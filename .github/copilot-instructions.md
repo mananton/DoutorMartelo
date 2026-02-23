@@ -1,122 +1,101 @@
 # Copilot Instructions: Doutor Martelo Dashboard
 
 ## Project Overview
-**Doutor Martelo** is a Google Apps Script web app for construction project cost management. It aggregates data from multiple Google Sheets and presents an interactive dashboard with cost tracking, worker assiduity, and travel logistics.
+**Doutor Martelo** is a Google Apps Script web app for construction project cost management. It aggregates data from multiple Google Sheets (written by **AppSheet**) and presents an interactive dashboard with cost tracking, worker assiduity, and travel logistics.
 
-- **Type**: Google Apps Script (GAS) web app + HTML5 frontend
-- **Runtime**: V8 (modern JavaScript)
-- **Timezone**: Europe/Lisbon (hardcoded throughout)
-- **Data Source**: Google Sheets with 4 primary sheets
+- **Type**: Google Apps Script (GAS) web app + HTML5 frontend (zero npm/build steps)
+- **Runtime**: V8 (modern JavaScript, ES6+)
+- **Timezone**: `Europe/Lisbon` — hardcoded in `TZ` constant and `appsscript.json`
+- **Data entry**: AppSheet writes to Google Sheets; this codebase is read-only against the sheets
 
 ## Architecture
 
-### Backend Flow (main.gs)
-1. **doGet()** → Serves HTML template
-2. **getDashboardData()** → JSON endpoint called by frontend
-3. **buildData_(ss)** → Aggregates all sheet data into hierarchical structure
-4. **Reader functions** → Extract and normalize data from each sheet
+### Backend Flow (`main.gs`)
+1. `doGet()` → serves HTML template named `"index"` (GAS strips `.html` extension from `index.html` on push)
+2. `getDashboardData()` → JSON endpoint; wraps errors as `{error: message}`
+3. `buildData_(ss)` → reads all 4 sheets, aggregates hierarchically, serializes Sets before returning
+4. Reader functions → normalize and validate raw sheet data
 
-### Frontend Flow (index.html)
-1. **loadData()** → Calls `google.script.run.getDashboardData()`
-2. **onDataLoaded()** → Parses JSON, triggers buildAll()
-3. **buildAll()** → Chains builders for KPIs, obra cards, charts
-4. **View/Tab System** → DOM manipulation with `showView()`, `showTab()`
+### Frontend Flow (`index.html`)
+1. `window.onload` → `loadData()` → `google.script.run.withSuccessHandler(onDataLoaded).getDashboardData()`
+2. `onDataLoaded(jsonStr)` → `JSON.parse` → `buildAll()`
+3. `buildAll()` → chains: `buildGlobalKpis`, `buildObrasGrid`, `buildGlobalBarChart`, `buildViagensView`, `buildEquipaView`
+4. Obra detail: `openObra(nome)` builds all 5 tab contents, then calls `showView('obra')`
 
 ## Sheet Structure & Readers
 
-All sheets skip header rows (start reading from row 3 for static data, row 2 for records).
-
-| Sheet Name | Columns Used | Reader Function | Key Output |
+| Sheet | Header Rows Skipped | Reader | Key Fields |
 |---|---|---|---|
-| REGISTOS_POR_DIA | 12 cols (A-K) | readRegistos_() | `{data, nome, funcao, obra, fase, horas, falta, eur_h, custo}` |
-| OBRAS | 3 cols | readObras_() | `{Obra_ID, Local_ID, Ativa}` |
-| COLABORADORES | 3 cols | readColabs_() | `{Nome, Funcao, Eur_h}` |
-| VIAGENS_DIARIAS | 9 cols | readViagens_() | `{Data_str, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, custo_dia}` |
+| `REGISTOS_POR_DIA` | 1 (row 2 = data start) | `readRegistos_()` | `{data, nome, funcao, obra, fase, horas, falta, eur_h, custo}` |
+| `OBRAS` | 2 (row 3 = data start) | `readObras_()` | `{Obra_ID, Local_ID, Ativa}` |
+| `COLABORADORES` | 2 (row 3 = data start) | `readColabs_()` | `{Nome, Funcao, Eur_h}` |
+| `VIAGENS_DIARIAS` | 2 (row 3 = data start) | `readViagens_()` | `{Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia}` |
 
-**Column Mapping Example (REGISTOS_POR_DIA):**
-- A=ID, B=DATA_REGISTO, C=NAME, D=FUNCAO, E=OBRA, F=FASE, G=HORAS, H=FALTA, I=EUR/H_BASE, J=EUR/H_ACTUAL, K=CUSTO
+**Column map for `REGISTOS_POR_DIA`:** A=ID (skipped), B=DATA_REGISTO, C=NAME, D=FUNCAO, E=OBRA, F=FASE, G=HORAS, H=FALTA, I=EUR/H_BASE (skipped), J=EUR/H_ACTUAL, K=CUSTO
 
-## Aggregation Patterns
+## Critical Patterns
 
-### Data Nesting (buildData_)
-Registos are aggregated with multiple grouping levels:
-- **Per-obra**: `obraMap[nome] = {custo_total, horas_total, trabalhadores, faltas, ...}`
-- **Per-day**: `daily[data] = {Custo, Horas, Trabalhadores, Faltas}`
-- **Per-week**: `weekly[isoWeek] = {Custo, Horas}` (ISO week format: "YYYY-SWW")
-- **Per-worker**: `workerMap[nome] = {funcao, fase, Custo, Horas, Dias, Faltas}`
-- **Assiduity**: `assidMap[nome].dias[data] = {horas, falta, custo}`
+### Aggregation in `buildData_`
+- During aggregation, unique counts use `new Set()` (e.g., `trabalhadores`, `Dias`).
+- **Sets must be serialized before `JSON.stringify`**: convert via `.size` for counts and `Array.from()` for arrays. Already handled in the serialization block.
+- ISO week format: `"YYYY-SWW"` via `isoWeek_()` — uses a **custom** (non-standard) ISO algorithm counting from Jan 1.
+- Monthly key: `r.data.slice(0,7)` → `"YYYY-MM"`.
 
-### Critical Helper
-- **isoWeek_(dateStr)** → Returns "YYYY-SWW" format for weekly grouping
-- Date handling: Accept Date objects or YYYY-MM-DD strings, always normalize to YYYY-MM-DD
+### `infoMap` Keyed on `Local_ID`, Not `Obra_ID`
+In `buildObrasGrid()` and `openObra()`, `DATA.obras_info` is indexed by `Local_ID` (the display name), not `Obra_ID`. The lookup is `infoMap[nome]` where `nome` is the obra key from `DATA.obras`.
 
-## Frontend Conventions
+### `buildEquipaView` Re-aggregates from `DATA.obras`
+The Equipa view does **not** use `DATA.colaboradores` for cost/hour stats. It iterates `DATA.obras[*].workers[]` and accumulates across obras. `DATA.colaboradores` is only used for the "all workers" base-rate roster table.
 
-### Data Access Pattern
+### Frontend Data Structure
 ```javascript
-DATA.global         // {custo_total, horas_total, obras_ativas, colaboradores, faltas, ...}
-DATA.obras[obraNome] // Per-obra detail including daily, weekly, monthly, workers
-DATA.viagens        // Array of daily travel records
-DATA.colaboradores  // Master list of workers with base hourly rates
+DATA.global         // {custo_total, horas_total, obras_ativas, colaboradores, faltas, custo_viagens, total_viagens, last_update}
+DATA.obras[nome]    // {custo_total, horas_total, trabalhadores, faltas, dias, all_dates, daily[], weekly[], monthly[], workers[], assiduidade[]}
+DATA.obras_info     // [{Obra_ID, Local_ID, Ativa}] — raw list, not a map
+DATA.viagens        // [{Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia}]
+DATA.colaboradores  // [{Nome, Funcao, Eur_h}]
 ```
 
-### Formatting Functions (Global)
-- `fmt(value)` → Euro format with 2 decimals (e.g., "1.234,56 €")
-- `fmtN(value)` → Number format with 1-2 decimals (e.g., "42,5 h")
-- `initials(name)` → First letters of first 2 words for avatars
+### Formatting (Global Scope in `<script>`)
+- `fmt(v)` → Euro with exactly 2 decimals, pt-PT locale (e.g., `"1.234,56 €"`)
+- `fmtN(v)` → Exactly **1 decimal** fixed, pt-PT locale (e.g., `"42,5"`)
+- `initials(name)` → First letter of first 2 words, uppercased
+- `barHtml(pct, val, alt)` → Reusable inline bar HTML; alt=true uses blue gradient
 
-### View System
-- Views: `view-home`, `view-obra`, `view-viagens`, `view-equipa`
-- Tabs: Within obra view, content rendered into `tab-{tabId}` divs
-- Tab targets: `custos-diarios`, `custos-semanais`, `custos-mensais`, `trabalhadores`, `assiduidade`
+### View & Tab System
+- Views: `view-home`, `view-obra`, `view-viagens`, `view-equipa` — toggled via `showView(id)`
+- Tab contents: `tab-custos-diarios`, `tab-custos-semanais`, `tab-custos-mensais`, `tab-trabalhadores`, `tab-assiduidade`, `tab-fases` — toggled via `showTab(tabId)`
+- Assiduidade tab is **exception-oriented**: shows absence dates as `MM-DD`, counts presences vs faltas
 
-### HTML Builders (All render into specific IDs)
-- `buildGlobalKpis()` → `#global-kpis`
-- `buildObrasGrid()` → `#obras-grid`
-- `buildDailyCosts(o)` → `#tab-custos-diarios`
-- `buildWorkers(o)` → `#tab-trabalhadores`
-- `buildAssiduidade(o)` → `#tab-assiduidade` (Exception-oriented: faltas only, dates as MM-DD)
+## Project-Specific Conventions
 
-## Project-Specific Patterns
+- **Portuguese throughout**: sheet names, UI labels, error messages, variable names
+- **Date normalization**: always `Utilities.formatDate(date, TZ, "yyyy-MM-dd")` in backend; dates arrive at frontend as `"YYYY-MM-DD"` strings
+- **Fallback values**: `parseFloat(x) || 0`, `String(x).trim() || ""`
+- **`falta` field**: stored as boolean `true`/`false`; reader normalizes `=== true || toLowerCase() === "true"`
+- **CSS theme**: dark-only, GitHub-inspired palette via CSS variables (`--bg`, `--surface`, `--accent` = amber `#f0a500`, etc.)
+- **Fonts**: DM Sans (UI) + DM Mono (numbers/mono values) from Google Fonts
 
-### Don't Do This
-- ❌ Hardcoding URLs in HTML; use template injection
-- ❌ Modifying sheet structure without updating reader functions
-- ❌ Treating dates as strings without normalization
-- ❌ Forgetting `.trim()` on sheet string values
-- ❌ Using `[false]` or `[0]` for boolean/integer checks—use explicit comparisons
+## Deployment Workflow
 
-### Do This
-- ✅ Normalize dates in readers to YYYY-MM-DD format consistently
-- ✅ Use Set for unique values during aggregation (convert to `.size` when serializing)
-- ✅ Filter out empty/header rows in readers before mapping
-- ✅ Serialize Sets to primitives before JSON.stringify (already done in buildData_)
-- ✅ Always include fallback values: `parseFloat(x) || 0`, `String(x).trim() || ""`
-
-### Language & Localization
-- Portuguese labels throughout (sheets, UI, error messages)
-- Time formatting always uses `Utilities.formatDate(date, "Europe/Lisbon", "yyyy-MM-dd")`
-- Number formatting uses `toLocaleString('pt-PT', {...})` for frontend display
-
-## Deployment & Workflow
-
-Run from terminal in workspace directory:
 ```powershell
-clasp push        # Deploy to Google Apps Script
-clasp open web    # Open dashboard in browser
+clasp push        # Push main.gs + index.html to Google Apps Script
+clasp open web    # Open deployed web app in browser
 ```
 
-Configuration in `.clasp.json` and `appsscript.json` (V8 runtime, user-deployed execution).
+No build step. `clasp` maps local files using `.clasp.json` (`scriptId` identifies the target GAS project). Runtime config in `appsscript.json` (V8, `Europe/Lisbon`, Stackdriver logging).
 
 ## When Adding Features
 
-1. **New sheet data** → Add reader function, integrate into buildData_()
-2. **New aggregation** → Follow nesting pattern (keep data hierarchical)
-3. **New UI view** → Create builder function, add tab if obra-detail, integrate into buildAll()
-4. **Formatter helpers** → Add to global scope in `<script>` section (pt-PT locale)
-5. **Data endpoint** → Add function, call via `google.script.run.newFunction()`
+1. **New sheet** → add reader function (normalize dates, trim strings, parse floats), call from `buildData_()`, add to return structure
+2. **New aggregation level** → follow Map pattern in `buildData_`, serialize Sets before returning
+3. **New backend endpoint** → add function, call via `google.script.run.withSuccessHandler(cb).myFunction()`
+4. **New UI view** → add `<div class="view" id="view-X">`, builder function, wire into `buildAll()`, add nav button
+5. **New tab in obra detail** → add `<div class="tab-content" id="tab-X">`, builder called from `openObra()`, add `.tab-btn`
+6. **Formatters** → add to global `<script>` scope, use `pt-PT` locale
 
-## Key Files Reference
-- [main.gs](../main.gs) – Backend logic, readers, data aggregation
-- [index.html](../index.html) – Frontend UI, builders, formatters (embedded CSS + JS)
-- [appsscript.json](../appsscript.json) – V8 runtime, web app config
+## Key Files
+- [`main.gs`](../main.gs) — backend: readers, aggregation, web app entry point
+- [`index.html`](../index.html) — frontend: embedded CSS + JS, all builders and view logic
+- [`appsscript.json`](../appsscript.json) — runtime config (V8, timezone, web app access)
+- [`.clasp.json`](../.clasp.json) — deployment target (`scriptId`)

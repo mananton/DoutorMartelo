@@ -233,12 +233,14 @@
       <button class="tab-btn" onclick="showTab('custos-mensais')" data-tab="custos-mensais">🗓 Mensal</button>
       <button class="tab-btn" onclick="showTab('trabalhadores')" data-tab="trabalhadores">👷 Trabalhadores</button>
       <button class="tab-btn" onclick="showTab('assiduidade')" data-tab="assiduidade">✅ Assiduidade</button>
+      <button class="tab-btn" onclick="showTab('fases')" data-tab="fases">🏗 Por Fase</button>
     </div>
     <div class="tab-content active" id="tab-custos-diarios"></div>
     <div class="tab-content" id="tab-custos-semanais"></div>
     <div class="tab-content" id="tab-custos-mensais"></div>
     <div class="tab-content" id="tab-trabalhadores"></div>
     <div class="tab-content" id="tab-assiduidade"></div>
+    <div class="tab-content" id="tab-fases"></div>
   </div>
 </div>
 
@@ -350,12 +352,12 @@ function buildAll() {
 function buildGlobalKpis() {
   const g = DATA.global;
   document.getElementById('global-kpis').innerHTML = [
-    {l:'Custo Total',v:fmt(g.custo_total),s:'Mão de obra',c:'amber'},
+    {l:'Custo Total',v:fmt(g.custo_total),s:`MO ${fmt(g.custo_mao_obra)} · Desl ${fmt(g.custo_deslocacoes)}`,c:'amber'},
     {l:'Horas Trabalhadas',v:fmtN(g.horas_total)+' h',s:'Período atual',c:'blue'},
     {l:'Obras com Registo',v:g.obras_ativas,s:'Com dados lançados',c:'green'},
     {l:'Colaboradores',v:g.colaboradores,s:'Ativos no período',c:'purple'},
     {l:'Faltas',v:g.faltas,s:'Período atual',c:g.faltas>0?'red':'green'},
-    {l:'Custo Deslocações',v:fmt(g.custo_viagens),s:g.total_viagens+' viagens',c:''},
+    {l:'Custo Deslocações',v:fmt(g.custo_deslocacoes),s:g.total_viagens+' viagens',c:''},
   ].map(k=>`<div class="kpi ${k.c}"><div class="kpi-label">${k.l}</div><div class="kpi-value">${k.v}</div><div class="kpi-sub">${k.s}</div></div>`).join('');
 }
 
@@ -412,11 +414,12 @@ function openObra(nome) {
 
   const custoMedio = o.dias>0 ? o.custo_total/o.dias : 0;
   document.getElementById('obra-kpis').innerHTML = [
-    {l:'Custo Total',v:fmt(o.custo_total),s:'Período completo',c:'amber'},
+    {l:'Custo Total',v:fmt(o.custo_total),s:`MO ${fmt(o.custo_mao_obra)} · Desl ${fmt(o.custo_deslocacoes)}`,c:'amber'},
     {l:'Custo Médio/Dia',v:fmt(custoMedio),s:'',c:''},
     {l:'Horas Totais',v:fmtN(o.horas_total)+' h',s:'',c:'blue'},
     {l:'Colaboradores',v:o.trabalhadores,s:'No período',c:'purple'},
     {l:'Faltas',v:o.faltas,s:'',c:o.faltas>0?'red':'green'},
+    {l:'Deslocações',v:fmt(o.custo_deslocacoes),s:o.qtd_deslocacoes+' viagens',c:''},
   ].map(k=>`<div class="kpi ${k.c}"><div class="kpi-label">${k.l}</div><div class="kpi-value">${k.v}</div><div class="kpi-sub">${k.s}</div></div>`).join('');
 
   buildDailyCosts(o);
@@ -424,6 +427,7 @@ function openObra(nome) {
   buildMonthlyCosts(o);
   buildWorkers(o);
   buildAssiduidade(o);
+  buildFaseCosts(o);
   showTab('custos-diarios');
   showView('obra');
 }
@@ -581,37 +585,90 @@ function buildAssiduidade(o) {
     </table></div>`;
 }
 
+function buildFaseCosts(o) {
+  if (!o.fases || o.fases.length === 0) {
+    document.getElementById('tab-fases').innerHTML =
+      '<p style="color:var(--text3);padding:20px">Sem dados de fase para esta obra.</p>';
+    return;
+  }
+  const maxC = Math.max(...o.fases.map(f => f.Custo), 1);
+  const maxH = Math.max(...o.fases.map(f => f.Horas), 1);
+  const rows = o.fases.map(f => `<tr>
+    <td class="td-mono">${f.Fase}</td>
+    <td class="td-euro td-right">${fmt(f.Custo)}</td>
+    <td class="td-hours td-right">${fmtN(f.Horas)} h</td>
+    <td class="td-center">${f.Workers}</td>
+    <td class="td-center">${f.Dias}</td>
+    <td class="td-center">${f.Faltas > 0 ? `<span class="tag tag-red">${f.Faltas}</span>` : '<span class="tag tag-green">0</span>'}</td>
+    <td style="min-width:110px"><div style="background:var(--surface3);height:14px;border-radius:3px;overflow:hidden">
+      <div style="width:${Math.round(f.Custo/maxC*100)}%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px"></div>
+    </div></td>
+  </tr>`).join('') +
+  `<tr class="totals-row"><td>TOTAL</td>
+    <td class="td-euro td-right">${fmt(o.fases.reduce((s,f)=>s+f.Custo,0))}</td>
+    <td class="td-hours td-right">${fmtN(o.fases.reduce((s,f)=>s+f.Horas,0))} h</td>
+    <td colspan="4"></td></tr>`;
+
+  document.getElementById('tab-fases').innerHTML = `
+    <div class="two-col">
+      <div class="card"><div class="card-head">📊 Custo por Fase</div><div class="card-body">
+        <div class="bar-chart">${o.fases.map(f=>`<div class="bar-row">
+          <div class="bar-label" title="${f.Fase}">${f.Fase}</div>
+          ${barHtml(Math.round(f.Custo/maxC*100), fmt(f.Custo), false)}
+        </div>`).join('')}</div>
+      </div></div>
+      <div class="card"><div class="card-head">⏱ Horas por Fase</div><div class="card-body">
+        <div class="bar-chart">${o.fases.map(f=>`<div class="bar-row">
+          <div class="bar-label" title="${f.Fase}">${f.Fase}</div>
+          ${barHtml(Math.round(f.Horas/maxH*100), fmtN(f.Horas)+'h', true)}
+        </div>`).join('')}</div>
+      </div></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr>
+      <th>Fase</th><th class="td-right">Custo (€)</th><th class="td-right">Horas</th>
+      <th class="td-center">Trabalhadores</th><th class="td-center">Dias</th>
+      <th class="td-center">Faltas</th><th>Peso</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 // ── VIAGENS ───────────────────────────────────────────────────
 function buildViagensView() {
   if (!DATA) return;
-  const via = DATA.viagens.filter(v=>v.custo_dia>0);
-  const total = via.reduce((s,v)=>s+v.custo_dia,0);
-  const totalV = DATA.viagens.reduce((s,v)=>s+(v.v_efetivas||0),0);
+  const desl = DATA.deslocacoes || [];
+
+  const totalCusto  = desl.reduce((s, d) => s + d.custo, 0);
+  const totalQtd    = desl.reduce((s, d) => s + d.qtd, 0);
+  const obrasUnicas = new Set(desl.map(d => d.obra)).size;
   document.getElementById('via-kpis').innerHTML = [
-    {l:'Custo Total',v:fmt(total)},{l:'Total Viagens',v:totalV},
-    {l:'Dias com Viagens',v:via.length},{l:'Custo Médio/Dia',v:fmt(via.length>0?total/via.length:0)},
+    {l:'Custo Total',      v:fmt(totalCusto)},
+    {l:'Total Viagens',    v:totalQtd},
+    {l:'Obras Abrangidas', v:obrasUnicas},
+    {l:'Registos',         v:desl.length},
   ].map(k=>`<div class="via-kpi"><div class="via-kpi-l">${k.l}</div><div class="via-kpi-v">${k.v}</div></div>`).join('');
-  const maxC = Math.max(...via.map(v=>v.custo_dia),1);
-  document.getElementById('via-bar-chart').innerHTML = via.map(v=>`<div class="bar-row">
-    <div class="bar-label">${v.Data_str.slice(5)}</div>
-    ${barHtml(Math.round(v.custo_dia/maxC*100),fmt(v.custo_dia),true)}
-  </div>`).join('');
-  const dNm = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const rows = DATA.viagens.map(v=>`<tr>
-    <td class="td-mono">${v.Data_str}</td>
-    <td class="td-center"><span class="tag tag-blue">${dNm[v.DiaSem%7]||v.DiaSem}</span></td>
-    <td class="td-center">${v.V_Padrao||0}</td><td class="td-center">${v.V_Real||'—'}</td>
-    <td class="td-center"><strong>${v.V_Efetivas||0}</strong></td>
-    <td class="td-center"><span class="tag tag-amber">${v.Viatura||'—'}</span></td>
-    <td class="td-center">${v.Obra||'—'}</td>
-    <td class="td-euro td-right">${fmt(v.Custo_Via||0)}</td>
-    <td class="td-euro td-right">${fmt(v.custo_dia)}</td>
+
+  const byObra = {};
+  desl.forEach(d => {
+    if (!byObra[d.obra]) byObra[d.obra] = 0;
+    byObra[d.obra] += d.custo;
+  });
+  const obraEntries = Object.entries(byObra).sort((a,b) => b[1]-a[1]);
+  const maxC = Math.max(...obraEntries.map(e => e[1]), 1);
+  document.getElementById('via-bar-chart').innerHTML = obraEntries.map(([obra, custo]) =>
+    `<div class="bar-row">
+      <div class="bar-label" title="${obra}">${obra}</div>
+      ${barHtml(Math.round(custo/maxC*100), fmt(custo), true)}
+    </div>`).join('');
+
+  const rows = desl.map(d => `<tr>
+    <td class="td-mono">${d.data}</td>
+    <td>${d.obra}</td>
+    <td style="color:var(--text2)">${d.origem||'—'}</td>
+    <td class="td-center">${d.qtd}</td>
+    <td class="td-euro td-right">${fmt(d.custo)}</td>
   </tr>`).join('');
   document.getElementById('via-table').innerHTML = `<table><thead><tr>
-    <th>Data</th><th class="td-center">Dia</th><th class="td-center">V.Padrão</th>
-    <th class="td-center">V.Real</th><th class="td-center">V.Efetivas</th>
-    <th class="td-center">Viatura</th><th class="td-center">Obra</th>
-    <th class="td-right">€/Viagem</th><th class="td-right">Custo Dia</th>
+    <th>Data</th><th>Obra</th><th>Origem</th>
+    <th class="td-center">Viagens</th><th class="td-right">Custo (€)</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
 

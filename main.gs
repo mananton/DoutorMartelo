@@ -8,11 +8,12 @@
 // ============================================================
 
 // ── CONFIGURAÇÃO GLOBAL ───────────────────────────────────────
-const SHEET_REGISTOS  = "REGISTOS_POR_DIA"; // arquivo direto gerido pela AppSheet
-const SHEET_OBRAS     = "OBRAS";
-const SHEET_COLAB     = "COLABORADORES";
-const SHEET_VIAGENS   = "VIAGENS_DIARIAS";
-const TZ              = "Europe/Lisbon";
+const SHEET_REGISTOS   = "REGISTOS_POR_DIA"; // arquivo direto gerido pela AppSheet
+const SHEET_OBRAS      = "OBRAS";
+const SHEET_COLAB      = "COLABORADORES";
+const SHEET_VIAGENS    = "VIAGENS_DIARIAS";
+const SHEET_DESLOCACOES = "REGISTO_DESLOCACOES"; // viagens por obra (AppSheet)
+const TZ               = "Europe/Lisbon";
 
 
 // ════════════════════════════════════════════════════════════
@@ -22,7 +23,7 @@ const TZ              = "Europe/Lisbon";
 /** Serve o dashboard HTML quando o URL é aberto no browser */
 function doGet(e) {
   return HtmlService
-    .createTemplateFromFile("Dashboard")
+    .createTemplateFromFile("index")
     .evaluate()
     .setTitle("Dashboard de Gestão de Obra")
     .addMetaTag("viewport", "width=device-width, initial-scale=1")
@@ -40,17 +41,19 @@ function getDashboardData() {
 }
 
 function buildData_(ss) {
-  const regSheet   = ss.getSheetByName(SHEET_REGISTOS);
-  const obraSheet  = ss.getSheetByName(SHEET_OBRAS);
-  const colabSheet = ss.getSheetByName(SHEET_COLAB);
-  const viaSheet   = ss.getSheetByName(SHEET_VIAGENS);
+  const regSheet    = ss.getSheetByName(SHEET_REGISTOS);
+  const obraSheet   = ss.getSheetByName(SHEET_OBRAS);
+  const colabSheet  = ss.getSheetByName(SHEET_COLAB);
+  const viaSheet    = ss.getSheetByName(SHEET_VIAGENS);
+  const deslocSheet = ss.getSheetByName(SHEET_DESLOCACOES);
 
   if (!regSheet) throw new Error("Folha não encontrada: " + SHEET_REGISTOS);
 
-  const registos  = readRegistos_(regSheet);
-  const obrasInfo = readObras_(obraSheet);
-  const colabs    = readColabs_(colabSheet);
-  const viagens   = readViagens_(viaSheet);
+  const registos    = readRegistos_(regSheet);
+  const obrasInfo   = readObras_(obraSheet);
+  const colabs      = readColabs_(colabSheet);
+  const viagens     = readViagens_(viaSheet);
+  const deslocacoes = readDeslocacoes_(deslocSheet);
 
   // ── Agregar por obra ────────────────────────────────────────
   const obraMap = {};
@@ -62,7 +65,7 @@ function buildData_(ss) {
       custo_total: 0, horas_total: 0,
       trabalhadores: new Set(), faltas: 0, datas: new Set(),
       daily: {}, weekly: {}, monthly: {},
-      workerMap: {}, assidMap: {}
+      workerMap: {}, assidMap: {}, faseMap: {}
     };
     const o = obraMap[obra];
     o.custo_total += r.custo;
@@ -106,6 +109,27 @@ function buildData_(ss) {
     o.assidMap[r.nome].dias[r.data].horas += r.horas;
     o.assidMap[r.nome].dias[r.data].custo += r.custo;
     if (r.falta) o.assidMap[r.nome].dias[r.data].falta = true;
+
+    // fases
+    if (r.fase) {
+      if (!o.faseMap[r.fase]) o.faseMap[r.fase] = {
+        Custo: 0, Horas: 0, Workers: new Set(), Dias: new Set(), Faltas: 0
+      };
+      o.faseMap[r.fase].Custo  += r.custo;
+      o.faseMap[r.fase].Horas  += r.horas;
+      o.faseMap[r.fase].Workers.add(r.nome);
+      o.faseMap[r.fase].Dias.add(r.data);
+      if (r.falta) o.faseMap[r.fase].Faltas++;
+    }
+  });
+
+  // ── Mapa de deslocações por obra ────────────────────────────
+  const deslocMap = {};
+  deslocacoes.forEach(d => {
+    if (!d.obra) return;
+    if (!deslocMap[d.obra]) deslocMap[d.obra] = { custo: 0, qtd: 0 };
+    deslocMap[d.obra].custo += d.custo;
+    deslocMap[d.obra].qtd   += d.qtd;
   });
 
   // ── Serializar obra map ─────────────────────────────────────
@@ -114,7 +138,10 @@ function buildData_(ss) {
     const o = obraMap[nome];
     const allDates = Array.from(o.datas).sort();
     obras[nome] = {
-      custo_total:   o.custo_total,
+      custo_mao_obra:    o.custo_total,
+      custo_deslocacoes: (deslocMap[nome] || {}).custo || 0,
+      qtd_deslocacoes:   (deslocMap[nome] || {}).qtd   || 0,
+      custo_total:       o.custo_total + ((deslocMap[nome] || {}).custo || 0),
       horas_total:   o.horas_total,
       trabalhadores: o.trabalhadores.size,
       faltas:        o.faltas,
@@ -148,34 +175,49 @@ function buildData_(ss) {
         nome:   n,
         funcao: o.assidMap[n].funcao,
         dias:   o.assidMap[n].dias
-      }))
+      })),
+      fases: Object.keys(o.faseMap)
+        .map(f => ({
+          Fase:    f,
+          Custo:   o.faseMap[f].Custo,
+          Horas:   o.faseMap[f].Horas,
+          Workers: o.faseMap[f].Workers.size,
+          Dias:    o.faseMap[f].Dias.size,
+          Faltas:  o.faseMap[f].Faltas
+        }))
+        .sort((a, b) => b.Custo - a.Custo)
     };
   });
 
   // ── Global KPIs ─────────────────────────────────────────────
-  const custoTotal   = registos.reduce((s, r) => s + r.custo, 0);
-  const horasTotal   = registos.reduce((s, r) => s + r.horas, 0);
-  const totalFaltas  = registos.filter(r => r.falta).length;
-  const trabUnicos   = new Set(registos.map(r => r.nome)).size;
-  const custoViagens = viagens.reduce((s, v) => s + v.custo_dia, 0);
-  const totalViagens = viagens.reduce((s, v) => s + v.v_efetivas, 0);
-  const lastUpdate   = Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm");
+  const custoMaoObra    = registos.reduce((s, r) => s + r.custo, 0);
+  const custoDeslocacoes = deslocacoes.reduce((s, d) => s + d.custo, 0);
+  const custoTotal      = custoMaoObra + custoDeslocacoes;
+  const horasTotal      = registos.reduce((s, r) => s + r.horas, 0);
+  const totalFaltas     = registos.filter(r => r.falta).length;
+  const trabUnicos      = new Set(registos.map(r => r.nome)).size;
+  const custoViagens    = viagens.reduce((s, v) => s + v.custo_dia, 0);
+  const totalViagens    = viagens.reduce((s, v) => s + v.v_efetivas, 0);
+  const lastUpdate      = Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm");
 
   return {
     global: {
-      custo_total:   custoTotal,
-      horas_total:   horasTotal,
-      obras_ativas:  Object.keys(obras).length,
-      colaboradores: trabUnicos,
-      faltas:        totalFaltas,
-      custo_viagens: custoViagens,
-      total_viagens: totalViagens,
-      last_update:   lastUpdate
+      custo_total:        custoTotal,
+      custo_mao_obra:     custoMaoObra,
+      custo_deslocacoes:  custoDeslocacoes,
+      horas_total:        horasTotal,
+      obras_ativas:       Object.keys(obras).length,
+      colaboradores:      trabUnicos,
+      faltas:             totalFaltas,
+      custo_viagens:      custoViagens,
+      total_viagens:      totalViagens,
+      last_update:        lastUpdate
     },
     obras:        obras,
     obras_info:   obrasInfo,
     colaboradores: colabs,
-    viagens:      viagens
+    viagens:      viagens,
+    deslocacoes:  deslocacoes
   };
 }
 
@@ -266,6 +308,29 @@ function readViagens_(sheet) {
         Custo_Via:  parseFloat(r[7]) || 0,
         custo_dia:  parseFloat(r[8]) || 0,
         v_efetivas: parseFloat(r[4]) || 0,
+      };
+    });
+}
+
+
+function readDeslocacoes_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  return data
+    .filter(r => r[2] && String(r[2]).trim() !== "" && String(r[2]).trim() !== "Obra_Destino")
+    .map(r => {
+      const rawD = r[1];
+      const dateStr = rawD instanceof Date
+        ? Utilities.formatDate(rawD, TZ, "yyyy-MM-dd")
+        : String(rawD).slice(0, 10);
+      return {
+        data:   dateStr,
+        obra:   String(r[2]).trim(),
+        origem: String(r[3] || "").trim(),
+        qtd:    parseFloat(r[4]) || 0,
+        custo:  parseFloat(r[5]) || 0,
       };
     });
 }
