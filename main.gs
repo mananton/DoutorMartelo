@@ -62,22 +62,24 @@ function buildData_(ss) {
     const obra = r.obra;
     if (!obra) return;
     if (!obraMap[obra]) obraMap[obra] = {
-      custo_total: 0, horas_total: 0,
+      custo_total: 0, horas_total: 0, atraso_total: 0,
       trabalhadores: new Set(), faltas: 0, datas: new Set(),
       daily: {}, weekly: {}, monthly: {},
       workerMap: {}, assidMap: {}, faseMap: {}
     };
     const o = obraMap[obra];
-    o.custo_total += r.custo;
-    o.horas_total += r.horas;
+    o.custo_total  += r.custo;
+    o.horas_total  += r.horas;
+    o.atraso_total += r.atraso_min;
     o.trabalhadores.add(r.nome);
     if (r.falta) o.faltas++;
     o.datas.add(r.data);
 
     // daily
-    if (!o.daily[r.data]) o.daily[r.data] = { Custo: 0, Horas: 0, Trabalhadores: new Set(), Faltas: 0 };
+    if (!o.daily[r.data]) o.daily[r.data] = { Custo: 0, Horas: 0, Atraso: 0, Trabalhadores: new Set(), Faltas: 0 };
     o.daily[r.data].Custo        += r.custo;
     o.daily[r.data].Horas        += r.horas;
+    o.daily[r.data].Atraso       += r.atraso_min;
     o.daily[r.data].Trabalhadores.add(r.nome);
     if (r.falta) o.daily[r.data].Faltas++;
 
@@ -96,19 +98,22 @@ function buildData_(ss) {
     // workers
     if (!o.workerMap[r.nome]) o.workerMap[r.nome] = {
       funcao: r.funcao, fase: r.fase,
-      Custo: 0, Horas: 0, Dias: new Set(), Faltas: 0
+      Custo: 0, Horas: 0, Atraso: 0, Dias: new Set(), Faltas: 0
     };
-    o.workerMap[r.nome].Custo += r.custo;
-    o.workerMap[r.nome].Horas += r.horas;
+    o.workerMap[r.nome].Custo  += r.custo;
+    o.workerMap[r.nome].Horas  += r.horas;
+    o.workerMap[r.nome].Atraso += r.atraso_min;
     o.workerMap[r.nome].Dias.add(r.data);
     if (r.falta) o.workerMap[r.nome].Faltas++;
 
     // assiduidade
     if (!o.assidMap[r.nome]) o.assidMap[r.nome] = { funcao: r.funcao, dias: {} };
-    if (!o.assidMap[r.nome].dias[r.data]) o.assidMap[r.nome].dias[r.data] = { horas: 0, falta: false, custo: 0 };
-    o.assidMap[r.nome].dias[r.data].horas += r.horas;
-    o.assidMap[r.nome].dias[r.data].custo += r.custo;
-    if (r.falta) o.assidMap[r.nome].dias[r.data].falta = true;
+    if (!o.assidMap[r.nome].dias[r.data]) o.assidMap[r.nome].dias[r.data] = { horas: 0, falta: false, custo: 0, atraso_min: 0, motivo: "" };
+    o.assidMap[r.nome].dias[r.data].horas      += r.horas;
+    o.assidMap[r.nome].dias[r.data].custo      += r.custo;
+    o.assidMap[r.nome].dias[r.data].atraso_min += r.atraso_min;
+    if (r.falta)  o.assidMap[r.nome].dias[r.data].falta  = true;
+    if (r.motivo) o.assidMap[r.nome].dias[r.data].motivo = r.motivo;
 
     // fases
     if (r.fase) {
@@ -143,6 +148,7 @@ function buildData_(ss) {
       qtd_deslocacoes:   (deslocMap[nome] || {}).qtd   || 0,
       custo_total:       o.custo_total + ((deslocMap[nome] || {}).custo || 0),
       horas_total:   o.horas_total,
+      atraso_total:  o.atraso_total,
       trabalhadores: o.trabalhadores.size,
       faltas:        o.faltas,
       dias:          o.datas.size,
@@ -151,6 +157,7 @@ function buildData_(ss) {
         DATA_str:      d,
         Custo:         o.daily[d].Custo,
         Horas:         o.daily[d].Horas,
+        Atraso:        o.daily[d].Atraso,
         Trabalhadores: o.daily[d].Trabalhadores.size,
         Faltas:        o.daily[d].Faltas
       })),
@@ -167,6 +174,7 @@ function buildData_(ss) {
           "Fase":           o.workerMap[n].fase,
           Custo:            o.workerMap[n].Custo,
           Horas:            o.workerMap[n].Horas,
+          Atraso:           o.workerMap[n].Atraso,
           Dias:             o.workerMap[n].Dias.size,
           Faltas:           o.workerMap[n].Faltas
         }))
@@ -194,6 +202,7 @@ function buildData_(ss) {
   const custoDeslocacoes = deslocacoes.reduce((s, d) => s + d.custo, 0);
   const custoTotal      = custoMaoObra + custoDeslocacoes;
   const horasTotal      = registos.reduce((s, r) => s + r.horas, 0);
+  const totalAtrasos    = registos.reduce((s, r) => s + r.atraso_min, 0);
   const totalFaltas     = registos.filter(r => r.falta).length;
   const trabUnicos      = new Set(registos.map(r => r.nome)).size;
   const custoViagens    = viagens.reduce((s, v) => s + v.custo_dia, 0);
@@ -206,6 +215,7 @@ function buildData_(ss) {
       custo_mao_obra:     custoMaoObra,
       custo_deslocacoes:  custoDeslocacoes,
       horas_total:        horasTotal,
+      total_atrasos:      totalAtrasos,
       obras_ativas:       Object.keys(obras).length,
       colaboradores:      trabUnicos,
       faltas:             totalFaltas,
@@ -227,7 +237,8 @@ function readRegistos_(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  // Lê apenas as 12 colunas úteis. Ignora o ID_Registo que está na M (13).
+  // Colunas A-L (12). Mapa actual: A=ID_Arquivo B=Data C=Nome D=Funcao E=Obra
+  // F=Fase G=Horas H=Atraso_Minutos I=Falta J=Motivo_Falta K=Eur_h L=Custo_Dia
   const data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
   const results = [];
 
@@ -242,15 +253,17 @@ function readRegistos_(sheet) {
       : String(rawData).slice(0, 10);
 
     results.push({
-      data:   dateStr,
-      nome:   String(row[2] || "").trim(),   // C
-      funcao: String(row[3] || "").trim(),   // D
-      obra:   obra,                          // E
-      fase:   String(row[5] || "").trim(),   // F 
-      horas:  parseFloat(row[6]) || 0,       // G
-      falta:  row[7] === true || String(row[7]).toLowerCase() === "true",  // H
-      eur_h:  parseFloat(row[9]) || 0,       // J
-      custo:  parseFloat(row[10]) || 0,      // K
+      data:       dateStr,
+      nome:       String(row[2] || "").trim(),   // C
+      funcao:     String(row[3] || "").trim(),   // D
+      obra:       obra,                          // E
+      fase:       String(row[5] || "").trim(),   // F
+      horas:      parseFloat(row[6]) || 0,       // G
+      atraso_min: parseFloat(row[7]) || 0,       // H — Atraso_Minutos (novo)
+      falta:      row[8] === true || String(row[8]).toLowerCase() === "true",  // I
+      motivo:     String(row[9] || "").trim(),   // J — Motivo Falta (novo)
+      eur_h:      parseFloat(row[10]) || 0,      // K
+      custo:      parseFloat(row[11]) || 0,      // L
     });
   });
 
