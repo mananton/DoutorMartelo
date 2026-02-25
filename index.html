@@ -740,6 +740,73 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 .equipa-row-clickable:hover { background: rgba(233,69,96,.04) !important; }
 .equipa-row-expanded { background: rgba(233,69,96,.06) !important; }
 
+/* ── Equipa Popup ─────────────────────────────────────── */
+.equipa-popup-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  animation: section-in .2s ease;
+}
+.equipa-popup {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); width: 90%; max-width: 520px;
+  max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,.4);
+}
+.equipa-popup-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 14px; font-weight: 600;
+  position: sticky; top: 0; background: var(--bg-card); z-index: 1;
+}
+.equipa-popup-close {
+  background: none; border: none; color: var(--text-dim);
+  font-size: 16px; cursor: pointer; padding: 4px 8px;
+  border-radius: var(--radius-sm); transition: all .15s;
+}
+.equipa-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
+.equipa-popup-body { padding: 16px 18px; }
+.equipa-popup-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.equipa-popup-item:last-child { border-bottom: none; }
+
+.assid-popup-overlay {
+  position: fixed; inset: 0; z-index: 8999;
+}
+.assid-popup {
+  position: fixed; z-index: 9000;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 260px; max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  overflow: hidden;
+}
+.assid-popup-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700; font-size: 13px;
+}
+.assid-popup-close {
+  background: none; border: none;
+  color: var(--text-dim); cursor: pointer;
+  font-size: 15px; padding: 2px 6px;
+  border-radius: 4px;
+}
+.assid-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
+.assid-popup-body { padding: 10px 16px 14px; }
+.assid-popup-item {
+  display: flex; gap: 6px; align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; flex-wrap: wrap;
+}
+.assid-popup-item:last-child { border-bottom: none; }
+
 @media (max-width: 1100px) {
   .equipa-stats-grid { grid-template-columns: repeat(3, 1fr); }
   .equipa-charts-row { grid-template-columns: 1fr; }
@@ -1099,6 +1166,9 @@ body.has-subbar .section { animation-delay: 0s; }
   .kpi-card::before { background: #999 !important; }
 }
 
+/* ── MOBILE UTILITY CLASSES ──────────────────────────────── */
+.mobile-only { display: none; }
+
 /* ── RESPONSIVE ─────────────────────────────────────────── */
 @media (max-width: 900px) {
   #sidebar { width: var(--sidebar-wc); }
@@ -1111,14 +1181,191 @@ body.has-subbar .section { animation-delay: 0s; }
   #topbar-subbar { left: var(--sidebar-wc); }
   #main-content { margin-left: var(--sidebar-wc); padding: 16px; }
 }
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   #sidebar { display: none; }
   #topbar { left: 0; }
-  #topbar-subbar { left: 0; flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 6px; }
-  #main-content { margin-left: 0; padding: 12px; padding-bottom: 70px; }
+  /* Subbar: remove fixed positioning — flows naturally below topbar */
+  #topbar-subbar {
+    position: static;
+    left: 0; right: auto;
+    flex-wrap: wrap; height: auto;
+    padding: 8px 12px; gap: 6px;
+    margin-top: var(--topbar-h);
+  }
+  /* main-content only needs topbar clearance since subbar is now in-flow */
+  body.has-subbar #main-content { margin-top: 0; }
+  #main-content { margin-left: 0; margin-top: var(--topbar-h); padding: 12px; padding-bottom: 70px; }
   #mobile-bottom-nav { display: flex; }
   .quick-date-btns { margin-left: 0; }
   .subbar-clear { margin-left: 0; }
+  .subbar-label { font-size: 10px; }
+  .subbar-date-input { padding: 4px 6px; max-width: 130px; }
+  .quick-date-btn { font-size: 10px; padding: 4px 8px; }
+
+  /* ── Chart containers: fixed height on mobile ──────────── */
+  .chart-card canvas,
+  .desl-chart-card canvas,
+  .equipa-chart-card canvas,
+  .comp-chart-card canvas { max-height: 220px; }
+
+  /* ── Radar mobile fallback table ───────────────────────── */
+  .mobile-only { display: block !important; }
+  .mobile-hide { display: none !important; }
+
+  /* ── Card-Table Pattern ────────────────────────────────── */
+  .card-table thead { display: none; }
+  .card-table tbody tr {
+    display: block;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+    padding: 12px 14px;
+  }
+  .card-table tbody tr:hover { background: var(--bg-hover); }
+  .card-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border: none;
+    font-size: 13px;
+  }
+  .card-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-right: 12px;
+  }
+  .card-table tbody td:first-child {
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  /* Equipa expanded detail row — keep full-width */
+  .card-table tbody tr:has(> td[colspan]) {
+    padding: 0;
+  }
+  .card-table tbody td[colspan] {
+    display: block;
+  }
+  .card-table tbody td[colspan]::before {
+    display: none;
+  }
+
+  /* ── Comparativa: hide evolucao tab, show desktop hint ── */
+  .comp-tab[data-comptab="evolucao"] { display: none; }
+  .comp-desktop-hint {
+    text-align: center; padding: 12px 16px;
+    font-size: 11px; color: var(--text-dim);
+    background: rgba(255,255,255,.03);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    margin-top: 16px;
+  }
+  .comp-desktop-hint i { margin-right: 4px; }
+
+  /* ── Assiduidade: mobile day list ────────────────────── */
+  .assid-daylist {
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .assid-daylist-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .assid-daylist-row:last-child { border-bottom: none; }
+  .assid-daylist-date {
+    font-weight: 600; color: var(--text);
+    min-width: 44px; font-variant-numeric: tabular-nums;
+  }
+  .assid-daylist-weekday {
+    font-size: 11px; color: var(--text-dim);
+    min-width: 28px; text-transform: uppercase;
+  }
+  .assid-daylist-hours {
+    font-weight: 600; font-variant-numeric: tabular-nums;
+    min-width: 42px; text-align: right;
+  }
+  .assid-daylist-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .assid-daylist-icon.ok { background: rgba(72,187,120,.15); color: var(--success); }
+  .assid-daylist-icon.falta { background: rgba(233,69,96,.15); color: var(--accent); }
+  .assid-daylist-icon.atraso { background: rgba(246,173,85,.15); color: var(--warning); }
+  .assid-daylist-icon.empty { background: rgba(255,255,255,.05); color: var(--text-dim); }
+  .assid-daylist-detail {
+    font-size: 11px; color: var(--text-dim);
+    margin-left: auto;
+  }
+  .assid-mobile-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; margin-bottom: 16px;
+  }
+  .assid-mobile-stat {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 12px; text-align: center;
+  }
+  .assid-mobile-stat-val {
+    font-size: 16px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .assid-mobile-stat-label {
+    font-size: 9px; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .4px; margin-top: 2px;
+  }
+
+  /* ── FIX: iOS zoom prevention — font-size >= 16px on inputs ── */
+  .obra-select,
+  .table-search,
+  .desl-date-input,
+  .subbar-date-input,
+  .comp-fase-select,
+  select,
+  input[type="text"],
+  input[type="date"] {
+    font-size: 16px !important;
+  }
+
+  /* ── FIX: Touch targets — min 44px height on action buttons ── */
+  .quick-date-btn,
+  .period-btn,
+  .heatmap-nav-btn,
+  .comp-tab,
+  .comp-evo-metric-btn,
+  .refresh-btn,
+  .print-btn,
+  .export-btn,
+  .subbar-clear,
+  .theme-toggle {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mobile-nav-btn {
+    min-height: 44px;
+  }
+
+  /* ── FIX: Prevent horizontal scroll ── */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  #main-content {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+  .comp-table-wrap,
+  .table-wrap {
+    max-width: calc(100vw - 24px);
+  }
 }
 </style>
 </head>
@@ -1181,13 +1428,8 @@ body.has-subbar .section { animation-delay: 0s; }
     </div>
   </div>
   <div class="topbar-right">
-    <div class="topbar-clock" id="topbar-clock">--:--:--</div>
-    <div class="topbar-badge" id="topbar-badge">a carregar...</div>
     <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema" id="theme-toggle-btn">
       <i class="fa-solid fa-moon" id="theme-toggle-icon"></i>
-    </button>
-    <button class="print-btn" onclick="printReport()" title="Exportar Relatório">
-      <i class="fa-solid fa-print"></i> Imprimir
     </button>
     <button class="refresh-btn" onclick="loadData()" id="refresh-btn">
       <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i> Atualizar
@@ -1203,10 +1445,10 @@ body.has-subbar .section { animation-delay: 0s; }
   <span class="subbar-label">Até</span>
   <input type="date" class="subbar-date-input" id="global-date-to" onchange="applyGlobalFilter()">
   <div class="quick-date-btns">
-    <button class="quick-date-btn" onclick="setQuickFilter('hoje')">Hoje</button>
+    <button class="quick-date-btn active" onclick="setQuickFilter('hoje')">Hoje</button>
     <button class="quick-date-btn" onclick="setQuickFilter('semana')">Semana</button>
     <button class="quick-date-btn" onclick="setQuickFilter('mes')">Mês</button>
-    <button class="quick-date-btn active" onclick="setQuickFilter('tudo')">Tudo</button>
+    <button class="quick-date-btn" onclick="setQuickFilter('tudo')">Tudo</button>
   </div>
   <button class="subbar-clear" onclick="clearGlobalFilter()">
     <i class="fa-solid fa-xmark" style="margin-right:3px"></i> Limpar
@@ -1241,31 +1483,8 @@ body.has-subbar .section { animation-delay: 0s; }
     <!-- Mini KPIs -->
     <div class="obra-kpi-grid" id="obra-kpis"></div>
 
-    <!-- Charts 2x2 -->
+    <!-- Charts -->
     <div class="charts-grid" id="obra-charts-grid">
-      <div class="chart-card">
-        <div class="chart-card-header">
-          <span><i class="fa-solid fa-chart-line"></i> Evolução Diária</span>
-          <div class="period-btns">
-            <button class="period-btn" onclick="setDailyPeriod(7)" data-period="7">7d</button>
-            <button class="period-btn" onclick="setDailyPeriod(30)" data-period="30">30d</button>
-            <button class="period-btn active" onclick="setDailyPeriod(0)" data-period="0">Tudo</button>
-          </div>
-        </div>
-        <div class="chart-card-body" id="chart-daily-wrap"><canvas id="chart-daily"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-card-header">
-          <span><i class="fa-solid fa-chart-bar"></i> Custo Semanal vs Horas</span>
-        </div>
-        <div class="chart-card-body" id="chart-weekly-wrap"><canvas id="chart-weekly"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-card-header">
-          <span><i class="fa-solid fa-ranking-star"></i> Top Workers por Custo</span>
-        </div>
-        <div class="chart-card-body" id="chart-workers-wrap"><canvas id="chart-workers"></canvas></div>
-      </div>
       <div class="chart-card">
         <div class="chart-card-header">
           <span><i class="fa-solid fa-chart-pie"></i> Custo por Fase</span>
@@ -1281,14 +1500,11 @@ body.has-subbar .section { animation-delay: 0s; }
         <div class="table-toolbar">
           <input type="text" class="table-search" id="worker-search"
                  placeholder="Pesquisar nome..." oninput="filterWorkers()">
-          <button class="export-btn" onclick="exportWorkersCSV()">
-            <i class="fa-solid fa-download"></i> CSV
-          </button>
         </div>
       </div>
       <div class="card-body" style="padding:0">
         <div class="table-wrap">
-          <table>
+          <table class="card-table">
             <thead>
               <tr id="workers-thead">
                 <th class="sortable" onclick="sortWorkers('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
@@ -1321,22 +1537,6 @@ body.has-subbar .section { animation-delay: 0s; }
       <div class="desl-origens-body" id="desl-origens"></div>
     </div>
 
-    <!-- Charts Row -->
-    <div class="desl-charts-row">
-      <div class="desl-chart-card">
-        <div class="desl-chart-header">
-          <i class="fa-solid fa-chart-bar"></i> Custo por Obra (Mão de Obra vs Deslocações)
-        </div>
-        <div class="desl-chart-body" id="desl-chart-obra-wrap"><canvas id="desl-chart-obra"></canvas></div>
-      </div>
-      <div class="desl-chart-card">
-        <div class="desl-chart-header">
-          <i class="fa-solid fa-chart-line"></i> Evolução Temporal
-        </div>
-        <div class="desl-chart-body" id="desl-chart-time-wrap"><canvas id="desl-chart-time"></canvas></div>
-      </div>
-    </div>
-
     <!-- Full Table -->
     <div class="card">
       <div class="card-header">
@@ -1352,14 +1552,11 @@ body.has-subbar .section { animation-delay: 0s; }
           <input type="date" class="desl-date-input" id="desl-date-from" onchange="filterDeslTable()">
           <span class="desl-date-label">Até</span>
           <input type="date" class="desl-date-input" id="desl-date-to" onchange="filterDeslTable()">
-          <button class="export-btn" onclick="exportDeslCSV()">
-            <i class="fa-solid fa-download"></i> CSV
-          </button>
         </div>
       </div>
       <div class="card-body" style="padding:0">
         <div class="table-wrap">
-          <table>
+          <table class="card-table">
             <thead>
               <tr id="desl-thead">
                 <th class="sortable" onclick="sortDesl('data')">Data <i class="fa-solid fa-sort sort-icon"></i></th>
@@ -1378,25 +1575,6 @@ body.has-subbar .section { animation-delay: 0s; }
 
   <!-- Equipa -->
   <div class="section" id="section-equipa">
-    <!-- Stats Cards -->
-    <div class="equipa-stats-grid" id="equipa-stats"></div>
-
-    <!-- Charts Row -->
-    <div class="equipa-charts-row">
-      <div class="equipa-chart-card">
-        <div class="equipa-chart-header">
-          <i class="fa-solid fa-chart-pie"></i> Distribuição por Função
-        </div>
-        <div class="equipa-chart-body" id="equipa-chart-funcao-wrap"><canvas id="equipa-chart-funcao"></canvas></div>
-      </div>
-      <div class="equipa-chart-card">
-        <div class="equipa-chart-header">
-          <i class="fa-solid fa-ranking-star"></i> Top 10 Colaboradores por Custo
-        </div>
-        <div class="equipa-chart-body" id="equipa-chart-top-wrap"><canvas id="equipa-chart-top"></canvas></div>
-      </div>
-    </div>
-
     <!-- Main Table -->
     <div class="card">
       <div class="card-header">
@@ -1410,24 +1588,21 @@ body.has-subbar .section { animation-delay: 0s; }
           </div>
           <input type="text" class="table-search" id="equipa-search"
                  placeholder="Pesquisar nome..." oninput="filterEquipa()">
-          <button class="export-btn" onclick="exportEquipaCSV()">
-            <i class="fa-solid fa-download"></i> CSV
-          </button>
         </div>
       </div>
       <div class="card-body" style="padding:0">
         <div class="table-wrap">
-          <table>
+          <table class="card-table">
             <thead>
               <tr id="equipa-thead">
                 <th class="sortable" onclick="sortEquipa('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable" onclick="sortEquipa('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortEquipa('eurH')">€/h <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortEquipa('obras')">Obras <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortEquipa('obras')">Obras <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortEquipa('fase')">Fase <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable td-right" onclick="sortEquipa('horas')">Total Horas <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable td-right" onclick="sortEquipa('custo')">Total Custo <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable td-center" onclick="sortEquipa('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortEquipa('assiduidade')">Assiduidade <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortEquipa('atrasos')">Atrasos <i class="fa-solid fa-sort sort-icon"></i></th>
               </tr>
             </thead>
             <tbody id="equipa-tbody"></tbody>
@@ -1435,109 +1610,61 @@ body.has-subbar .section { animation-delay: 0s; }
         </div>
       </div>
     </div>
+    <!-- Popup container -->
+    <div id="equipa-popup-container"></div>
   </div>
 
   <!-- Assiduidade -->
   <div class="section" id="section-assiduidade">
-    <div class="assid-toolbar">
-      <div class="obra-select-wrap">
-        <select class="obra-select" id="assid-obra-select" onchange="assidSelectObra(this.value)" style="min-width:200px">
-          <option value="">Selecione a obra...</option>
-        </select>
-        <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-calendar-xmark"></i> Faltas por Colaborador
+        <div class="equipa-table-toolbar">
+          <input type="text" class="table-search" id="assid-search"
+                 placeholder="Pesquisar nome..." oninput="renderAssidTable()">
+        </div>
       </div>
-      <div class="obra-select-wrap">
-        <select class="obra-select" id="assid-worker-select" onchange="assidSelectWorker(this.value)" style="min-width:200px">
-          <option value="">Selecione colaborador...</option>
-        </select>
-        <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="assid-thead">
+                <th class="sortable" onclick="sortAssid('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortAssid('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortAssid('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="assid-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
-    <div id="assid-content">
-      <div class="assid-empty-msg">
-        <i class="fa-solid fa-calendar-check"></i>
-        Selecione uma obra e um colaborador para ver a assiduidade.
-      </div>
-    </div>
+
+    <!-- Popup de faltas -->
+    <div id="assid-popup-container"></div>
   </div>
 
   <!-- Análise Comparativa -->
   <div class="section" id="section-comparativa">
-    <!-- Tabs -->
-    <div class="comp-tabs">
-      <button class="comp-tab active" onclick="switchCompTab('obras')" data-comptab="obras">
-        <i class="fa-solid fa-building" style="margin-right:6px"></i>Comparação de Obras
-      </button>
-      <button class="comp-tab" onclick="switchCompTab('fases')" data-comptab="fases">
-        <i class="fa-solid fa-layer-group" style="margin-right:6px"></i>Análise de Fases
-      </button>
-      <button class="comp-tab" onclick="switchCompTab('evolucao')" data-comptab="evolucao">
-        <i class="fa-solid fa-chart-line" style="margin-right:6px"></i>Evolução Temporal
-      </button>
-    </div>
-
-    <!-- Panel A: Comparação de Obras -->
-    <div class="comp-panel active" id="comp-panel-obras">
-      <div class="comp-charts-row">
-        <div class="comp-chart-card">
-          <div class="comp-chart-header">
-            <i class="fa-solid fa-chart-bar"></i> Custo: Mão de Obra vs Deslocações
-          </div>
-          <div class="comp-chart-body tall" id="comp-chart-custos-wrap"><canvas id="comp-chart-custos"></canvas></div>
+    <div class="comp-charts-row">
+      <div class="comp-chart-card">
+        <div class="comp-chart-header">
+          <i class="fa-solid fa-chart-bar"></i> Custo: Mão de Obra vs Deslocações
         </div>
-        <div class="comp-chart-card">
-          <div class="comp-chart-header">
-            <i class="fa-solid fa-spider"></i> Radar Comparativo
-          </div>
-          <div class="comp-chart-body tall" id="comp-chart-radar-wrap"><canvas id="comp-chart-radar"></canvas></div>
-        </div>
-      </div>
-      <div class="comp-table-wrap" id="comp-table-obras-wrap"></div>
-    </div>
-
-    <!-- Panel B: Análise de Fases -->
-    <div class="comp-panel" id="comp-panel-fases">
-      <div class="comp-fase-toolbar">
-        <div class="obra-select-wrap">
-          <select class="obra-select" id="comp-fase-select" onchange="buildCompFases(this.value)" style="min-width:220px">
-            <option value="">Selecione uma obra...</option>
-          </select>
-          <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
-        </div>
-        <div id="comp-fase-highlights"></div>
-      </div>
-      <div class="comp-charts-row" id="comp-fase-charts">
-        <div class="comp-chart-card">
-          <div class="comp-chart-header">
-            <i class="fa-solid fa-coins"></i> Custo por Fase
-          </div>
-          <div class="comp-chart-body" id="comp-chart-fasecusto-wrap"><canvas id="comp-chart-fasecusto"></canvas></div>
-        </div>
-        <div class="comp-chart-card">
-          <div class="comp-chart-header">
-            <i class="fa-solid fa-clock"></i> Horas por Fase
-          </div>
-          <div class="comp-chart-body" id="comp-chart-fasehoras-wrap"><canvas id="comp-chart-fasehoras"></canvas></div>
-        </div>
-      </div>
-      <div class="comp-table-wrap" id="comp-table-fases-wrap"></div>
-    </div>
-
-    <!-- Panel C: Evolução Temporal -->
-    <div class="comp-panel" id="comp-panel-evolucao">
-      <div class="comp-evo-controls">
-        <div class="comp-evo-metric-btns">
-          <button class="comp-evo-metric-btn active" onclick="switchCompEvoMetric('custo')" data-metric="custo">Custo</button>
-          <button class="comp-evo-metric-btn" onclick="switchCompEvoMetric('horas')" data-metric="horas">Horas</button>
-        </div>
+        <div class="comp-chart-body tall" id="comp-chart-custos-wrap"><canvas id="comp-chart-custos"></canvas></div>
       </div>
       <div class="comp-chart-card">
         <div class="comp-chart-header">
-          <i class="fa-solid fa-chart-line"></i> Evolução Mensal por Obra
+          <i class="fa-solid fa-layer-group"></i> Custo: Fases de Obra
         </div>
-        <div class="comp-chart-body tall" id="comp-chart-evo-wrap"><canvas id="comp-chart-evo"></canvas></div>
+        <div class="comp-chart-body tall" id="comp-chart-fasesobra-wrap"><canvas id="comp-chart-fasesobra"></canvas></div>
       </div>
-      <div class="comp-evo-legend" id="comp-evo-legend"></div>
+      <div class="comp-chart-card">
+        <div class="comp-chart-header">
+          <i class="fa-solid fa-calendar-days"></i> Dias: Fases de Obra
+        </div>
+        <div class="comp-chart-body tall" id="comp-chart-diasfase-wrap"><canvas id="comp-chart-diasfase"></canvas></div>
+      </div>
     </div>
   </div>
 
@@ -1615,14 +1742,22 @@ let compEvoHidden = {};
 /* ── FORMATTERS ─────────────────────────────────────────── */
 const fmt  = v => (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const fmtN = v => typeof v === 'number' ? v.toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : v;
+const fmtMin = m => { if (!m) return '0m'; const h = Math.floor(m / 60); const min = Math.round(m % 60); return h > 0 ? h + 'h ' + min + 'm' : min + 'm'; };
 const initials = n => n.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const CHART_PALETTE = ['#e94560','#63b3ed','#48bb78','#f6ad55','#ff6b6b','#805ad5','#38b2ac','#d69e2e','#ed64a6','#4fd1c5'];
+function isMobile() { return window.innerWidth < 768; }
+function mLegend(override) {
+  const base = isMobile()
+    ? { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 6 } }
+    : { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } };
+  return Object.assign(base, override || {});
+}
 
 /* ── THEME / DATE FILTER / KPI TOOLTIP GLOBALS ──────────── */
-let currentTheme = 'dark';
+let currentTheme = 'light';
 let globalDateFrom = '';
 let globalDateTo = '';
-let activeQuickFilter = 'tudo';
+let activeQuickFilter = 'hoje';
 
 const KPI_TOOLTIPS = {
   'Custo Total':       'Soma de todos os custos de mão de obra e deslocações em todas as obras.',
@@ -1656,7 +1791,6 @@ const sectionTitles = {
 function loadData() {
   const overlay = document.getElementById('loading-overlay');
   overlay.classList.remove('hidden');
-  document.getElementById('topbar-badge').textContent = 'a carregar...';
   startRefreshSpinner();
   showSkeletons();
 
@@ -1671,10 +1805,9 @@ function onDataLoaded(jsonStr) {
     DATA = JSON.parse(jsonStr);
     if (DATA.error) { onDataError(DATA.error); return; }
     buildAll();
+    setQuickFilter('hoje');
     hideOverlay();
     stopRefreshSpinner();
-    document.getElementById('topbar-badge').textContent =
-      'Atualizado: ' + (DATA.global.last_update || '—');
     checkAlerts();
   } catch (e) {
     onDataError('Erro ao processar dados: ' + e.message);
@@ -1684,7 +1817,6 @@ function onDataLoaded(jsonStr) {
 function onDataError(err) {
   hideOverlay();
   stopRefreshSpinner();
-  document.getElementById('topbar-badge').textContent = 'Erro';
   document.getElementById('section-overview').innerHTML =
     `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i>
      Erro ao carregar dados: ${err}</div>`;
@@ -1717,14 +1849,14 @@ function showSection(id) {
   updateBreadcrumb();
   updateMobileNav();
 
-  // Auto-sync assiduidade with current obra
-  if (id === 'assiduidade' && currentObraName && DATA && DATA.obras[currentObraName]) {
-    const sel = document.getElementById('assid-obra-select');
-    if (sel.value !== currentObraName) {
-      sel.value = currentObraName;
-      assidSelectObra(currentObraName);
-    }
-  }
+  // Auto-sync assiduidade with current obra — disabled (heatmap removed)
+  // if (id === 'assiduidade' && currentObraName && DATA && DATA.obras[currentObraName]) {
+  //   const sel = document.getElementById('assid-obra-select');
+  //   if (sel.value !== currentObraName) {
+  //     sel.value = currentObraName;
+  //     assidSelectObra(currentObraName);
+  //   }
+  // }
 
   window.scrollTo(0, 0);
 }
@@ -1753,7 +1885,7 @@ function buildAll() {
   buildOverview();
   buildDeslocacoes();
   buildEquipa();
-  initAssiduidade();
+  buildAssidTable();
   buildComparativa();
 }
 
@@ -1778,6 +1910,11 @@ function openObra(nome) {
   currentObraName = nome;
   sectionTitles['obra-detail'] = nome;
   showSection('obra-detail');
+
+  // Fix sidebar active: highlight only the clicked obra button
+  document.querySelectorAll('#obras-submenu .nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === nome);
+  });
 
   // Update dropdown
   document.getElementById('obra-select').value = nome;
@@ -1816,13 +1953,58 @@ function populateObraSelect() {
 function buildObraKpis(nome) {
   const o = DATA.obras[nome];
   const container = document.getElementById('obra-kpis');
+
+  // Se não há filtro activo, usar totais brutos directamente
+  const semFiltro = !globalDateFrom && !globalDateTo;
+
+  let custoMO = 0, horas = 0, faltas = 0, atrasos = 0, custoDesl = 0;
+  let workerSet = new Set();
+  let diasSet = new Set();
+
+  if (semFiltro) {
+    custoMO    = o.custo_mao_obra    || 0;
+    horas      = o.horas_total       || 0;
+    faltas     = o.faltas            || 0;
+    atrasos    = o.atraso_total      || 0;
+    custoDesl  = o.custo_deslocacoes || 0;
+    workerSet  = { size: o.trabalhadores || 0 };
+    diasSet    = { size: o.dias          || 0 };
+  } else {
+    // Agregar a partir dos dados daily filtrados
+    (o.daily || []).forEach(d => {
+      if (!dateInRange(d.DATA_str)) return;
+      custoMO += d.Custo  || 0;
+      horas   += d.Horas  || 0;
+      diasSet.add(d.DATA_str);
+    });
+
+    // Faltas, atrasos e workers a partir da assiduidade filtrada
+    (o.assiduidade || []).forEach(w => {
+      Object.entries(w.dias).forEach(([dateStr, dayData]) => {
+        if (!dateInRange(dateStr)) return;
+        if (dayData.falta)      faltas++;
+        if (dayData.atraso_min) atrasos += dayData.atraso_min;
+        if (dayData.horas > 0)  workerSet.add(w.nome);
+      });
+    });
+
+    // Deslocações filtradas
+    (DATA.deslocacoes || []).forEach(d => {
+      if (d.obra === nome && dateInRange(d.data)) custoDesl += d.custo || 0;
+    });
+  }
+
+  const custoTotal = custoMO + custoDesl;
+  const nWorkers   = semFiltro ? workerSet.size : workerSet.size;
+  const nDias      = semFiltro ? diasSet.size   : diasSet.size;
+
   const items = [
-    { val: fmt(o.custo_total),         label: 'Custo Total' },
-    { val: fmtN(o.horas_total) + 'h',  label: 'Horas' },
-    { val: o.trabalhadores,             label: 'Trabalhadores' },
-    { val: o.faltas,                    label: 'Faltas' },
-    { val: o.dias,                      label: 'Dias Trabalhados' },
-    { val: fmt(o.custo_deslocacoes),   label: 'Deslocações' },
+    { val: fmt(custoTotal),        label: 'Custo Total' },
+    { val: fmtN(horas) + 'h',     label: 'Horas' },
+    { val: nWorkers,               label: 'Trabalhadores' },
+    { val: faltas,                 label: 'Faltas' },
+    { val: nDias,                  label: 'Dias Trabalhados' },
+    { val: fmt(custoDesl),         label: 'Deslocações' },
   ];
   container.innerHTML = items.map(i => `
     <div class="obra-kpi">
@@ -1839,7 +2021,7 @@ function destroyObraCharts() {
   Object.values(obraCharts).forEach(c => { if (c) c.destroy(); });
   obraCharts = {};
   // Restore canvases that may have been replaced with no-data messages
-  ['daily','weekly','workers','fases'].forEach(key => {
+  ['fases'].forEach(key => {
     const wrap = document.getElementById('chart-' + key + '-wrap');
     if (wrap && !document.getElementById('chart-' + key)) {
       wrap.innerHTML = '<canvas id="chart-' + key + '"></canvas>';
@@ -1850,185 +2032,67 @@ function destroyObraCharts() {
 function buildObraCharts(nome) {
   const obra = DATA.obras[nome];
   destroyObraCharts();
-  dailyPeriod = 0;
-  updatePeriodBtns();
-  // Apply global date filter to daily data
-  const filteredDaily = (obra.daily || []).filter(d => dateInRange(d.DATA_str));
-  buildDailyChart(filteredDaily);
-  buildWeeklyChart(obra.weekly);
-  buildWorkersChart(obra.workers);
-  buildFasesChart(obra.fases);
-}
 
-/* ── Daily line chart (dual Y) ─────────────────────────── */
-function buildDailyChart(daily) {
-  if (obraCharts.daily) obraCharts.daily.destroy();
-  let data = daily;
-  if (dailyPeriod > 0) data = daily.slice(-dailyPeriod);
-  if (!data.length) {
-    document.getElementById('chart-daily').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem dados diários</div>';
-    return;
-  }
-  const ctx = document.getElementById('chart-daily');
-  obraCharts.daily = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.map(d => d.DATA_str.slice(5)),
-      datasets: [
-        {
-          label: 'Custo (\u20ac)',
-          data: data.map(d => d.Custo),
-          borderColor: '#f6ad55',
-          backgroundColor: 'rgba(246,173,85,.1)',
-          fill: true, tension: .3, yAxisID: 'y',
-          pointRadius: data.length > 30 ? 0 : 3,
-          borderWidth: 2,
-        },
-        {
-          label: 'Horas',
-          data: data.map(d => d.Horas),
-          borderColor: '#63b3ed',
-          backgroundColor: 'rgba(99,179,237,.1)',
-          fill: false, tension: .3, yAxisID: 'y1',
-          pointRadius: data.length > 30 ? 0 : 3,
-          borderWidth: 2,
-        }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.datasetIndex === 0 ? fmt(ctx.raw) : fmtN(ctx.raw) + 'h') } }
-      },
-      scales: {
-        y:  { position: 'left',  title: { display: true, text: '\u20ac', color: '#f6ad55', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 } } },
-        y1: { position: 'right', title: { display: true, text: 'Horas', color: '#63b3ed', font: { size: 10 } }, grid: { drawOnChartArea: false }, ticks: { font: { size: 10 } } },
-        x:  { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,.04)' } }
-      }
-    }
+  // Aggregate fases from assiduidade (date-filtered)
+  const faseAgg = {};
+  const assid = obra.assiduidade || [];
+  const workers = obra.workers || [];
+  assid.forEach(w => {
+    const wInfo = workers.find(ww => ww['Nome (auto)'] === w.nome);
+    const fase = (wInfo && wInfo.Fase) || '\u2014';
+    Object.entries(w.dias).forEach(([dateStr, d]) => {
+      if (!dateInRange(dateStr)) return;
+      if (d.falta) return;
+      if (!faseAgg[fase]) faseAgg[fase] = { Fase: fase, Custo: 0, Horas: 0 };
+      faseAgg[fase].Custo += d.custo || 0;
+      faseAgg[fase].Horas += d.horas || 0;
+    });
   });
+  const filteredFases = Object.values(faseAgg).filter(f => f.Custo > 0 || f.Horas > 0);
+  buildFasesChart(filteredFases);
 }
 
-function setDailyPeriod(days) {
-  dailyPeriod = days;
-  updatePeriodBtns();
-  if (currentObraName && DATA.obras[currentObraName]) {
-    const filteredDaily = (DATA.obras[currentObraName].daily || []).filter(d => dateInRange(d.DATA_str));
-    buildDailyChart(filteredDaily);
-  }
-}
+/* ── Daily line chart — disabled (card removed) ──────── */
+function buildDailyChart(daily) { /* disabled */ }
+function setDailyPeriod(days) { /* disabled */ }
+function updatePeriodBtns() { /* disabled */ }
 
-function updatePeriodBtns() {
-  document.querySelectorAll('.period-btn').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.period) === dailyPeriod);
-  });
-}
+/* ── Weekly bar chart — disabled (card removed) ──────── */
+function buildWeeklyChart(weekly) { /* disabled */ }
 
-/* ── Weekly bar chart (dual Y) ─────────────────────────── */
-function buildWeeklyChart(weekly) {
-  if (obraCharts.weekly) obraCharts.weekly.destroy();
-  if (!weekly.length) {
-    document.getElementById('chart-weekly').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem dados semanais</div>';
-    return;
-  }
-  const ctx = document.getElementById('chart-weekly');
-  obraCharts.weekly = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: weekly.map(w => w.Semana),
-      datasets: [
-        { label: 'Custo (\u20ac)', data: weekly.map(w => w.Custo), backgroundColor: 'rgba(246,173,85,.7)', borderRadius: 4, yAxisID: 'y' },
-        { label: 'Horas',          data: weekly.map(w => w.Horas), backgroundColor: 'rgba(99,179,237,.7)',  borderRadius: 4, yAxisID: 'y1' }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.datasetIndex === 0 ? fmt(ctx.raw) : fmtN(ctx.raw) + 'h') } }
-      },
-      scales: {
-        y:  { position: 'left',  title: { display: true, text: '\u20ac', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 } } },
-        y1: { position: 'right', title: { display: true, text: 'Horas', font: { size: 10 } }, grid: { drawOnChartArea: false }, ticks: { font: { size: 10 } } },
-        x:  { ticks: { font: { size: 10 } }, grid: { display: false } }
-      }
-    }
-  });
-}
+/* ── Horizontal bar — top 10 workers by cost — disabled (card removed) ── */
+function buildWorkersChart(workers) { /* disabled */ }
 
-/* ── Horizontal bar — top 10 workers by cost ───────────── */
-function buildWorkersChart(workers) {
-  if (obraCharts.workers) obraCharts.workers.destroy();
-  const top = workers.slice(0, 10);
-  if (!top.length) {
-    document.getElementById('chart-workers').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem trabalhadores</div>';
-    return;
-  }
-  const funcoes = [...new Set(top.map(w => w['Função (auto)']))];
-  const funcaoColor = {};
-  funcoes.forEach((f, i) => { funcaoColor[f] = CHART_PALETTE[i % CHART_PALETTE.length]; });
-
-  const ctx = document.getElementById('chart-workers');
-  obraCharts.workers = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: top.map(w => w['Nome (auto)'].split(' ').slice(0, 2).join(' ')),
-      datasets: [{
-        data: top.map(w => w.Custo),
-        backgroundColor: top.map(w => funcaoColor[w['Função (auto)']] || '#e94560'),
-        borderRadius: 4,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => fmt(ctx.raw),
-            afterLabel: ctx => top[ctx.dataIndex]['Função (auto)'],
-          }
-        }
-      },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
-      }
-    }
-  });
-}
-
-/* ── Donut — cost by phase ─────────────────────────────── */
+/* ── Bar chart — cost by phase ──────────────────────────── */
 function buildFasesChart(fases) {
   if (obraCharts.fases) obraCharts.fases.destroy();
   if (!fases || !fases.length) {
     document.getElementById('chart-fases').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem fases definidas</div>';
+      '<div class="no-chart-data">Sem fases no período</div>';
     return;
   }
+  const sorted = fases.slice().sort((a, b) => b.Custo - a.Custo);
   const ctx = document.getElementById('chart-fases');
   obraCharts.fases = new Chart(ctx, {
-    type: 'doughnut',
+    type: 'bar',
     data: {
-      labels: fases.map(f => f.Fase),
+      labels: sorted.map(f => f.Fase),
       datasets: [{
-        data: fases.map(f => f.Custo),
-        backgroundColor: fases.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderWidth: 0,
+        label: 'Custo',
+        data: sorted.map(f => f.Custo),
+        backgroundColor: sorted.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+        borderRadius: 4,
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      cutout: '55%',
       plugins: {
-        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, padding: 8 } },
-        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + fmt(ctx.raw) } }
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } }
+      },
+      scales: {
+        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } }
       }
     }
   });
@@ -2039,16 +2103,36 @@ function buildFasesChart(fases) {
    ══════════════════════════════════════════════════════════ */
 function buildObraWorkersTable(nome) {
   const obra = DATA.obras[nome];
-  currentObraWorkers = obra.workers.map(w => ({
-    nome:   w['Nome (auto)'],
-    funcao: w['Função (auto)'],
-    fase:   w.Fase || '\u2014',
-    horas:  w.Horas,
-    custo:  w.Custo,
-    atraso: w.Atraso,
-    dias:   w.Dias,
-    faltas: w.Faltas,
-  }));
+  const assid = obra.assiduidade || [];
+  const workers = obra.workers || [];
+
+  // Aggregate from assiduidade (date-filtered) instead of pre-aggregated workers
+  const agg = {};
+  assid.forEach(w => {
+    const wName = w.nome;
+    if (!agg[wName]) {
+      const wInfo = workers.find(ww => ww['Nome (auto)'] === wName);
+      agg[wName] = {
+        nome: wName,
+        funcao: (wInfo && wInfo['Função (auto)']) || w.funcao || '\u2014',
+        fase: (wInfo && wInfo.Fase) || '\u2014',
+        horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0
+      };
+    }
+    Object.entries(w.dias).forEach(([dateStr, d]) => {
+      if (!dateInRange(dateStr)) return;
+      if (d.falta) {
+        agg[wName].faltas++;
+      } else if (d.horas > 0) {
+        agg[wName].horas += d.horas;
+        agg[wName].custo += d.custo || 0;
+        agg[wName].dias++;
+      }
+      if (d.atraso_min) agg[wName].atraso += d.atraso_min;
+    });
+  });
+
+  currentObraWorkers = Object.values(agg).filter(w => w.dias > 0 || w.faltas > 0);
   workerSortCol = 'custo';
   workerSortAsc = false;
   document.getElementById('worker-search').value = '';
@@ -2068,14 +2152,14 @@ function renderWorkerRows() {
   const tbody = document.getElementById('workers-tbody');
   tbody.innerHTML = rows.map(w => `
     <tr>
-      <td><strong>${w.nome}</strong></td>
-      <td>${w.funcao}</td>
-      <td>${w.fase}</td>
-      <td class="td-right td-hours td-mono">${fmtN(w.horas)}h</td>
-      <td class="td-right td-euro td-mono">${fmt(w.custo)}</td>
-      <td class="td-right td-mono">${w.atraso > 0 ? w.atraso + ' min' : '\u2014'}</td>
-      <td class="td-center td-mono">${w.dias}</td>
-      <td class="td-center">${w.faltas > 0 ? '<span class="tag tag-red">' + w.faltas + '</span>' : '0'}</td>
+      <td data-label="Nome"><strong>${w.nome}</strong></td>
+      <td data-label="Função">${w.funcao}</td>
+      <td data-label="Fase">${w.fase}</td>
+      <td data-label="Horas" class="td-right td-hours td-mono">${fmtN(w.horas)}h</td>
+      <td data-label="Custo" class="td-right td-euro td-mono">${fmt(w.custo)}</td>
+      <td data-label="Atrasos" class="td-right td-mono">${w.atraso > 0 ? w.atraso + ' min' : '\u2014'}</td>
+      <td data-label="Dias" class="td-center td-mono">${w.dias}</td>
+      <td data-label="Faltas" class="td-center">${w.faltas > 0 ? '<span class="tag tag-red">' + w.faltas + '</span>' : '0'}</td>
     </tr>
   `).join('');
 
@@ -2107,32 +2191,12 @@ function sortWorkers(col) {
 
 function filterWorkers() { renderWorkerRows(); }
 
-function exportWorkersCSV() {
-  if (!currentObraWorkers.length) return;
-  const header = 'Nome;Função;Fase;Horas;Custo;Atrasos (min);Dias;Faltas';
-  const rows = currentObraWorkers.map(w =>
-    [w.nome, w.funcao, w.fase, w.horas, w.custo.toFixed(2), w.atraso, w.dias, w.faltas].join(';')
-  );
-  const csv = header + '\n' + rows.join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
-  a.download = (currentObraName || 'obra') + '_trabalhadores.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
+function exportWorkersCSV() { /* disabled */ }
 
 /* ── SECTION BUILDERS (placeholders) ────────────────────── */
 function buildOverview() {
   if (!DATA || !DATA.global) return;
   const g = computeFilteredGlobal();
-
-  const fmtMin = m => {
-    if (!m) return '0m';
-    const h = Math.floor(m / 60);
-    const min = Math.round(m % 60);
-    return h > 0 ? h + 'h ' + min + 'm' : min + 'm';
-  };
 
   const pctMO   = g.custo_total > 0 ? ((g.custo_mao_obra / g.custo_total) * 100).toFixed(1) : '0';
   const pctDesl = g.custo_total > 0 ? ((g.custo_deslocacoes / g.custo_total) * 100).toFixed(1) : '0';
@@ -2140,11 +2204,11 @@ function buildOverview() {
   const cards = [
     { icon: 'fa-coins',                theme: 'warning', label: 'Custo Total',       value: g.custo_total,       format: 'euro',    sub: g.obras_ativas + ' obras ativas' },
     { icon: 'fa-hammer',               theme: 'info',    label: 'Mão de Obra',       value: g.custo_mao_obra,    format: 'euro',    sub: pctMO + '% do custo total' },
-    { icon: 'fa-car',                  theme: 'accent',  label: 'Deslocações',       value: g.custo_deslocacoes, format: 'euro',    sub: pctDesl + '% do custo total' },
+    { icon: 'fa-car',                  theme: 'accent',  label: 'Deslocações',       value: g.custo_deslocacoes, format: 'euro',    sub: pctDesl + '% do custo total', link: 'deslocacoes' },
     { icon: 'fa-clock',                theme: 'success', label: 'Horas Trabalhadas', value: g.horas_total,       format: 'hours',   sub: 'Total acumulado' },
     { icon: 'fa-building',             theme: 'info',    label: 'Obras Ativas',      value: g.obras_ativas,      format: 'int',     sub: 'Em andamento' },
-    { icon: 'fa-users',                theme: 'success', label: 'Colaboradores',     value: g.colaboradores,     format: 'int',     sub: 'Trabalhadores únicos' },
-    { icon: 'fa-user-xmark',           theme: 'accent',  label: 'Faltas Totais',     value: g.faltas,            format: 'int',     sub: 'Registos de ausência', badge: g.faltas > 5 },
+    { icon: 'fa-users',                theme: 'success', label: 'Colaboradores',     value: g.colaboradores,     format: 'int',     sub: 'Trabalhadores únicos', link: 'equipa' },
+    { icon: 'fa-user-xmark',           theme: 'accent',  label: 'Faltas Totais',     value: g.faltas,            format: 'int',     sub: 'Registos de ausência', badge: g.faltas > 5, link: 'assiduidade' },
     { icon: 'fa-triangle-exclamation', theme: 'warning', label: 'Total Atrasos',     value: g.total_atrasos,     format: 'minutes', sub: fmtMin(g.total_atrasos) + ' acumulados' },
   ];
 
@@ -2154,8 +2218,11 @@ function buildOverview() {
     const tooltipHtml = tooltip
       ? '<div class="kpi-info-btn">?</div><div class="kpi-info-tooltip">' + tooltip + '</div>'
       : '';
+    const linkAttr = c.link
+      ? ' onclick="showSection(\'' + c.link + '\')" style="position:relative;cursor:pointer"'
+      : ' style="position:relative"';
     html += `
-      <div class="kpi-card" data-theme="${c.theme}" style="position:relative">
+      <div class="kpi-card" data-theme="${c.theme}"${linkAttr}>
         ${tooltipHtml}
         <div class="kpi-icon"><i class="fa-solid ${c.icon}"></i></div>
         <div class="kpi-label">${c.label}</div>
@@ -2209,7 +2276,18 @@ function animateCounters() {
 function buildDeslocacoes() {
   if (!DATA || !DATA.deslocacoes) return;
   const desl = DATA.deslocacoes.filter(d => dateInRange(d.data));
-  if (!desl.length) return;
+  if (!desl.length) {
+    // Limpar todos os containers para não mostrar dados de render anterior
+    const empty = '<div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-route" style="font-size:28px;display:block;margin-bottom:12px;opacity:.4"></i>Sem deslocações no período seleccionado</div>';
+    document.getElementById('desl-kpis').innerHTML = empty;
+    const origensEl = document.getElementById('desl-origens');
+    if (origensEl) origensEl.innerHTML = '';
+    deslAllRows = [];
+    const tbody = document.getElementById('desl-tbody');
+    if (tbody) tbody.innerHTML = '';
+    destroyDeslCharts();
+    return;
+  }
 
   // Store for table filtering
   deslAllRows = desl.slice();
@@ -2259,11 +2337,6 @@ function buildDeslocacoes() {
 
   // ── MAPA DE ORIGENS ──
   buildDeslOrigens(desl);
-
-  // ── CHARTS ──
-  destroyDeslCharts();
-  buildDeslObraChart(desl);
-  buildDeslTimeChart(desl);
 
   // ── TABLE ──
   populateDeslFilters(desl);
@@ -2334,98 +2407,11 @@ function destroyDeslCharts() {
   });
 }
 
-/* ── Stacked bar: Mão de Obra vs Deslocações by obra ── */
-function buildDeslObraChart(desl) {
-  // Aggregate deslocações cost per obra
-  const deslPerObra = {};
-  desl.forEach(d => { deslPerObra[d.obra] = (deslPerObra[d.obra] || 0) + d.custo; });
+/* ── Stacked bar: Mão de Obra vs Deslocações by obra — disabled (card removed) ── */
+function buildDeslObraChart(desl) { /* disabled */ }
 
-  // Get labour cost per obra from DATA.obras
-  const obraNames = Object.keys(deslPerObra).sort((a, b) => {
-    const totalA = (DATA.obras[a] ? DATA.obras[a].custo_total - (deslPerObra[a] || 0) : 0) + (deslPerObra[a] || 0);
-    const totalB = (DATA.obras[b] ? DATA.obras[b].custo_total - (deslPerObra[b] || 0) : 0) + (deslPerObra[b] || 0);
-    return totalB - totalA;
-  }).slice(0, 12);
-
-  if (!obraNames.length) {
-    document.getElementById('desl-chart-obra-wrap').innerHTML = '<div class="no-chart-data">Sem dados</div>';
-    return;
-  }
-
-  const labourData = obraNames.map(n => {
-    if (!DATA.obras[n]) return 0;
-    // custo_total in DATA.obras already includes deslocacoes, subtract to get labour only
-    return Math.max(0, DATA.obras[n].custo_total - (deslPerObra[n] || 0));
-  });
-  const deslData = obraNames.map(n => deslPerObra[n] || 0);
-  const shortNames = obraNames.map(n => n.length > 18 ? n.slice(0, 16) + '…' : n);
-
-  const ctx = document.getElementById('desl-chart-obra');
-  deslCharts.obra = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: shortNames,
-      datasets: [
-        { label: 'Mão de Obra', data: labourData, backgroundColor: 'rgba(99,179,237,.7)', borderRadius: 4 },
-        { label: 'Deslocações', data: deslData, backgroundColor: 'rgba(246,173,85,.7)', borderRadius: 4 }
-      ]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } }
-      },
-      scales: {
-        x: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        y: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } }
-      }
-    }
-  });
-}
-
-/* ── Line chart: daily deslocações cost ───────────────── */
-function buildDeslTimeChart(desl) {
-  // Aggregate cost by date
-  const dateMap = {};
-  desl.forEach(d => {
-    dateMap[d.data] = (dateMap[d.data] || 0) + d.custo;
-  });
-  const sorted = Object.entries(dateMap).sort((a, b) => a[0].localeCompare(b[0]));
-  if (!sorted.length) {
-    document.getElementById('desl-chart-time-wrap').innerHTML = '<div class="no-chart-data">Sem dados temporais</div>';
-    return;
-  }
-
-  const ctx = document.getElementById('desl-chart-time');
-  deslCharts.time = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: sorted.map(([d]) => d.slice(5)), // MM-DD
-      datasets: [{
-        label: 'Custo Deslocações (\u20ac)',
-        data: sorted.map(([, v]) => v),
-        borderColor: '#f6ad55',
-        backgroundColor: 'rgba(246,173,85,.1)',
-        fill: true, tension: .3,
-        pointRadius: sorted.length > 30 ? 0 : 3,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } }
-      },
-      scales: {
-        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,.04)' } }
-      }
-    }
-  });
-}
+/* ── Line chart: daily deslocações cost — disabled (card removed) ── */
+function buildDeslTimeChart(desl) { /* disabled */ }
 
 /* ── Table filters populate ──────────────────────────── */
 function populateDeslFilters(desl) {
@@ -2434,12 +2420,9 @@ function populateDeslFilters(desl) {
   sel.innerHTML = '<option value="">Todas as obras</option>' +
     obras.map(o => `<option value="${o}">${o}</option>`).join('');
 
-  // Set date range from data
-  const dates = desl.map(d => d.data).filter(Boolean).sort();
-  if (dates.length) {
-    document.getElementById('desl-date-from').value = dates[0];
-    document.getElementById('desl-date-to').value = dates[dates.length - 1];
-  }
+  // Clear local date filters — global filter already applied to deslAllRows
+  document.getElementById('desl-date-from').value = '';
+  document.getElementById('desl-date-to').value = '';
 }
 
 /* ── Table render ────────────────────────────────────── */
@@ -2466,11 +2449,11 @@ function renderDeslTable() {
     const dateParts = d.data.split('-');
     const dateDisplay = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : d.data;
     return `<tr>
-      <td class="td-mono">${dateDisplay}</td>
-      <td><strong>${d.obra}</strong></td>
-      <td>${d.origem || '\u2014'}</td>
-      <td class="td-right td-mono">${d.qtd}</td>
-      <td class="td-right td-euro td-mono">${fmt(d.custo)}</td>
+      <td data-label="Data" class="td-mono">${dateDisplay}</td>
+      <td data-label="Obra"><strong>${d.obra}</strong></td>
+      <td data-label="Origem">${d.origem || '\u2014'}</td>
+      <td data-label="Viagens" class="td-right td-mono">${d.qtd}</td>
+      <td data-label="Custo" class="td-right td-euro td-mono">${fmt(d.custo)}</td>
     </tr>`;
   }).join('');
 
@@ -2502,84 +2485,71 @@ function sortDesl(col) {
   renderDeslTable();
 }
 
-function exportDeslCSV() {
-  const obraFilter = document.getElementById('desl-filter-obra').value;
-  const dateFrom = document.getElementById('desl-date-from').value;
-  const dateTo = document.getElementById('desl-date-to').value;
-
-  let rows = deslAllRows.filter(d => {
-    if (obraFilter && d.obra !== obraFilter) return false;
-    if (dateFrom && d.data < dateFrom) return false;
-    if (dateTo && d.data > dateTo) return false;
-    return true;
-  });
-
-  if (!rows.length) return;
-  const header = 'Data;Obra Destino;Origem;Nº Viagens;Custo';
-  const csvRows = rows.map(d =>
-    [d.data, d.obra, d.origem || '', d.qtd, d.custo.toFixed(2)].join(';')
-  );
-  const csv = header + '\n' + csvRows.join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
-  a.download = 'deslocacoes.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
+function exportDeslCSV() { /* disabled */ }
 
 function buildEquipa() {
   if (!DATA) return;
   const colabs = DATA.colaboradores || [];
   const obras = DATA.obras || {};
 
-  // ── Cross-reference: aggregate per collaborator across all obras ──
-  const workerAgg = {};   // nome -> { funcao, eurH, horas, custo, faltas, dias, obrasMap }
+  // ── Cross-reference: aggregate per collaborator from assiduidade (date-filtered) ──
+  const workerAgg = {};   // nome -> { funcao, eurH, horas, custo, faltas, atrasos, dias, obrasList[], faltasList[] }
   colabs.forEach(c => {
-    workerAgg[c.Nome] = { funcao: c.Funcao, eurH: c.Eur_h, horas: 0, custo: 0, faltas: 0, dias: 0, obrasMap: {} };
+    workerAgg[c.Nome] = { funcao: c.Funcao, eurH: c.Eur_h, horas: 0, custo: 0, faltas: 0, atrasos: 0, dias: 0, obrasSet: new Set(), fasesSet: new Set(), faltasList: [] };
   });
 
   Object.keys(obras).forEach(obraNome => {
-    const workers = obras[obraNome].workers || [];
-    workers.forEach(w => {
-      const nome = w['Nome (auto)'];
+    const assid = obras[obraNome].assiduidade || [];
+    assid.forEach(w => {
+      const nome = w.nome;
       if (!workerAgg[nome]) {
-        workerAgg[nome] = { funcao: w['Função (auto)'], eurH: 0, horas: 0, custo: 0, faltas: 0, dias: 0, obrasMap: {} };
+        // Worker not in COLABORADORES sheet — create entry
+        const colabInfo = colabs.find(c => c.Nome === nome);
+        workerAgg[nome] = {
+          funcao: colabInfo ? colabInfo.Funcao : '\u2014',
+          eurH: colabInfo ? colabInfo.Eur_h : 0,
+          horas: 0, custo: 0, faltas: 0, atrasos: 0, dias: 0,
+          obrasSet: new Set(), fasesSet: new Set(), faltasList: []
+        };
       }
-      workerAgg[nome].horas += w.Horas || 0;
-      workerAgg[nome].custo += w.Custo || 0;
-      workerAgg[nome].faltas += w.Faltas || 0;
-      workerAgg[nome].dias += w.Dias || 0;
-      workerAgg[nome].obrasMap[obraNome] = {
-        horas: w.Horas || 0, custo: w.Custo || 0, faltas: w.Faltas || 0, dias: w.Dias || 0, fase: w.Fase || '\u2014'
-      };
+      Object.entries(w.dias).forEach(([dateStr, dayData]) => {
+        if (!dateInRange(dateStr)) return;
+        if (dayData.falta) {
+          workerAgg[nome].faltas++;
+          workerAgg[nome].faltasList.push({ data: dateStr, obra: obraNome, motivo: dayData.motivo || '', fase: (dayData.fases && dayData.fases.length > 0) ? dayData.fases.join(', ') : '\u2014' });
+        } else if (dayData.horas > 0) {
+          workerAgg[nome].horas += dayData.horas;
+          workerAgg[nome].custo += dayData.custo || 0;
+          workerAgg[nome].dias++;
+        }
+        if (dayData.atraso_min) workerAgg[nome].atrasos += dayData.atraso_min;
+        workerAgg[nome].obrasSet.add(obraNome);
+      });
+
+      // Recolher fase deste worker nesta obra
+      const wInfo = (obras[obraNome].workers || [])
+        .find(ww => ww['Nome (auto)'] === nome);
+      if (wInfo && wInfo.Fase) workerAgg[nome].fasesSet.add(wInfo.Fase);
     });
   });
 
   // Build rows array
-  equipaAllRows = Object.entries(workerAgg).map(([nome, agg]) => {
-    const obrasCount = Object.keys(agg.obrasMap).length;
-    const totalPresencas = agg.dias + agg.faltas;
-    const assiduidade = totalPresencas > 0 ? ((agg.dias / totalPresencas) * 100) : 0;
-    return {
-      nome, funcao: agg.funcao, eurH: agg.eurH,
-      obras: obrasCount, horas: agg.horas, custo: agg.custo,
-      faltas: agg.faltas, dias: agg.dias, assiduidade,
-      obrasMap: agg.obrasMap
-    };
-  });
+  equipaAllRows = Object.entries(workerAgg)
+    .filter(([, agg]) => agg.dias > 0 || agg.faltas > 0) // Only show workers with data in period
+    .map(([nome, agg]) => {
+      const obrasList = [...agg.obrasSet].sort();
+      return {
+        nome, funcao: agg.funcao, eurH: agg.eurH,
+        fase: [...agg.fasesSet].sort().join(', ') || '\u2014',
+        obras: obrasList.length, horas: agg.horas, custo: agg.custo,
+        faltas: agg.faltas, atrasos: agg.atrasos, dias: agg.dias,
+        obrasList, faltasList: agg.faltasList
+      };
+    });
 
   equipaSortCol = 'custo';
   equipaSortAsc = false;
   equipaExpandedRow = null;
-
-  // ── Stats Cards ──
-  buildEquipaStats();
-
-  // ── Charts ──
-  destroyEquipaCharts();
-  buildEquipaFuncaoChart();
-  buildEquipaTopChart();
 
   // ── Table ──
   populateEquipaFuncaoFilter();
@@ -2587,133 +2557,24 @@ function buildEquipa() {
   renderEquipaTable();
 }
 
-/* ── Aggregate stats for cards ───────────────────────── */
+/* ── Aggregate stats for cards (disabled — UI removed) ── */
 function buildEquipaStats() {
-  if (!equipaAllRows.length) return;
-  const rows = equipaAllRows;
-
-  const maisCaro = rows.reduce((a, b) => a.custo > b.custo ? a : b);
-  const maisHoras = rows.reduce((a, b) => a.horas > b.horas ? a : b);
-  const maisFaltas = rows.reduce((a, b) => a.faltas > b.faltas ? a : b);
-  const withData = rows.filter(r => r.dias + r.faltas > 0);
-  const maisAssiduo = withData.length > 0
-    ? withData.reduce((a, b) => a.assiduidade > b.assiduidade ? a : b)
-    : { nome: '\u2014', assiduidade: 0 };
-
-  // Custo médio/hora por função
-  const funcHoras = {};
-  const funcCusto = {};
-  rows.forEach(r => {
-    if (!funcHoras[r.funcao]) { funcHoras[r.funcao] = 0; funcCusto[r.funcao] = 0; }
-    funcHoras[r.funcao] += r.horas;
-    funcCusto[r.funcao] += r.custo;
-  });
-  const funcAvg = Object.keys(funcHoras).map(f => ({
-    funcao: f,
-    avg: funcHoras[f] > 0 ? funcCusto[f] / funcHoras[f] : 0
-  })).sort((a, b) => b.avg - a.avg);
-  const topFuncAvg = funcAvg.length > 0 ? funcAvg[0] : { funcao: '\u2014', avg: 0 };
-
-  const shortName = n => n.split(' ').slice(0, 2).join(' ');
-
-  const stats = [
-    { val: shortName(maisCaro.nome), label: 'Mais Caro (' + fmt(maisCaro.custo) + ')', color: 'var(--warning)' },
-    { val: shortName(maisHoras.nome), label: 'Mais Horas (' + fmtN(maisHoras.horas) + 'h)', color: 'var(--info)' },
-    { val: shortName(maisFaltas.nome), label: 'Mais Faltas (' + maisFaltas.faltas + ')', color: 'var(--accent)' },
-    { val: shortName(maisAssiduo.nome), label: 'Melhor Assiduidade (' + maisAssiduo.assiduidade.toFixed(0) + '%)', color: 'var(--success)' },
-    { val: fmt(topFuncAvg.avg) + '/h', label: 'Custo Médio/h (' + topFuncAvg.funcao + ')', color: 'var(--text-muted)' },
-  ];
-
-  document.getElementById('equipa-stats').innerHTML = stats.map(s => `
-    <div class="equipa-stat">
-      <div class="equipa-stat-val" style="color:${s.color}">${s.val}</div>
-      <div class="equipa-stat-label">${s.label}</div>
-    </div>
-  `).join('');
+  /* body commented out — stats cards removed from equipa section */
 }
 
-/* ── Charts destruction ──────────────────────────────── */
+/* ── Charts destruction (disabled — charts removed) ──── */
 function destroyEquipaCharts() {
-  Object.values(equipaCharts).forEach(c => { if (c) c.destroy(); });
-  equipaCharts = {};
-  if (equipaDetailChart) { equipaDetailChart.destroy(); equipaDetailChart = null; }
-  ['funcao','top'].forEach(key => {
-    const wrap = document.getElementById('equipa-chart-' + key + '-wrap');
-    if (wrap && !document.getElementById('equipa-chart-' + key)) {
-      wrap.innerHTML = '<canvas id="equipa-chart-' + key + '"></canvas>';
-    }
-  });
+  /* body commented out — charts removed from equipa section */
 }
 
-/* ── Donut: distribution by Funcao ───────────────────── */
+/* ── Donut: distribution by Funcao (disabled) ────────── */
 function buildEquipaFuncaoChart() {
-  const funcCount = {};
-  equipaAllRows.forEach(r => { funcCount[r.funcao] = (funcCount[r.funcao] || 0) + 1; });
-  const entries = Object.entries(funcCount).sort((a, b) => b[1] - a[1]);
-  if (!entries.length) {
-    document.getElementById('equipa-chart-funcao-wrap').innerHTML = '<div class="no-chart-data">Sem dados</div>';
-    return;
-  }
-  const ctx = document.getElementById('equipa-chart-funcao');
-  equipaCharts.funcao = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: entries.map(([f]) => f),
-      datasets: [{
-        data: entries.map(([, c]) => c),
-        backgroundColor: entries.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderWidth: 0,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      cutout: '55%',
-      plugins: {
-        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, padding: 8 } },
-        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.raw + ' colaboradores' } }
-      }
-    }
-  });
+  /* body commented out — chart removed from equipa section */
 }
 
-/* ── Horizontal bar: top 10 by cost ──────────────────── */
+/* ── Horizontal bar: top 10 by cost (disabled) ───────── */
 function buildEquipaTopChart() {
-  const top = equipaAllRows.slice().sort((a, b) => b.custo - a.custo).slice(0, 10);
-  if (!top.length) {
-    document.getElementById('equipa-chart-top-wrap').innerHTML = '<div class="no-chart-data">Sem dados</div>';
-    return;
-  }
-  const funcoes = [...new Set(top.map(w => w.funcao))];
-  const funcaoColor = {};
-  funcoes.forEach((f, i) => { funcaoColor[f] = CHART_PALETTE[i % CHART_PALETTE.length]; });
-
-  const ctx = document.getElementById('equipa-chart-top');
-  equipaCharts.top = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: top.map(w => w.nome.split(' ').slice(0, 2).join(' ')),
-      datasets: [{
-        data: top.map(w => w.custo),
-        backgroundColor: top.map(w => funcaoColor[w.funcao] || '#e94560'),
-        borderRadius: 4,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: {
-          label: ctx => fmt(ctx.raw),
-          afterLabel: ctx => top[ctx.dataIndex].funcao + ' \u2022 ' + fmtN(top[ctx.dataIndex].horas) + 'h'
-        } }
-      },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
-      }
-    }
-  });
+  /* body commented out — chart removed from equipa section */
 }
 
 /* ── Populate funcao filter ──────────────────────────── */
@@ -2742,30 +2603,55 @@ function renderEquipaTable() {
   });
 
   const tbody = document.getElementById('equipa-tbody');
+  const OBRAS_MAX = 24; // caracteres antes de colapsar para popup
   let html = '';
-  rows.forEach((r, idx) => {
-    const isExpanded = equipaExpandedRow === r.nome;
-    const expandedCls = isExpanded ? ' equipa-row-expanded' : '';
-    html += `<tr class="equipa-row-clickable${expandedCls}" onclick="toggleEquipaDetail('${r.nome.replace(/'/g, "\\'")}')">
-      <td><strong>${r.nome}</strong></td>
-      <td><span class="tag tag-blue">${r.funcao}</span></td>
-      <td class="td-right td-mono">${fmt(r.eurH)}</td>
-      <td class="td-center td-mono">${r.obras}</td>
-      <td class="td-right td-hours td-mono">${fmtN(r.horas)}h</td>
-      <td class="td-right td-euro td-mono">${fmt(r.custo)}</td>
-      <td class="td-center">${r.faltas > 0 ? '<span class="tag tag-red">' + r.faltas + '</span>' : '0'}</td>
-      <td class="td-right td-mono">${r.assiduidade.toFixed(0)}%</td>
-    </tr>`;
-    if (isExpanded) {
-      html += `<tr><td colspan="8" style="padding:0"><div class="equipa-detail-panel" id="equipa-detail-panel">
-        ${buildEquipaDetailHTML(r)}
-      </div></td></tr>`;
+  rows.forEach(r => {
+    const escNome = r.nome.replace(/'/g, "\\'");
+
+    // Coluna Obras: inline se couber, popup se não couber
+    const obrasText = r.obrasList.join(', ');
+    let obrasCell;
+    if (!r.obrasList.length) {
+      obrasCell = '\u2014';
+    } else if (obrasText.length <= OBRAS_MAX) {
+      obrasCell = '<span style="font-size:12px">' + obrasText + '</span>';
+    } else {
+      const preview = r.obrasList[0] +
+        (r.obrasList.length > 1
+          ? ', <span style="color:var(--text-dim)">+' + (r.obrasList.length - 1) + '</span>'
+          : '');
+      obrasCell = '<span style="cursor:pointer;font-size:12px;' +
+        'text-decoration:underline dotted;color:var(--text)"' +
+        ' onclick="event.stopPropagation();equipaShowObras(\'' + escNome + '\')"' +
+        ' title="Ver todas as obras">' + preview + '</span>';
     }
+
+    // Coluna Faltas: clicável se houver faltas
+    const faltasCell = r.faltas > 0
+      ? '<span class="tag tag-red" style="cursor:pointer"' +
+        ' onclick="event.stopPropagation();equipaShowFaltas(\'' + escNome + '\')"' +
+        ' title="Ver detalhe">' + r.faltas + '</span>'
+      : '0';
+
+    // Coluna Atrasos
+    const atrasosCell = r.atrasos > 0 ? fmtMin(r.atrasos) : '\u2014';
+
+    html += '<tr>' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong></td>' +
+      '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
+      '<td data-label="Obras">' + obrasCell + '</td>' +
+      '<td data-label="Fase" class="td-right" style="font-size:12px;color:var(--text-muted)">' + r.fase + '</td>' +
+      '<td data-label="Total Horas" class="td-right td-mono">' + (r.horas > 0 ? r.horas.toFixed(1) + 'h' : '\u2014') + '</td>' +
+      '<td data-label="Total Custo" class="td-right td-mono">' + (r.custo > 0 ? fmt(r.custo) : '\u2014') + '</td>' +
+      '<td data-label="Faltas" class="td-center">' + faltasCell + '</td>' +
+      '<td data-label="Atrasos" class="td-right td-mono">' + atrasosCell + '</td>' +
+      '</tr>';
   });
   tbody.innerHTML = html;
 
   // Update sort indicators
-  const colMap = { nome: 0, funcao: 1, eurH: 2, obras: 3, horas: 4, custo: 5, faltas: 6, assiduidade: 7 };
+  const colMap = { nome: 0, funcao: 1, obras: 2, fase: 3,
+                   horas: 4, custo: 5, faltas: 6, atrasos: 7 };
   const ths = document.querySelectorAll('#equipa-thead th');
   ths.forEach(th => {
     th.classList.remove('sort-active');
@@ -2778,15 +2664,64 @@ function renderEquipaTable() {
     const icon = ths[idx].querySelector('.sort-icon');
     if (icon) icon.className = 'fa-solid ' + (equipaSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
   }
-
-  // Render detail chart if expanded
-  if (equipaExpandedRow) {
-    const row = equipaAllRows.find(r => r.nome === equipaExpandedRow);
-    if (row) renderEquipaDetailChart(row);
-  }
 }
 
 function filterEquipa() { renderEquipaTable(); }
+
+/* ── Equipa Popup System ────────────────────────────── */
+function equipaPopupOpen(title, bodyHtml) {
+  const container = document.getElementById('equipa-popup-container');
+  container.innerHTML =
+    '<div class="equipa-popup-overlay" onclick="equipaPopupClose()">' +
+      '<div class="equipa-popup" onclick="event.stopPropagation()">' +
+        '<div class="equipa-popup-header">' +
+          '<span>' + title + '</span>' +
+          '<button class="equipa-popup-close" onclick="equipaPopupClose()"><i class="fa-solid fa-xmark"></i></button>' +
+        '</div>' +
+        '<div class="equipa-popup-body">' + bodyHtml + '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function equipaPopupClose() {
+  document.getElementById('equipa-popup-container').innerHTML = '';
+}
+
+function equipaShowObras(nome) {
+  const row = equipaAllRows.find(r => r.nome === nome);
+  if (!row || !row.obrasList || !row.obrasList.length) return;
+
+  let html = '';
+  row.obrasList.forEach(obraNome => {
+    html += '<div class="equipa-popup-item">' +
+      '<span><i class="fa-solid fa-building" style="font-size:10px;margin-right:6px;color:var(--info)"></i>' + obraNome + '</span>' +
+      '<span style="cursor:pointer;color:var(--accent);font-size:11px;font-weight:600" onclick="equipaPopupClose();openObra(\'' + obraNome.replace(/'/g, "\\'") + '\')">' +
+        '<i class="fa-solid fa-arrow-right" style="font-size:9px"></i> Ver' +
+      '</span>' +
+    '</div>';
+  });
+  equipaPopupOpen('<i class="fa-solid fa-building" style="margin-right:8px;color:var(--info)"></i>Obras de ' + nome.split(' ').slice(0, 2).join(' '), html);
+}
+
+function equipaShowFaltas(nome) {
+  const row = equipaAllRows.find(r => r.nome === nome);
+  if (!row || !row.faltasList || !row.faltasList.length) return;
+
+  const sorted = row.faltasList.slice().sort((a, b) => b.data.localeCompare(a.data));
+  let html = '';
+  sorted.forEach(f => {
+    const parts = f.data.split('-');
+    const dateDisplay = parts[2] + '/' + parts[1] + '/' + parts[0];
+    html += '<div class="equipa-popup-item">' +
+      '<span><span style="color:var(--accent);font-weight:600">' + dateDisplay + '</span>' +
+        ' <span style="color:var(--text-dim);font-size:11px">\u2022 ' + (f.motivo || '\u2014') + '</span>' +
+        ' <span style="color:var(--info);font-size:11px">\u2022 ' + f.obra + '</span>' +
+        ' <span style="color:var(--text-muted);font-size:11px">\u2022 ' + f.fase + '</span>' +
+      '</span>' +
+    '</div>';
+  });
+  equipaPopupOpen('<i class="fa-solid fa-user-xmark" style="margin-right:8px;color:var(--accent)"></i>Faltas de ' + nome.split(' ').slice(0, 2).join(' ') + ' (' + sorted.length + ')', html);
+}
 
 function sortEquipa(col) {
   if (equipaSortCol === col) {
@@ -2800,135 +2735,21 @@ function sortEquipa(col) {
 
 /* ── Detail panel toggle ─────────────────────────────── */
 function toggleEquipaDetail(nome) {
-  if (equipaDetailChart) { equipaDetailChart.destroy(); equipaDetailChart = null; }
-  equipaExpandedRow = equipaExpandedRow === nome ? null : nome;
-  renderEquipaTable();
+  /* body commented out — expand/collapse removed from equipa section */
 }
 
 /* ── Build detail HTML for expanded row ──────────────── */
 function buildEquipaDetailHTML(row) {
-  const obrasEntries = Object.entries(row.obrasMap).sort((a, b) => b[1].custo - a[1].custo);
-
-  // Obras list
-  const obrasListHtml = obrasEntries.map(([obraNome, stats]) => `
-    <div class="equipa-obra-item">
-      <span class="equipa-obra-name"><i class="fa-solid fa-building" style="font-size:10px;margin-right:6px;color:var(--info)"></i>${obraNome}</span>
-      <div class="equipa-obra-stats">
-        <span style="color:var(--text-dim)">${stats.fase}</span>
-        <span style="color:var(--info)">${fmtN(stats.horas)}h</span>
-        <span style="color:var(--warning);font-weight:600">${fmt(stats.custo)}</span>
-        ${stats.faltas > 0 ? '<span style="color:var(--accent)">' + stats.faltas + ' faltas</span>' : ''}
-      </div>
-    </div>
-  `).join('');
-
-  // Faltas detail from assiduidade data
-  let faltasHtml = '<span style="font-size:12px;color:var(--text-dim)">Sem dados de faltas detalhados</span>';
-  const faltasList = [];
-  Object.keys(DATA.obras || {}).forEach(obraNome => {
-    const assid = (DATA.obras[obraNome].assiduidade || []).find(a => a.nome === row.nome);
-    if (!assid) return;
-    Object.entries(assid.dias).forEach(([dateStr, dayData]) => {
-      if (dayData.falta) {
-        const parts = dateStr.split('-');
-        faltasList.push({
-          data: parts[2] + '/' + parts[1] + '/' + parts[0],
-          dataSort: dateStr,
-          obra: obraNome,
-          motivo: dayData.motivo || '\u2014'
-        });
-      }
-    });
-  });
-  if (faltasList.length > 0) {
-    faltasList.sort((a, b) => b.dataSort.localeCompare(a.dataSort));
-    faltasHtml = faltasList.slice(0, 10).map(f =>
-      `<div class="equipa-falta-item"><span style="color:var(--accent)">${f.data}</span> \u2022 ${f.obra}${f.motivo !== '\u2014' ? ' \u2022 <em>' + f.motivo + '</em>' : ''}</div>`
-    ).join('');
-    if (faltasList.length > 10) faltasHtml += `<div class="equipa-falta-item" style="color:var(--text-dim)">... e mais ${faltasList.length - 10} faltas</div>`;
-  }
-
-  return `
-    <div class="equipa-detail-grid">
-      <div class="equipa-detail-section">
-        <h4><i class="fa-solid fa-chart-bar" style="margin-right:6px"></i>Horas por Obra</h4>
-        <div class="equipa-detail-chart"><canvas id="equipa-detail-canvas"></canvas></div>
-      </div>
-      <div>
-        <div class="equipa-detail-section">
-          <h4><i class="fa-solid fa-building" style="margin-right:6px"></i>Obras Participadas (${obrasEntries.length})</h4>
-          ${obrasListHtml}
-        </div>
-        <div class="equipa-detail-section" style="margin-top:16px">
-          <h4><i class="fa-solid fa-user-xmark" style="margin-right:6px"></i>Histórico de Faltas (${faltasList.length})</h4>
-          ${faltasHtml}
-        </div>
-        <div style="margin-top:14px;padding:10px 14px;background:rgba(246,173,85,.08);border-radius:var(--radius-sm);border:1px solid rgba(246,173,85,.15)">
-          <span style="font-size:11px;color:var(--text-dim)">Total Gerado:</span>
-          <span style="font-size:16px;font-weight:700;color:var(--warning);margin-left:8px">${fmt(row.custo)}</span>
-        </div>
-      </div>
-    </div>`;
+  /* body commented out — detail panel removed from equipa section */
 }
 
 /* ── Detail mini chart: horas por obra ───────────────── */
 function renderEquipaDetailChart(row) {
-  if (equipaDetailChart) { equipaDetailChart.destroy(); equipaDetailChart = null; }
-  const canvas = document.getElementById('equipa-detail-canvas');
-  if (!canvas) return;
-
-  const entries = Object.entries(row.obrasMap).sort((a, b) => b[1].horas - a[1].horas).slice(0, 8);
-  if (!entries.length) return;
-
-  equipaDetailChart = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels: entries.map(([n]) => n.length > 15 ? n.slice(0, 13) + '\u2026' : n),
-      datasets: [{
-        data: entries.map(([, s]) => s.horas),
-        backgroundColor: entries.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderRadius: 4,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => fmtN(ctx.raw) + 'h \u2022 ' + fmt(entries[ctx.dataIndex][1].custo) } }
-      },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 9 }, callback: v => v + 'h' } },
-        y: { grid: { display: false }, ticks: { font: { size: 9 } } }
-      }
-    }
-  });
+  /* body commented out — detail chart removed from equipa section */
 }
 
-/* ── CSV export ──────────────────────────────────────── */
-function exportEquipaCSV() {
-  const search = (document.getElementById('equipa-search').value || '').toLowerCase();
-  const funcaoFilter = document.getElementById('equipa-filter-funcao').value;
-
-  let rows = equipaAllRows.filter(r => {
-    if (funcaoFilter && r.funcao !== funcaoFilter) return false;
-    if (search && !r.nome.toLowerCase().includes(search)) return false;
-    return true;
-  });
-
-  if (!rows.length) return;
-  const header = 'Nome;Função;€/h;Obras;Total Horas;Total Custo;Faltas;Assiduidade %';
-  const csvRows = rows.map(r =>
-    [r.nome, r.funcao, r.eurH.toFixed(2), r.obras, r.horas.toFixed(1), r.custo.toFixed(2), r.faltas, r.assiduidade.toFixed(0)].join(';')
-  );
-  const csv = header + '\n' + csvRows.join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
-  a.download = 'colaboradores.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
+/* ── CSV export — disabled ────────────────────────────── */
+function exportEquipaCSV() { /* disabled */ }
 
 /* ══════════════════════════════════════════════════════════
    ANÁLISE COMPARATIVA
@@ -2945,32 +2766,16 @@ function generateDistinctColors(n) {
 
 function buildComparativa() {
   if (!DATA || !DATA.obras) return;
-  const names = Object.keys(DATA.obras).sort();
-  const sel = document.getElementById('comp-fase-select');
-  sel.innerHTML = '<option value="">Selecione uma obra...</option>' +
-    names.map(n => '<option value="' + n + '">' + n + '</option>').join('');
-
-  compCurrentTab = 'obras';
-  compEvoMetric = 'custo';
-  compEvoHidden = {};
-
   destroyCompCharts();
   buildCompObras();
-  buildCompEvo();
 }
 
-function switchCompTab(tab) {
-  compCurrentTab = tab;
-  document.querySelectorAll('.comp-tab').forEach(t => t.classList.toggle('active', t.dataset.comptab === tab));
-  document.querySelectorAll('.comp-panel').forEach(p => p.classList.remove('active'));
-  const panel = document.getElementById('comp-panel-' + tab);
-  if (panel) panel.classList.add('active');
-}
+function switchCompTab(tab) { /* disabled */ }
 
 function destroyCompCharts() {
   Object.values(compCharts).forEach(c => { if (c) c.destroy(); });
   compCharts = {};
-  ['custos','radar','fasecusto','fasehoras','evo'].forEach(key => {
+  ['custos','fasesobra','diasfase'].forEach(key => {
     const wrap = document.getElementById('comp-chart-' + key + '-wrap');
     if (wrap && !document.getElementById('comp-chart-' + key)) {
       wrap.innerHTML = '<canvas id="comp-chart-' + key + '"></canvas>';
@@ -2985,23 +2790,36 @@ function buildCompObras() {
   const obraNames = Object.keys(DATA.obras).sort();
   if (!obraNames.length) return;
   buildCompCustosChart(obraNames);
-  buildCompRadarChart(obraNames);
-  buildCompTable(obraNames);
+  buildCompFasesObraChart(obraNames);
+  buildCompDiasFaseChart(obraNames);
 }
 
 function buildCompCustosChart(obraNames) {
   if (compCharts.custos) compCharts.custos.destroy();
 
+  // Aggregate deslocações (date-filtered)
   const deslPerObra = {};
   (DATA.deslocacoes || []).forEach(d => {
+    if (!dateInRange(d.data)) return;
     deslPerObra[d.obra] = (deslPerObra[d.obra] || 0) + d.custo;
   });
 
-  const labourData = obraNames.map(n => {
-    const o = DATA.obras[n];
-    return Math.max(0, (o.custo_total || 0) - (deslPerObra[n] || 0));
+  // Aggregate labour from assiduidade (date-filtered)
+  const labourPerObra = {};
+  obraNames.forEach(n => {
+    labourPerObra[n] = 0;
+    (DATA.obras[n].assiduidade || []).forEach(w => {
+      Object.entries(w.dias).forEach(([dateStr, d]) => {
+        if (!dateInRange(dateStr)) return;
+        if (d.falta) return;
+        labourPerObra[n] += d.custo || 0;
+      });
+    });
   });
+
+  const labourData = obraNames.map(n => labourPerObra[n] || 0);
   const deslData = obraNames.map(n => deslPerObra[n] || 0);
+  const totalData = obraNames.map((n, i) => labourData[i] + deslData[i]);
   const shortNames = obraNames.map(n => n.length > 14 ? n.slice(0, 12) + '\u2026' : n);
 
   const ctx = document.getElementById('comp-chart-custos');
@@ -3012,13 +2830,14 @@ function buildCompCustosChart(obraNames) {
       labels: shortNames,
       datasets: [
         { label: 'M\u00e3o de Obra', data: labourData, backgroundColor: 'rgba(99,179,237,.7)', borderRadius: 4 },
-        { label: 'Desloca\u00e7\u00f5es', data: deslData, backgroundColor: 'rgba(246,173,85,.7)', borderRadius: 4 }
+        { label: 'Desloca\u00e7\u00f5es', data: deslData, backgroundColor: 'rgba(246,173,85,.7)', borderRadius: 4 },
+        { label: 'Total', data: totalData, backgroundColor: 'rgba(233,69,96,.7)', borderRadius: 4 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        legend: mLegend(),
         tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } }
       },
       scales: {
@@ -3029,429 +2848,144 @@ function buildCompCustosChart(obraNames) {
   });
 }
 
-function buildCompRadarChart(obraNames) {
-  if (compCharts.radar) compCharts.radar.destroy();
+/* ── Radar chart — disabled (card removed) ────────────── */
+function buildCompRadarChart(obraNames) { /* disabled */ }
 
-  const raw = obraNames.map(n => {
-    const o = DATA.obras[n];
-    const totalPresencas = (o.dias || 0) + (o.faltas || 0);
-    const taxaFaltas = totalPresencas > 0 ? (o.faltas / totalPresencas) * 100 : 0;
-    const custoMedioH = o.horas_total > 0 ? o.custo_total / o.horas_total : 0;
-    return { nome: n, custo: o.custo_total || 0, horas: o.horas_total || 0, workers: o.trabalhadores || 0, taxaFaltas, custoMedioH };
-  });
+/* ── Stacked bar: Fases de Obra por Obra ─────────────── */
+function buildCompFasesObraChart(obraNames) {
+  if (compCharts.fasesobra) compCharts.fasesobra.destroy();
 
-  const maxVals = {
-    custo: Math.max(...raw.map(r => r.custo), 1),
-    horas: Math.max(...raw.map(r => r.horas), 1),
-    workers: Math.max(...raw.map(r => r.workers), 1),
-    taxaFaltas: Math.max(...raw.map(r => r.taxaFaltas), 1),
-    custoMedioH: Math.max(...raw.map(r => r.custoMedioH), 1)
-  };
-
-  const colors = generateDistinctColors(obraNames.length);
-
-  const datasets = raw.map((r, i) => ({
-    label: r.nome.length > 18 ? r.nome.slice(0, 16) + '\u2026' : r.nome,
-    data: [
-      (r.custo / maxVals.custo) * 100,
-      (r.horas / maxVals.horas) * 100,
-      (r.workers / maxVals.workers) * 100,
-      (r.taxaFaltas / maxVals.taxaFaltas) * 100,
-      (r.custoMedioH / maxVals.custoMedioH) * 100
-    ],
-    borderColor: colors[i],
-    backgroundColor: colors[i].replace('hsl(', 'hsla(').replace(')', ', 0.08)'),
-    borderWidth: 2,
-    pointRadius: 3,
-    pointBackgroundColor: colors[i],
-  }));
-
-  // Limit to top 6 by cost for readability
-  datasets.sort((a, b) => b.data[0] - a.data[0]);
-  const topDatasets = datasets.slice(0, 6);
-
-  const ctx = document.getElementById('comp-chart-radar');
-  if (!ctx) return;
-  compCharts.radar = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: ['Custo Total', 'Horas Totais', 'N\u00ba Trabalhadores', 'Taxa Faltas', '\u20ac/h M\u00e9dio'],
-      datasets: topDatasets
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 }, padding: 6 } },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              const r = raw.find(function(r) {
-                var short = r.nome.length > 18 ? r.nome.slice(0, 16) + '\u2026' : r.nome;
-                return short === ctx.dataset.label;
-              });
-              if (!r) return ctx.dataset.label;
-              var dims = [fmt(r.custo), fmtN(r.horas) + 'h', r.workers, r.taxaFaltas.toFixed(1) + '%', fmt(r.custoMedioH) + '/h'];
-              return ctx.dataset.label + ': ' + dims[ctx.dataIndex];
-            }
-          }
-        }
-      },
-      scales: {
-        r: {
-          beginAtZero: true,
-          max: 100,
-          ticks: { display: false, stepSize: 20 },
-          grid: { color: 'rgba(255,255,255,.08)' },
-          pointLabels: { font: { size: 10, weight: '600' }, color: '#a0aec0' },
-          angleLines: { color: 'rgba(255,255,255,.06)' }
-        }
-      }
-    }
-  });
-}
-
-function buildCompTable(obraNames) {
-  const deslPerObra = {};
-  (DATA.deslocacoes || []).forEach(d => {
-    deslPerObra[d.obra] = (deslPerObra[d.obra] || 0) + d.custo;
-  });
-
-  const rows = obraNames.map(n => {
-    const o = DATA.obras[n];
-    const totalPresencas = (o.dias || 0) + (o.faltas || 0);
-    const taxaFaltas = totalPresencas > 0 ? (o.faltas / totalPresencas) * 100 : 0;
-    const custoMedioH = o.horas_total > 0 ? o.custo_total / o.horas_total : 0;
-    const custoDesl = deslPerObra[n] || 0;
-    const custoMO = Math.max(0, (o.custo_total || 0) - custoDesl);
-    return { nome: n, custoTotal: o.custo_total || 0, custoMO, custoDesl,
-      horas: o.horas_total || 0, workers: o.trabalhadores || 0,
-      dias: o.dias || 0, faltas: o.faltas || 0, taxaFaltas, custoMedioH };
-  });
-
-  const cols = ['custoTotal','custoMO','custoDesl','horas','workers','dias','faltas','taxaFaltas','custoMedioH'];
-  const minMax = {};
-  cols.forEach(c => {
-    const vals = rows.map(r => r[c]);
-    minMax[c] = { min: Math.min(...vals), max: Math.max(...vals) };
-  });
-
-  function heatColor(val, col) {
-    const mm = minMax[col];
-    if (mm.max === mm.min) return 'background:transparent';
-    var ratio = (val - mm.min) / (mm.max - mm.min);
-    // Green (low/good) -> Red (high/bad)
-    var r = Math.round(233 * ratio + 72 * (1 - ratio));
-    var g = Math.round(69 * ratio + 187 * (1 - ratio));
-    var b = Math.round(96 * ratio + 120 * (1 - ratio));
-    return 'background:rgba(' + r + ',' + g + ',' + b + ',.15);color:rgb(' + r + ',' + g + ',' + b + ')';
-  }
-
-  var html = '<table class="comp-table"><thead><tr>';
-  html += '<th>Obra</th><th style="text-align:right">Custo Total</th><th style="text-align:right">M\u00e3o Obra</th>';
-  html += '<th style="text-align:right">Desloca\u00e7\u00f5es</th><th style="text-align:right">Horas</th>';
-  html += '<th style="text-align:center">Workers</th><th style="text-align:center">Dias</th>';
-  html += '<th style="text-align:center">Faltas</th><th style="text-align:right">Taxa Faltas</th>';
-  html += '<th style="text-align:right">\u20ac/hora</th></tr></thead><tbody>';
-
-  rows.sort(function(a, b) { return b.custoTotal - a.custoTotal; });
-
-  rows.forEach(function(r) {
-    html += '<tr>' +
-      '<td><strong>' + r.nome + '</strong></td>' +
-      '<td style="text-align:right"><span class="comp-heatcell" style="' + heatColor(r.custoTotal, 'custoTotal') + '">' + fmt(r.custoTotal) + '</span></td>' +
-      '<td style="text-align:right"><span class="comp-heatcell" style="' + heatColor(r.custoMO, 'custoMO') + '">' + fmt(r.custoMO) + '</span></td>' +
-      '<td style="text-align:right"><span class="comp-heatcell" style="' + heatColor(r.custoDesl, 'custoDesl') + '">' + fmt(r.custoDesl) + '</span></td>' +
-      '<td style="text-align:right"><span class="comp-heatcell" style="' + heatColor(r.horas, 'horas') + '">' + fmtN(r.horas) + 'h</span></td>' +
-      '<td style="text-align:center"><span class="comp-heatcell" style="' + heatColor(r.workers, 'workers') + '">' + r.workers + '</span></td>' +
-      '<td style="text-align:center"><span class="comp-heatcell" style="' + heatColor(r.dias, 'dias') + '">' + r.dias + '</span></td>' +
-      '<td style="text-align:center"><span class="comp-heatcell" style="' + heatColor(r.faltas, 'faltas') + '">' + r.faltas + '</span></td>' +
-      '<td style="text-align:right"><span class="comp-heatcell" style="' + heatColor(r.taxaFaltas, 'taxaFaltas') + '">' + r.taxaFaltas.toFixed(1) + '%</span></td>' +
-      '<td style="text-align:right"><span class="comp-heatcell" style="' + heatColor(r.custoMedioH, 'custoMedioH') + '">' + fmt(r.custoMedioH) + '</span></td>' +
-      '</tr>';
-  });
-
-  html += '</tbody></table>';
-  document.getElementById('comp-table-obras-wrap').innerHTML = html;
-}
-
-/* ── PART B: Phase Analysis ──────────────────────────── */
-
-function buildCompFases(obraNome) {
-  if (!obraNome || !DATA || !DATA.obras[obraNome]) {
-    document.getElementById('comp-fase-highlights').innerHTML = '';
-    document.getElementById('comp-table-fases-wrap').innerHTML = '';
-    if (compCharts.fasecusto) { compCharts.fasecusto.destroy(); compCharts.fasecusto = null; }
-    if (compCharts.fasehoras) { compCharts.fasehoras.destroy(); compCharts.fasehoras = null; }
-    ['fasecusto','fasehoras'].forEach(function(key) {
-      var wrap = document.getElementById('comp-chart-' + key + '-wrap');
-      if (wrap) wrap.innerHTML = '<canvas id="comp-chart-' + key + '"></canvas>';
+  // Aggregate: obra → fase → custo (date-filtered)
+  const obraFases = {};
+  const allFases = new Set();
+  obraNames.forEach(nome => {
+    obraFases[nome] = {};
+    const obra = DATA.obras[nome];
+    const workers = obra.workers || [];
+    (obra.assiduidade || []).forEach(w => {
+      const wInfo = workers.find(ww => ww['Nome (auto)'] === w.nome);
+      const fase = (wInfo && wInfo.Fase) || '\u2014';
+      Object.entries(w.dias).forEach(([dateStr, d]) => {
+        if (!dateInRange(dateStr) || d.falta) return;
+        allFases.add(fase);
+        obraFases[nome][fase] = (obraFases[nome][fase] || 0) + (d.custo || 0);
+      });
     });
+  });
+
+  const faseList = [...allFases].sort();
+  if (!faseList.length) {
+    document.getElementById('comp-chart-fasesobra').parentElement.innerHTML =
+      '<div class="no-chart-data">Sem fases no per\u00edodo</div>';
     return;
   }
 
-  const fases = DATA.obras[obraNome].fases || [];
-  if (!fases.length) {
-    document.getElementById('comp-fase-highlights').innerHTML =
-      '<span style="font-size:12px;color:var(--text-dim)">Sem fases definidas para esta obra.</span>';
-    document.getElementById('comp-table-fases-wrap').innerHTML = '';
-    return;
-  }
+  const shortNames = obraNames.map(n => n.length > 14 ? n.slice(0, 12) + '\u2026' : n);
 
-  const enriched = fases.map(f => ({
-    Fase: f.Fase, Custo: f.Custo, Horas: f.Horas,
-    Workers: f.Workers || 0, Dias: f.Dias || 0, Faltas: f.Faltas || 0,
-    eurHora: f.Horas > 0 ? f.Custo / f.Horas : 0
+  // One dataset per fase, stacked
+  const datasets = faseList.map((fase, i) => ({
+    label: fase,
+    data: obraNames.map(n => obraFases[n][fase] || 0),
+    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    borderRadius: 4,
   }));
 
-  const maisCara = enriched.reduce((a, b) => a.Custo > b.Custo ? a : b);
-  const withHours = enriched.filter(f => f.Horas > 0);
-  const maisEficiente = withHours.length > 0
-    ? withHours.reduce((a, b) => a.eurHora < b.eurHora ? a : b)
-    : null;
-
-  let highlightsHtml = '<span class="comp-fase-highlight cara"><i class="fa-solid fa-arrow-up" style="font-size:9px"></i> Mais cara: ' + maisCara.Fase + '</span>';
-  if (maisEficiente) {
-    highlightsHtml += ' <span class="comp-fase-highlight eficiente"><i class="fa-solid fa-bolt" style="font-size:9px"></i> Mais eficiente: ' + maisEficiente.Fase + ' (' + fmt(maisEficiente.eurHora) + '/h)</span>';
-  }
-  document.getElementById('comp-fase-highlights').innerHTML = highlightsHtml;
-
-  buildCompFaseCustoChart(enriched);
-  buildCompFaseHorasChart(enriched);
-  buildCompFaseTable(enriched, maisCara, maisEficiente);
-}
-
-function buildCompFaseCustoChart(fases) {
-  if (compCharts.fasecusto) compCharts.fasecusto.destroy();
-  const sorted = fases.slice().sort((a, b) => b.Custo - a.Custo);
-
-  var wrap = document.getElementById('comp-chart-fasecusto-wrap');
-  if (!document.getElementById('comp-chart-fasecusto')) {
-    wrap.innerHTML = '<canvas id="comp-chart-fasecusto"></canvas>';
-  }
-
-  const ctx = document.getElementById('comp-chart-fasecusto');
-  compCharts.fasecusto = new Chart(ctx, {
+  const ctx = document.getElementById('comp-chart-fasesobra');
+  if (!ctx) return;
+  compCharts.fasesobra = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: sorted.map(f => f.Fase),
-      datasets: [{
-        data: sorted.map(f => f.Custo),
-        backgroundColor: sorted.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderRadius: 4,
-      }]
-    },
+    data: { labels: shortNames, datasets },
     options: {
-      indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } }
+        legend: mLegend(),
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } }
       },
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' },
+             ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } }
       }
     }
   });
 }
 
-function buildCompFaseHorasChart(fases) {
-  if (compCharts.fasehoras) compCharts.fasehoras.destroy();
-  const sorted = fases.slice().sort((a, b) => b.Horas - a.Horas);
+/* ── Stacked bar: Dias por Fase de Obra ──────────────── */
+function buildCompDiasFaseChart(obraNames) {
+  if (compCharts.diasfase) compCharts.diasfase.destroy();
 
-  var wrap = document.getElementById('comp-chart-fasehoras-wrap');
-  if (!document.getElementById('comp-chart-fasehoras')) {
-    wrap.innerHTML = '<canvas id="comp-chart-fasehoras"></canvas>';
+  // Aggregate: obra → fase → Set<dateStr> (distinct days)
+  const obraFaseDias = {};
+  const allFases = new Set();
+  obraNames.forEach(nome => {
+    obraFaseDias[nome] = {};
+    const obra = DATA.obras[nome];
+    const workers = obra.workers || [];
+    (obra.assiduidade || []).forEach(w => {
+      const wInfo = workers.find(ww => ww['Nome (auto)'] === w.nome);
+      const fase = (wInfo && wInfo.Fase) || '\u2014';
+      Object.entries(w.dias).forEach(([dateStr, d]) => {
+        if (!dateInRange(dateStr) || d.falta) return;
+        if (d.horas <= 0) return;
+        allFases.add(fase);
+        if (!obraFaseDias[nome][fase]) obraFaseDias[nome][fase] = new Set();
+        obraFaseDias[nome][fase].add(dateStr);
+      });
+    });
+  });
+
+  const faseList = [...allFases].sort();
+  if (!faseList.length) {
+    document.getElementById('comp-chart-diasfase').parentElement.innerHTML =
+      '<div class="no-chart-data">Sem fases no per\u00edodo</div>';
+    return;
   }
 
-  const ctx = document.getElementById('comp-chart-fasehoras');
-  compCharts.fasehoras = new Chart(ctx, {
+  const shortNames = obraNames.map(n => n.length > 14 ? n.slice(0, 12) + '\u2026' : n);
+
+  // One dataset per fase, stacked — value = number of distinct days
+  const datasets = faseList.map((fase, i) => ({
+    label: fase,
+    data: obraNames.map(n => obraFaseDias[n][fase] ? obraFaseDias[n][fase].size : 0),
+    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    borderRadius: 4,
+  }));
+
+  const ctx = document.getElementById('comp-chart-diasfase');
+  if (!ctx) return;
+  compCharts.diasfase = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: sorted.map(f => f.Fase),
-      datasets: [{
-        data: sorted.map(f => f.Horas),
-        backgroundColor: sorted.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderRadius: 4,
-      }]
-    },
+    data: { labels: shortNames, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => fmtN(ctx.raw) + 'h' } }
+        legend: mLegend(),
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw + ' dias' } }
       },
       scales: {
-        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v + 'h' } },
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' },
+             ticks: { font: { size: 10 }, stepSize: 1 } }
       }
     }
   });
 }
 
-function buildCompFaseTable(fases, maisCara, maisEficiente) {
-  var html = '<table class="comp-table"><thead><tr>';
-  html += '<th>Fase</th><th style="text-align:right">Custo</th><th style="text-align:right">Horas</th>';
-  html += '<th style="text-align:center">Workers</th><th style="text-align:center">Dias</th>';
-  html += '<th style="text-align:center">Faltas</th><th style="text-align:right">\u20ac/hora</th>';
-  html += '</tr></thead><tbody>';
+/* ── Comparison table — disabled (card removed) ──────── */
+function buildCompTable(obraNames) { /* disabled */ }
 
-  const sorted = fases.slice().sort((a, b) => b.Custo - a.Custo);
-
-  sorted.forEach(function(f) {
-    var isCara = f.Fase === maisCara.Fase;
-    var isEficiente = maisEficiente && f.Fase === maisEficiente.Fase;
-    var rowStyle = '';
-    if (isCara) rowStyle = 'background:rgba(233,69,96,.04)';
-    else if (isEficiente) rowStyle = 'background:rgba(72,187,120,.04)';
-
-    html += '<tr style="' + rowStyle + '">' +
-      '<td><strong>' + f.Fase + '</strong>' +
-      (isCara ? ' <span class="tag tag-red" style="font-size:9px">Mais cara</span>' : '') +
-      (isEficiente ? ' <span class="tag tag-green" style="font-size:9px">Mais eficiente</span>' : '') +
-      '</td>' +
-      '<td class="td-right td-euro td-mono">' + fmt(f.Custo) + '</td>' +
-      '<td class="td-right td-hours td-mono">' + fmtN(f.Horas) + 'h</td>' +
-      '<td class="td-center td-mono">' + f.Workers + '</td>' +
-      '<td class="td-center td-mono">' + f.Dias + '</td>' +
-      '<td class="td-center">' + (f.Faltas > 0 ? '<span class="tag tag-red">' + f.Faltas + '</span>' : '0') + '</td>' +
-      '<td class="td-right td-mono" style="font-weight:600">' + (f.Horas > 0 ? fmt(f.eurHora) + '/h' : '\u2014') + '</td>' +
-      '</tr>';
-  });
-
-  html += '</tbody></table>';
-  document.getElementById('comp-table-fases-wrap').innerHTML = html;
-}
+/* ── PART B: Phase Analysis — disabled (panel removed) ── */
+function buildCompFases(obraNome) { /* disabled */ }
+function buildCompFaseCustoChart(fases) { /* disabled */ }
+function buildCompFaseHorasChart(fases) { /* disabled */ }
+function buildCompFaseTable(fases, maisCara, maisEficiente) { /* disabled */ }
 
 /* ── PART C: Temporal Evolution ──────────────────────── */
 
-function buildCompEvo() {
-  if (!DATA || !DATA.obras) return;
-
-  const obraNames = Object.keys(DATA.obras).sort();
-  const colors = generateDistinctColors(obraNames.length);
-
-  // Aggregate monthly data from daily[]
-  const obraMonthly = {};
-  const allMonths = new Set();
-
-  obraNames.forEach(nome => {
-    const obra = DATA.obras[nome];
-    const daily = (obra.daily || []).filter(d => dateInRange(d.DATA_str));
-    const monthAgg = {};
-
-    daily.forEach(d => {
-      const monthKey = d.DATA_str.slice(0, 7);
-      if (!monthAgg[monthKey]) monthAgg[monthKey] = { custo: 0, horas: 0 };
-      monthAgg[monthKey].custo += d.Custo || 0;
-      monthAgg[monthKey].horas += d.Horas || 0;
-      allMonths.add(monthKey);
-    });
-
-    obraMonthly[nome] = monthAgg;
-  });
-
-  const sortedMonths = [...allMonths].sort();
-  if (!sortedMonths.length) {
-    document.getElementById('comp-chart-evo-wrap').innerHTML = '<div class="no-chart-data">Sem dados temporais</div>';
-    document.getElementById('comp-evo-legend').innerHTML = '';
-    return;
-  }
-
-  const metric = compEvoMetric;
-  const datasets = obraNames.map((nome, i) => ({
-    label: nome.length > 20 ? nome.slice(0, 18) + '\u2026' : nome,
-    data: sortedMonths.map(m => obraMonthly[nome][m] ? obraMonthly[nome][m][metric] : 0),
-    borderColor: colors[i],
-    backgroundColor: 'transparent',
-    tension: .3,
-    borderWidth: 2,
-    pointRadius: sortedMonths.length > 12 ? 0 : 3,
-    pointBackgroundColor: colors[i],
-    hidden: !!compEvoHidden[nome],
-  }));
-
-  if (compCharts.evo) compCharts.evo.destroy();
-  var wrap = document.getElementById('comp-chart-evo-wrap');
-  if (!document.getElementById('comp-chart-evo')) {
-    wrap.innerHTML = '<canvas id="comp-chart-evo"></canvas>';
-  }
-
-  const ctx = document.getElementById('comp-chart-evo');
-  compCharts.evo = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: sortedMonths.map(m => {
-        var parts = m.split('-');
-        return MONTH_NAMES_PT[parseInt(parts[1]) - 1].slice(0, 3) + ' ' + parts[0].slice(2);
-      }),
-      datasets: datasets
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              return ctx.dataset.label + ': ' + (metric === 'custo' ? fmt(ctx.raw) : fmtN(ctx.raw) + 'h');
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          grid: { color: 'rgba(255,255,255,.04)' },
-          ticks: {
-            font: { size: 10 },
-            callback: function(v) {
-              return metric === 'custo'
-                ? (v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac')
-                : v + 'h';
-            }
-          }
-        },
-        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 } } }
-      }
-    }
-  });
-
-  // Build clickable legend
-  var legendHtml = '';
-  obraNames.forEach(function(nome, i) {
-    var hiddenClass = compEvoHidden[nome] ? ' hidden' : '';
-    var shortName = nome.length > 20 ? nome.slice(0, 18) + '\u2026' : nome;
-    legendHtml += '<div class="comp-evo-legend-item' + hiddenClass + '" onclick="toggleCompEvoSerie(\'' + nome.replace(/'/g, "\\'") + '\',' + i + ')">' +
-      '<div class="comp-evo-legend-dot" style="background:' + colors[i] + '"></div>' +
-      shortName + '</div>';
-  });
-  document.getElementById('comp-evo-legend').innerHTML = legendHtml;
-
-  document.querySelectorAll('.comp-evo-metric-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.metric === metric);
-  });
-}
-
-function toggleCompEvoSerie(nome, index) {
-  compEvoHidden[nome] = !compEvoHidden[nome];
-
-  if (compCharts.evo) {
-    var meta = compCharts.evo.getDatasetMeta(index);
-    meta.hidden = !!compEvoHidden[nome];
-    compCharts.evo.update();
-  }
-
-  var items = document.querySelectorAll('.comp-evo-legend-item');
-  if (items[index]) {
-    items[index].classList.toggle('hidden', !!compEvoHidden[nome]);
-  }
-}
-
-function switchCompEvoMetric(metric) {
-  compEvoMetric = metric;
-  buildCompEvo();
-}
+/* ── Evolução Temporal — disabled (panel removed) ── */
+function buildCompEvo() { /* disabled */ }
+function toggleCompEvoSerie(nome, index) { /* disabled */ }
+function switchCompEvoMetric(metric) { /* disabled */ }
 
 /* ══════════════════════════════════════════════════════════
    ASSIDUIDADE — HEATMAP CALENDAR
@@ -3461,249 +2995,207 @@ const MONTH_NAMES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
 const WEEKDAYS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 
 function initAssiduidade() {
+  buildAssidTable();
+}
+
+/* ── Variáveis de estado da tabela de assiduidade ── */
+let assidAllRows  = [];
+let assidSortCol  = 'faltas';
+let assidSortAsc  = false;
+
+function buildAssidTable() {
   if (!DATA || !DATA.obras) return;
-  const sel = document.getElementById('assid-obra-select');
-  const names = Object.keys(DATA.obras).sort();
-  sel.innerHTML = '<option value="">Selecione a obra...</option>' +
-    names.map(n => `<option value="${n}">${n}</option>`).join('');
-  document.getElementById('assid-worker-select').innerHTML =
-    '<option value="">Selecione colaborador...</option>';
+  const obras = DATA.obras;
+
+  // nome → { funcao, faltas, faltasList[] }
+  const agg = {};
+
+  Object.keys(obras).forEach(obraNome => {
+    const assid = obras[obraNome].assiduidade || [];
+    assid.forEach(w => {
+      if (!agg[w.nome]) {
+        agg[w.nome] = { funcao: w.funcao || '—', faltas: 0, faltasList: [] };
+      }
+      Object.entries(w.dias).forEach(([dateStr, d]) => {
+        if (!dateInRange(dateStr)) return;
+        if (!d.falta) return;
+        agg[w.nome].faltas++;
+        const parts = dateStr.split('-');
+        agg[w.nome].faltasList.push({
+          dataSort: dateStr,
+          data:     parts[2] + '/' + parts[1],   // DD/MM
+          motivo:   d.motivo  || '—',
+          obra:     obraNome,
+          fase:     (d.fases && d.fases.length > 0)
+                      ? d.fases.join(', ')
+                      : '—'
+        });
+      });
+    });
+  });
+
+  // Apenas workers com faltas > 0
+  assidAllRows = Object.entries(agg)
+    .filter(([, a]) => a.faltas > 0)
+    .map(([nome, a]) => ({
+      nome,
+      funcao:     a.funcao,
+      faltas:     a.faltas,
+      faltasList: a.faltasList.sort((x, y) => y.dataSort.localeCompare(x.dataSort))
+    }));
+
+  assidSortCol = 'faltas';
+  assidSortAsc = false;
+  renderAssidTable();
+}
+
+function renderAssidTable() {
+  const search = (document.getElementById('assid-search').value || '').toLowerCase();
+
+  let rows = assidAllRows.filter(r =>
+    !search || r.nome.toLowerCase().includes(search)
+  );
+
+  rows.sort((a, b) => {
+    const va = a[assidSortCol], vb = b[assidSortCol];
+    if (typeof va === 'string')
+      return assidSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return assidSortAsc ? va - vb : vb - va;
+  });
+
+  const tbody = document.getElementById('assid-tbody');
+
+  if (!rows.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--text-dim)">' +
+      '<i class="fa-solid fa-circle-check" style="font-size:28px;display:block;' +
+      'margin-bottom:12px;color:var(--success);opacity:.6"></i>' +
+      'Sem faltas no período seleccionado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const escNome = r.nome.replace(/'/g, "\\'");
+    const faltasCell =
+      '<span class="tag tag-red" style="cursor:pointer"' +
+      ' onclick="event.stopPropagation();assidShowFaltas(\'' + escNome + '\',event)"' +
+      ' title="Ver detalhe">' + r.faltas + '</span>';
+    return '<tr>' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong></td>' +
+      '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
+      '<td data-label="Faltas" class="td-center">' + faltasCell + '</td>' +
+      '</tr>';
+  }).join('');
+
+  // Indicadores de ordenação
+  const colMap = { nome: 0, funcao: 1, faltas: 2 };
+  const ths = document.querySelectorAll('#assid-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const ic = th.querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[assidSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const ic = ths[idx].querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid ' +
+      (assidSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+
+function sortAssid(col) {
+  assidSortAsc = assidSortCol === col ? !assidSortAsc
+    : (col === 'nome' || col === 'funcao');
+  assidSortCol = col;
+  renderAssidTable();
+}
+
+function assidShowFaltas(nome, event) {
+  const row = assidAllRows.find(r => r.nome === nome);
+  if (!row || !row.faltasList.length) return;
+
+  // Capturar rect antes do requestAnimationFrame (currentTarget é limpo após o handler)
+  const clickRect = event && event.currentTarget
+    ? event.currentTarget.getBoundingClientRect() : null;
+
+  const bodyHtml = row.faltasList.map(f =>
+    '<div class="assid-popup-item">' +
+      '<span style="color:var(--accent);font-weight:700;min-width:42px">' + f.data + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--text)">'  + f.motivo + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--info)">'  + f.obra   + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--text-muted);font-size:11px">' + f.fase + '</span>' +
+    '</div>'
+  ).join('');
+
+  const container = document.getElementById('assid-popup-container');
+  container.innerHTML =
+    '<div class="assid-popup-overlay" onclick="assidPopupClose()"></div>' +
+    '<div class="assid-popup" id="assid-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="assid-popup-header">' +
+        '<span><i class="fa-solid fa-calendar-xmark" style="margin-right:8px;' +
+        'color:var(--accent)"></i>Faltas de ' +
+        nome.split(' ').slice(0, 2).join(' ') + ' (' + row.faltas + ')</span>' +
+        '<button class="assid-popup-close" onclick="assidPopupClose()">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="assid-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  // Posicionar perto do elemento clicado
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('assid-popup-inner');
+    if (!popup || !clickRect) return;
+    const pw    = popup.offsetWidth  || 300;
+    const ph    = popup.offsetHeight || 200;
+    let top  = clickRect.bottom + 8;
+    let left = clickRect.left;
+    if (left + pw > window.innerWidth  - 12) left = window.innerWidth  - pw - 12;
+    if (left < 12) left = 12;
+    if (top  + ph > window.innerHeight - 12) top  = clickRect.top - ph - 8;
+    if (top  < 12) top  = 12;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function assidPopupClose() {
+  document.getElementById('assid-popup-container').innerHTML = '';
 }
 
 function assidSelectObra(obraNome) {
-  assidCurrentObra = obraNome || null;
-  assidCurrentWorker = null;
-  updateBreadcrumb();
-  const wSel = document.getElementById('assid-worker-select');
-  if (!obraNome || !DATA || !DATA.obras[obraNome] || !DATA.obras[obraNome].assiduidade) {
-    wSel.innerHTML = '<option value="">Selecione colaborador...</option>';
-    document.getElementById('assid-content').innerHTML =
-      '<div class="assid-empty-msg"><i class="fa-solid fa-calendar-check"></i>' +
-      'Selecione uma obra e um colaborador para ver a assiduidade.</div>';
-    return;
-  }
-  const assid = DATA.obras[obraNome].assiduidade;
-  const workers = assid.map(a => a.nome).sort();
-  wSel.innerHTML = '<option value="">Selecione colaborador...</option>' +
-    workers.map(n => `<option value="${n}">${n}</option>`).join('');
-  document.getElementById('assid-content').innerHTML =
-    '<div class="assid-empty-msg"><i class="fa-solid fa-user"></i>' +
-    'Selecione um colaborador para ver o calendário.</div>';
+  /* disabled */
 }
 
 function assidSelectWorker(nome) {
-  assidCurrentWorker = nome || null;
-  updateBreadcrumb();
-  if (!nome || !assidCurrentObra) {
-    document.getElementById('assid-content').innerHTML =
-      '<div class="assid-empty-msg"><i class="fa-solid fa-user"></i>' +
-      'Selecione um colaborador para ver o calendário.</div>';
-    return;
-  }
-  // Find worker data
-  const assid = DATA.obras[assidCurrentObra].assiduidade;
-  const worker = assid.find(a => a.nome === nome);
-  if (!worker) return;
-
-  // Auto-detect month from latest data
-  const dates = Object.keys(worker.dias).sort();
-  if (dates.length > 0) {
-    const last = new Date(dates[dates.length - 1]);
-    assidYear = last.getFullYear();
-    assidMonth = last.getMonth();
-  }
-  renderAssidHeatmap();
+  /* disabled */
 }
 
 function renderAssidHeatmap() {
-  if (!assidCurrentWorker || !assidCurrentObra) return;
-  const assid = DATA.obras[assidCurrentObra].assiduidade;
-  const worker = assid.find(a => a.nome === assidCurrentWorker);
-  if (!worker) return;
-
-  const year = assidYear;
-  const month = assidMonth;
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  // Monday-first offset: (day.getDay() + 6) % 7
-  const startOffset = (firstDay.getDay() + 6) % 7;
-
-  // Build heatmap cells
-  let cellsHtml = '';
-  // Empty cells for offset
-  for (let i = 0; i < startOffset; i++) {
-    cellsHtml += '<div class="hm-cell hm-outside"></div>';
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    const dayData = worker.dias[dateStr];
-    const dayOfWeek = (new Date(year, month, d).getDay() + 6) % 7; // 0=Mon, 6=Sun
-    const isWeekend = dayOfWeek >= 5;
-    let cls = 'hm-empty';
-    let label = d;
-
-    if (dayData) {
-      if (dayData.falta) {
-        cls = 'hm-falta';
-      } else if (dayData.atraso_min > 30) {
-        cls = 'hm-atraso';
-      } else {
-        const h = dayData.horas || 0;
-        if (h >= 8) cls = 'hm-8plus';
-        else if (h >= 4) cls = 'hm-4to7';
-        else if (h > 0) cls = 'hm-1to3';
-      }
-    }
-
-    cellsHtml += `<div class="hm-cell ${cls}" data-date="${dateStr}" ` +
-      `onmouseenter="assidShowTooltip(event,'${dateStr}')" ` +
-      `onmouseleave="assidHideTooltip()">${d}</div>`;
-  }
-
-  // Stats
-  const stats = computeAssidStats(worker, year, month);
-
-  const html = `
-    <div class="assid-layout">
-      <div class="assid-heatmap-wrap">
-        <div class="heatmap-nav">
-          <button class="heatmap-nav-btn" onclick="assidPrevMonth()">
-            <i class="fa-solid fa-chevron-left"></i>
-          </button>
-          <div class="heatmap-month-label">${MONTH_NAMES_PT[month]} ${year}</div>
-          <button class="heatmap-nav-btn" onclick="assidNextMonth()">
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-        </div>
-        <div class="heatmap-weekdays">
-          ${WEEKDAYS_PT.map(w => `<div class="heatmap-weekday">${w}</div>`).join('')}
-        </div>
-        <div class="heatmap-grid">
-          ${cellsHtml}
-        </div>
-        <div class="heatmap-legend">
-          <div class="heatmap-legend-cell hm-empty"></div> Sem dados
-          <div class="heatmap-legend-cell hm-1to3"></div> 1-3h
-          <div class="heatmap-legend-cell hm-4to7"></div> 4-7h
-          <div class="heatmap-legend-cell hm-8plus"></div> 8h+
-          <div class="heatmap-legend-sep"></div>
-          <div class="heatmap-legend-cell hm-falta"></div> Falta
-          <div class="heatmap-legend-cell hm-atraso"></div> Atraso >30m
-        </div>
-      </div>
-      <div class="assid-stats-panel">
-        <div class="assid-stat">
-          <div class="assid-stat-val" style="color:var(--success)">${stats.taxaPresenca}%</div>
-          <div class="assid-stat-label">Taxa Presença</div>
-        </div>
-        <div class="assid-stat">
-          <div class="assid-stat-val" style="color:var(--info)">${fmtN(stats.mediaHoras)}h</div>
-          <div class="assid-stat-label">Média Horas/Dia</div>
-        </div>
-        <div class="assid-stat">
-          <div class="assid-stat-val" style="color:var(--warning)">${stats.totalAtrasos}m</div>
-          <div class="assid-stat-label">Total Atrasos</div>
-        </div>
-        <div class="assid-stat">
-          <div class="assid-stat-val" style="color:var(--accent)">${fmt(stats.totalCusto)}</div>
-          <div class="assid-stat-label">Custo no Mês</div>
-        </div>
-        <div class="assid-stat">
-          <div class="assid-stat-val">${stats.diasTrabalhados}</div>
-          <div class="assid-stat-label">Dias Trabalhados</div>
-        </div>
-        <div class="assid-stat">
-          <div class="assid-stat-val" style="color:var(--text-dim)">${stats.diasUteis}</div>
-          <div class="assid-stat-label">Dias Úteis no Mês</div>
-        </div>
-      </div>
-    </div>`;
-
-  document.getElementById('assid-content').innerHTML = html;
+  /* disabled */
 }
 
 function computeAssidStats(worker, year, month) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  let diasTrabalhados = 0, totalHoras = 0, totalAtrasos = 0, totalCusto = 0, faltas = 0, diasUteis = 0;
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dow = new Date(year, month, d).getDay();
-    if (dow !== 0 && dow !== 6) diasUteis++;
-
-    const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    const dayData = worker.dias[dateStr];
-    if (!dayData) continue;
-
-    if (dayData.falta) {
-      faltas++;
-    } else if (dayData.horas > 0) {
-      diasTrabalhados++;
-      totalHoras += dayData.horas;
-    }
-    totalAtrasos += dayData.atraso_min || 0;
-    totalCusto += dayData.custo || 0;
-  }
-
-  const diasComDados = diasTrabalhados + faltas;
-  const taxaPresenca = diasComDados > 0 ? ((diasTrabalhados / diasComDados) * 100).toFixed(0) : '—';
-  const mediaHoras = diasTrabalhados > 0 ? (totalHoras / diasTrabalhados) : 0;
-
-  return { taxaPresenca, mediaHoras, totalAtrasos, totalCusto, diasTrabalhados, diasUteis };
+  /* disabled */
 }
 
 function assidPrevMonth() {
-  assidMonth--;
-  if (assidMonth < 0) { assidMonth = 11; assidYear--; }
-  renderAssidHeatmap();
+  /* disabled */
 }
 
 function assidNextMonth() {
-  assidMonth++;
-  if (assidMonth > 11) { assidMonth = 0; assidYear++; }
-  renderAssidHeatmap();
+  /* disabled */
 }
 
 function assidShowTooltip(event, dateStr) {
-  if (!assidCurrentWorker || !assidCurrentObra) return;
-  const assid = DATA.obras[assidCurrentObra].assiduidade;
-  const worker = assid.find(a => a.nome === assidCurrentWorker);
-  if (!worker) return;
-
-  const dayData = worker.dias[dateStr];
-  const tooltip = document.getElementById('assid-tooltip');
-  const parts = dateStr.split('-');
-  const dateLabel = parts[2] + '/' + parts[1] + '/' + parts[0];
-
-  let lines = [`<strong>${dateLabel}</strong>`];
-  if (!dayData) {
-    lines.push('<span style="color:var(--text-dim)">Sem registo</span>');
-  } else {
-    if (dayData.falta) {
-      lines.push('<span style="color:var(--accent)">Falta</span>');
-      if (dayData.motivo) lines.push('Motivo: ' + dayData.motivo);
-    } else {
-      lines.push('Horas: <strong>' + fmtN(dayData.horas || 0) + 'h</strong>');
-      lines.push('Custo: ' + fmt(dayData.custo || 0));
-      if (dayData.atraso_min > 0) {
-        lines.push('<span style="color:var(--warning)">Atraso: ' + dayData.atraso_min + ' min</span>');
-        if (dayData.motivo) lines.push('Motivo: ' + dayData.motivo);
-      }
-    }
-  }
-
-  tooltip.innerHTML = lines.join('<br>');
-  tooltip.classList.add('visible');
-
-  // Position near cursor
-  const x = event.clientX + 12;
-  const y = event.clientY - 10;
-  tooltip.style.left = x + 'px';
-  tooltip.style.top = y + 'px';
+  /* disabled */
 }
 
 function assidHideTooltip() {
-  document.getElementById('assid-tooltip').classList.remove('visible');
+  /* disabled */
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -3792,7 +3284,13 @@ function applyGlobalFilter() {
     document.querySelector('.quick-date-btn[onclick*="tudo"]').classList.add('active');
   }
 
-  if (DATA) buildAll();
+  if (DATA) {
+    buildAll();
+    if (currentSection === 'obra-detail' &&
+        currentObraName && DATA.obras[currentObraName]) {
+      openObra(currentObraName);
+    }
+  }
 }
 
 function setQuickFilter(preset) {
@@ -3836,7 +3334,13 @@ function setQuickFilter(preset) {
   document.getElementById('global-date-from').value = globalDateFrom;
   document.getElementById('global-date-to').value = globalDateTo;
 
-  if (DATA) buildAll();
+  if (DATA) {
+    buildAll();
+    if (currentSection === 'obra-detail' &&
+        currentObraName && DATA.obras[currentObraName]) {
+      openObra(currentObraName);
+    }
+  }
 }
 
 function clearGlobalFilter() {
@@ -3850,6 +3354,7 @@ function computeFilteredGlobal() {
   // Re-aggregate from daily data
   let custoTotal = 0, horasTotal = 0, faltas = 0, totalAtrasos = 0;
   const workerSet = new Set();
+  const obraSet = new Set();
   let custoDesl = 0;
 
   Object.keys(DATA.obras).forEach(nome => {
@@ -3858,6 +3363,7 @@ function computeFilteredGlobal() {
       if (!dateInRange(d.DATA_str)) return;
       custoTotal += d.Custo || 0;
       horasTotal += d.Horas || 0;
+      obraSet.add(nome);
     });
     // Workers and faltas from assiduidade if available
     (obra.assiduidade || []).forEach(w => {
@@ -3882,10 +3388,10 @@ function computeFilteredGlobal() {
     custo_mao_obra: custoTotal - custoDesl,
     custo_deslocacoes: custoDesl,
     horas_total: horasTotal,
-    obras_ativas: DATA.global.obras_ativas,
-    colaboradores: workerSet.size || DATA.global.colaboradores,
-    faltas: faltas || DATA.global.faltas,
-    total_atrasos: totalAtrasos || DATA.global.total_atrasos,
+    obras_ativas: obraSet.size,
+    colaboradores: workerSet.size,
+    faltas: faltas,
+    total_atrasos: totalAtrasos,
     last_update: DATA.global.last_update,
   };
 }
@@ -3926,19 +3432,6 @@ function showToast(message, type, duration) {
 function checkAlerts() {
   if (!DATA || !DATA.global) return;
   const g = DATA.global;
-
-  // Check faltas rate > 15%
-  const totalPresencas = Object.keys(DATA.obras || {}).reduce((s, n) => {
-    const o = DATA.obras[n];
-    return s + (o.dias || 0) + (o.faltas || 0);
-  }, 0);
-  const totalFaltas = Object.keys(DATA.obras || {}).reduce((s, n) => s + (DATA.obras[n].faltas || 0), 0);
-  if (totalPresencas > 0) {
-    const taxaFaltas = (totalFaltas / totalPresencas) * 100;
-    if (taxaFaltas > 15) {
-      showToast('Taxa de faltas global: ' + taxaFaltas.toFixed(1) + '% (acima do limite de 15%)', 'warning', 8000);
-    }
-  }
 
   // Check deslocações > 20% of total cost
   if (g.custo_total > 0 && g.custo_deslocacoes > 0) {
@@ -3989,12 +3482,8 @@ function stopRefreshSpinner() {
   if (icon) icon.classList.remove('fa-spin');
 }
 
-/* ══════════════════════════════════════════════════════════
-   PRINT REPORT
-   ══════════════════════════════════════════════════════════ */
-function printReport() {
-  window.print();
-}
+/* ── Print — disabled (button removed) ── */
+function printReport() { /* disabled */ }
 
 /* ══════════════════════════════════════════════════════════
    KEYBOARD NAVIGATION
@@ -4104,19 +3593,6 @@ function initResizeObservers() {
   const main = document.getElementById('main-content');
   if (main) observer.observe(main);
 }
-
-/* ══════════════════════════════════════════════════════════
-   REAL-TIME CLOCK
-   ══════════════════════════════════════════════════════════ */
-function updateClock() {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  document.getElementById('topbar-clock').textContent = hh + ':' + mm + ':' + ss;
-}
-setInterval(updateClock, 1000);
-updateClock();
 
 /* ══════════════════════════════════════════════════════════
    INIT

@@ -108,12 +108,14 @@ function buildData_(ss) {
 
     // assiduidade
     if (!o.assidMap[r.nome]) o.assidMap[r.nome] = { funcao: r.funcao, dias: {} };
-    if (!o.assidMap[r.nome].dias[r.data]) o.assidMap[r.nome].dias[r.data] = { horas: 0, falta: false, custo: 0, atraso_min: 0, motivo: "" };
+    if (!o.assidMap[r.nome].dias[r.data]) o.assidMap[r.nome].dias[r.data] = { horas: 0, falta: false, custo: 0, atraso_min: 0, motivo: "", fases: [] };
     o.assidMap[r.nome].dias[r.data].horas      += r.horas;
     o.assidMap[r.nome].dias[r.data].custo      += r.custo;
     o.assidMap[r.nome].dias[r.data].atraso_min += r.atraso_min;
     if (r.falta)  o.assidMap[r.nome].dias[r.data].falta  = true;
     if (r.motivo) o.assidMap[r.nome].dias[r.data].motivo = r.motivo;
+    if (r.fase && !o.assidMap[r.nome].dias[r.data].fases.includes(r.fase))
+      o.assidMap[r.nome].dias[r.data].fases.push(r.fase);
 
     // fases
     if (r.fase) {
