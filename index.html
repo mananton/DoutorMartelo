@@ -1368,6 +1368,41 @@ body.has-subbar .section { animation-delay: 0s; }
   }
 }
 
+/* ── POPUP DESLOCAÇÃO ───────────────────────────────── */
+.desl-popup-overlay {
+  position: fixed; inset: 0; z-index: 8999;
+}
+.desl-popup {
+  position: fixed; z-index: 9000;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); min-width: 260px; max-width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45); overflow: hidden;
+}
+.desl-popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  font-weight: 700; font-size: 13px;
+}
+.desl-popup-close {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 4px;
+}
+.desl-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
+.desl-popup-body { padding: 12px 16px 16px; }
+.desl-popup-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.desl-popup-row:last-child { border-bottom: none; }
+.desl-popup-label {
+  color: var(--text-muted); min-width: 72px;
+  flex-shrink: 0; font-size: 11px; padding-top: 1px;
+}
+.desl-popup-val { color: var(--text); font-weight: 500; }
+.desl-row-clickable { cursor: pointer; }
+.desl-row-clickable:hover { background: var(--bg-hover); }
+
 /* ── FÉRIAS ─────────────────────────────────────────── */
 .ferias-saldo-ok    { color: var(--success); font-weight: 700; }
 .ferias-saldo-warn  { color: var(--warning); font-weight: 700; }
@@ -1804,6 +1839,9 @@ body.has-subbar .section { animation-delay: 0s; }
 
 <!-- Assiduidade Tooltip -->
 <div id="assid-tooltip"></div>
+
+<!-- POPUP DESLOCAÇÃO -->
+<div id="desl-popup-container"></div>
 
 <!-- ══════ TOAST CONTAINER ══════ -->
 <div id="toast-container"></div>
@@ -2588,16 +2626,24 @@ function renderDeslTable() {
   });
 
   const tbody = document.getElementById('desl-tbody');
-  tbody.innerHTML = rows.map(d => {
+  tbody.innerHTML = rows.map((d, idx) => {
     const dateParts = d.data.split('-');
     const dateDisplay = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : d.data;
-    return `<tr>
-      <td data-label="Data" class="td-mono">${dateDisplay}</td>
-      <td data-label="Obra"><strong>${d.obra}</strong></td>
-      <td data-label="Origem">${d.origem || '\u2014'}</td>
-      <td data-label="Viagens" class="td-right td-mono">${d.qtd}</td>
-      <td data-label="Custo" class="td-right td-euro td-mono">${fmt(d.custo)}</td>
-    </tr>`;
+    // Só mostra indicador de clique se tiver veículo ou motorista
+    const hasExtra = d.veiculo || d.motorista;
+    const rowClass = hasExtra ? 'class="desl-row-clickable"' : '';
+    const clickAttr = hasExtra
+      ? ' onclick="deslShowPopup(event,' + idx + ')"'
+      : '';
+    return '<tr ' + rowClass + clickAttr + '>' +
+      '<td data-label="Data" class="td-mono">' + dateDisplay + '</td>' +
+      '<td data-label="Obra"><strong>' + (d.obra || '\u2014') + '</strong>' +
+        (hasExtra ? ' <i class="fa-solid fa-circle-info" style="font-size:9px;color:var(--info);opacity:.6;margin-left:4px" title="Clique para ver veículo e motorista"></i>' : '') +
+      '</td>' +
+      '<td data-label="Origem">' + (d.origem || '\u2014') + '</td>' +
+      '<td data-label="Viagens" class="td-right td-mono">' + d.qtd + '</td>' +
+      '<td data-label="Custo" class="td-right td-euro td-mono">' + fmt(d.custo) + '</td>' +
+      '</tr>';
   }).join('');
 
   // Update sort indicators
@@ -2629,6 +2675,80 @@ function sortDesl(col) {
 }
 
 function exportDeslCSV() { /* disabled */ }
+
+function deslShowPopup(event, idx) {
+  event.stopPropagation();
+
+  // Reconstituir rows filtradas (mesma lógica de renderDeslTable)
+  const obraFilter = document.getElementById('desl-filter-obra').value;
+  const dateFrom   = document.getElementById('desl-date-from').value;
+  const dateTo     = document.getElementById('desl-date-to').value;
+  let rows = deslAllRows.filter(d => {
+    if (obraFilter && d.obra !== obraFilter) return false;
+    if (dateFrom && d.data < dateFrom) return false;
+    if (dateTo && d.data > dateTo) return false;
+    return true;
+  });
+  rows.sort((a, b) => {
+    let va = a[deslSortCol], vb = b[deslSortCol];
+    if (typeof va === 'string') return deslSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return deslSortAsc ? va - vb : vb - va;
+  });
+
+  const d = rows[idx];
+  if (!d) return;
+
+  const dateParts = d.data.split('-');
+  const dateDisplay = dateParts.length === 3
+    ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0]
+    : d.data;
+
+  const row = (label, icon, color, val) =>
+    '<div class="desl-popup-row">' +
+      '<i class="fa-solid ' + icon + '" style="color:' + color + ';font-size:11px;margin-top:2px"></i>' +
+      '<span class="desl-popup-label">' + label + '</span>' +
+      '<span class="desl-popup-val">' + (val || '\u2014') + '</span>' +
+    '</div>';
+
+  const bodyHtml =
+    row('Data',     'fa-calendar',         'var(--info)',    dateDisplay) +
+    row('Destino',  'fa-building',         'var(--info)',    d.obra) +
+    row('Origem',   'fa-location-dot',     'var(--success)', d.origem) +
+    row('Viagens',  'fa-route',            'var(--warning)', String(d.qtd)) +
+    row('Custo',    'fa-money-bill-wave',  'var(--warning)', fmt(d.custo)) +
+    row('Veículo',  'fa-van-shuttle',      'var(--accent)',  d.veiculo || '\u2014') +
+    row('Motorista','fa-id-card',          'var(--accent)',  d.motorista || '\u2014');
+
+  const container = document.getElementById('desl-popup-container');
+  container.innerHTML =
+    '<div class="desl-popup-overlay" onclick="deslPopupClose()"></div>' +
+    '<div class="desl-popup" id="desl-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="desl-popup-header">' +
+        '<span><i class="fa-solid fa-route" style="margin-right:8px;color:var(--info)"></i>Deslocação — ' + dateDisplay + '</span>' +
+        '<button class="desl-popup-close" onclick="deslPopupClose()">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="desl-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('desl-popup-inner');
+    if (!popup) return;
+    const pw = popup.offsetWidth  || 300;
+    const ph = popup.offsetHeight || 200;
+    let top  = event.clientY + 12;
+    let left = event.clientX - pw / 2;
+    if (left + pw > window.innerWidth  - 12) left = window.innerWidth  - pw - 12;
+    if (left < 12) left = 12;
+    if (top  + ph > window.innerHeight - 12) top  = event.clientY - ph - 12;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function deslPopupClose() {
+  document.getElementById('desl-popup-container').innerHTML = '';
+}
 
 function buildEquipa() {
   if (!DATA) return;

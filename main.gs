@@ -336,20 +336,35 @@ function readDeslocacoes_(sheet) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  const data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+
+  // Nova estrutura (9 colunas):
+  // A=ID_Viagem, B=Data, C=Obra_Destino(legacy), D=Destino(novo),
+  // E=Veiculo, F=Motorista, G=Origem, H=Quantidade_Viagens, I=Custo_Total
+  const data = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
+
   return data
-    .filter(r => r[2] && String(r[2]).trim() !== "" && String(r[2]).trim() !== "Obra_Destino")
+    .filter(r => {
+      // Obra válida em D (novo) ou em C (legacy)
+      const obra = String(r[3] || r[2] || "").trim();
+      return obra !== "" && obra !== "Obra_Destino" && obra !== "Destino";
+    })
     .map(r => {
       const rawD = r[1];
       const dateStr = rawD instanceof Date
         ? Utilities.formatDate(rawD, TZ, "yyyy-MM-dd")
         : String(rawD).slice(0, 10);
+
+      // Usa Destino (col D) se preenchido, senão cai para Obra_Destino (col C - legacy)
+      const obra = String(r[3] || r[2] || "").trim();
+
       return {
-        data:   dateStr,
-        obra:   String(r[2]).trim(),
-        origem: String(r[3] || "").trim(),
-        qtd:    parseFloat(r[4]) || 0,
-        custo:  parseFloat(r[5]) || 0,
+        data:      dateStr,
+        obra:      obra,
+        veiculo:   String(r[4] || "").trim(),
+        motorista: String(r[5] || "").trim(),
+        origem:    String(r[6] || "").trim(),
+        qtd:       parseFloat(r[7]) || 0,
+        custo:     parseFloat(r[8]) || 0,
       };
     });
 }
