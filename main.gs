@@ -13,6 +13,7 @@ const SHEET_OBRAS      = "OBRAS";
 const SHEET_COLAB      = "COLABORADORES";
 const SHEET_VIAGENS    = "VIAGENS_DIARIAS";
 const SHEET_DESLOCACOES = "REGISTO_DESLOCACOES"; // viagens por obra (AppSheet)
+const SHEET_FERIAS      = "FERIAS";
 const TZ               = "Europe/Lisbon";
 
 
@@ -46,6 +47,7 @@ function buildData_(ss) {
   const colabSheet  = ss.getSheetByName(SHEET_COLAB);
   const viaSheet    = ss.getSheetByName(SHEET_VIAGENS);
   const deslocSheet = ss.getSheetByName(SHEET_DESLOCACOES);
+  const feriasSheet = ss.getSheetByName(SHEET_FERIAS);
 
   if (!regSheet) throw new Error("Folha não encontrada: " + SHEET_REGISTOS);
 
@@ -54,6 +56,7 @@ function buildData_(ss) {
   const colabs      = readColabs_(colabSheet);
   const viagens     = readViagens_(viaSheet);
   const deslocacoes = readDeslocacoes_(deslocSheet);
+  const ferias      = readFerias_(feriasSheet);
 
   // ── Agregar por obra ────────────────────────────────────────
   const obraMap = {};
@@ -229,7 +232,8 @@ function buildData_(ss) {
     obras_info:   obrasInfo,
     colaboradores: colabs,
     viagens:      viagens,
-    deslocacoes:  deslocacoes
+    deslocacoes:  deslocacoes,
+    ferias:       ferias
   };
 }
 
@@ -355,11 +359,131 @@ function readDeslocacoes_(sheet) {
 //  SECÇÃO 2 — MENU & HELPERS
 // ════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════
+//  SECÇÃO 3 — LIMPEZA AUTOMÁTICA DE LINHAS VAZIAS
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Trigger onChange instalável.
+ * Dispara quando a AppSheet elimina um registo, deixando uma linha vazia.
+ * Para instalar: Executar installOnChangeTrigger() UMA VEZ manualmente.
+ */
+function onSheetChange(e) {
+  if (e && e.changeType !== "REMOVE_ROW" && e.changeType !== "EDIT") return;
+  limparLinhasVazias_();
+}
+
+/**
+ * Remove todas as linhas completamente vazias de REGISTOS_POR_DIA.
+ * Percorre de baixo para cima para não deslocar índices ao apagar.
+ */
+function limparLinhasVazias_() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_REGISTOS);
+  if (!sheet) return;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return; // Só cabeçalho ou vazio — nada a fazer
+
+  const numRows = lastRow - 1; // excluir cabeçalho (linha 1)
+  const values  = sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getValues();
+
+  // Percorrer de baixo para cima — apagar linhas completamente vazias
+  for (let i = numRows - 1; i >= 0; i--) {
+    const isEmpty = values[i].every(cell => cell === "" || cell === null);
+    if (isEmpty) {
+      sheet.deleteRow(i + 2); // +2 porque i é 0-based e há cabeçalho na linha 1
+    }
+  }
+}
+
+/**
+ * Instala o trigger onChange na spreadsheet.
+ * EXECUTAR MANUALMENTE UMA ÚNICA VEZ no editor do Apps Script.
+ * Verificar em: Editar > Triggers do projecto actual.
+ */
+function installOnChangeTrigger() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "onSheetChange")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  ScriptApp.newTrigger("onSheetChange")
+    .forSpreadsheet(ss)
+    .onChange()
+    .create();
+
+  Logger.log("✅ Trigger onChange instalado com sucesso.");
+}
+
+/**
+ * Remove o trigger onChange instalado.
+ * Usar apenas se quiseres desactivar a limpeza automática.
+ */
+function uninstallOnChangeTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "onSheetChange")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  Logger.log("Trigger removido.");
+}
+
+/**
+ * Atalho manual no menu para limpar linhas vazias imediatamente.
+ */
+function limparLinhasVaziasManual() {
+  limparLinhasVazias_();
+  SpreadsheetApp.getUi().alert("✅ Linhas vazias eliminadas de REGISTOS_POR_DIA.");
+}
+
+function readFerias_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  const results = [];
+
+  data.forEach(row => {
+    const nome = String(row[0] || "").trim();
+    if (!nome) return;
+
+    const admRaw = row[1];
+    const admStr = admRaw instanceof Date
+      ? Utilities.formatDate(admRaw, TZ, "yyyy-MM-dd")
+      : String(admRaw).slice(0, 10);
+
+    const refIniRaw = row[3];
+    const refIniStr = refIniRaw instanceof Date
+      ? Utilities.formatDate(refIniRaw, TZ, "yyyy-MM-dd")
+      : String(refIniRaw || "").slice(0, 10);
+
+    const refFimRaw = row[4];
+    const refFimStr = refFimRaw instanceof Date
+      ? Utilities.formatDate(refFimRaw, TZ, "yyyy-MM-dd")
+      : String(refFimRaw || "").slice(0, 10);
+
+    results.push({
+      nome:            nome,
+      data_admissao:   admStr,
+      dias_total:      parseInt(row[2]) || 0,
+      ano_ref_inicio:  refIniStr,
+      ano_ref_fim:     refFimStr,
+      dias_usados:     parseInt(row[5]) || 0,
+      dias_disponiveis: parseInt(row[6]) || 0
+    });
+  });
+
+  return results;
+}
+
 /** Corre automaticamente quando o ficheiro é aberto. Apenas para atalhos de UI. */
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🏗 Dashboard")
     .addItem("Abrir Dashboard", "abrirDashboard")
+    .addItem("Limpar linhas vazias", "limparLinhasVaziasManual")
     .addToUi();
 }
 

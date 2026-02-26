@@ -1367,6 +1367,92 @@ body.has-subbar .section { animation-delay: 0s; }
     max-width: calc(100vw - 24px);
   }
 }
+
+/* ── FÉRIAS ─────────────────────────────────────────── */
+.ferias-saldo-ok    { color: var(--success); font-weight: 700; }
+.ferias-saldo-warn  { color: var(--warning); font-weight: 700; }
+.ferias-saldo-neg   { color: var(--accent);  font-weight: 700; }
+.ferias-saldo-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+.ferias-saldo-badge.neg {
+  background: rgba(233,69,96,.15); color: var(--accent);
+  animation: pulse-badge 1.8s ease infinite;
+}
+.ferias-saldo-badge.warn {
+  background: rgba(246,173,85,.15); color: var(--warning);
+}
+.ferias-saldo-badge.ok {
+  background: rgba(72,187,120,.15); color: var(--success);
+}
+@keyframes pulse-badge {
+  0%,100% { box-shadow: 0 0 0 0 rgba(233,69,96,.3); }
+  50%     { box-shadow: 0 0 0 6px rgba(233,69,96,0); }
+}
+.ferias-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 16px;
+}
+@media (max-width: 900px) { .ferias-cal-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 600px) { .ferias-cal-grid { grid-template-columns: 1fr; } }
+.ferias-month-block { }
+.ferias-month-title {
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.ferias-month-days {
+  display: grid; grid-template-columns: repeat(7,1fr); gap: 3px;
+}
+.ferias-day-label {
+  font-size: 9px; font-weight: 700; color: var(--text-dim);
+  text-align: center; padding: 2px 0;
+  text-transform: uppercase;
+}
+.ferias-day {
+  aspect-ratio: 1; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.ferias-day.has-ferias {
+  background: rgba(99,179,237,.25); color: var(--info);
+  font-weight: 700; cursor: pointer; border-radius: 6px;
+}
+.ferias-day.has-ferias:hover {
+  background: rgba(99,179,237,.45);
+  transform: scale(1.15);
+  transition: all .15s ease;
+}
+.ferias-day.empty { visibility: hidden; }
+.ferias-popup-overlay { position: fixed; inset: 0; z-index: 8999; }
+.ferias-popup {
+  position: fixed; z-index: 9000;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); min-width: 240px; max-width: 340px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45); overflow: hidden;
+}
+.ferias-popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  font-weight: 700; font-size: 13px;
+}
+.ferias-popup-close {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 4px;
+}
+.ferias-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
+.ferias-popup-body { padding: 12px 16px 16px; font-size: 13px; }
+.ferias-popup-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.ferias-popup-row:last-child { border-bottom: none; }
 </style>
 </head>
 <body class="has-subbar">
@@ -1404,6 +1490,9 @@ body.has-subbar .section { animation-delay: 0s; }
     </button>
     <button class="nav-item" onclick="showSection('assiduidade')" data-section="assiduidade">
       <i class="fa-solid fa-calendar-check"></i><span>Assiduidade</span>
+    </button>
+    <button class="nav-item" onclick="showSection('ferias')" data-section="ferias">
+      <i class="fa-solid fa-umbrella-beach"></i><span>Férias</span>
     </button>
     <button class="nav-item" onclick="showSection('comparativa')" data-section="comparativa">
       <i class="fa-solid fa-chart-column"></i><span>Comparativa</span>
@@ -1614,6 +1703,49 @@ body.has-subbar .section { animation-delay: 0s; }
     <div id="equipa-popup-container"></div>
   </div>
 
+  <!-- Férias -->
+  <div class="section" id="section-ferias">
+
+    <!-- Tabela principal -->
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-umbrella-beach"></i> Férias por Colaborador
+        <div class="equipa-table-toolbar">
+          <input type="text" class="table-search" id="ferias-search"
+                 placeholder="Pesquisar nome..." oninput="renderFeriasTable()">
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="ferias-thead">
+                <th class="sortable" onclick="sortFerias('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortFerias('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th>Período Activo</th>
+                <th class="sortable td-center" onclick="sortFerias('dias_total')">Total <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortFerias('dias_usados')">Usados <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortFerias('dias_disponiveis')">Disponíveis <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="ferias-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendário de férias do trabalhador seleccionado -->
+    <div class="card" id="ferias-cal-card" style="display:none;margin-top:16px">
+      <div class="card-header" id="ferias-cal-header">
+        <i class="fa-solid fa-calendar-days"></i> <span id="ferias-cal-title"></span>
+      </div>
+      <div class="card-body" id="ferias-cal-body"></div>
+    </div>
+
+    <!-- Popup -->
+    <div id="ferias-popup-container"></div>
+  </div>
+
   <!-- Assiduidade -->
   <div class="section" id="section-assiduidade">
     <div class="card">
@@ -1693,6 +1825,9 @@ body.has-subbar .section { animation-delay: 0s; }
   <button class="mobile-nav-btn" onclick="showSection('assiduidade')" data-mobilesec="assiduidade">
     <i class="fa-solid fa-calendar-check"></i><span>Assid.</span>
   </button>
+  <button class="mobile-nav-btn" onclick="showSection('ferias')" data-mobilesec="ferias">
+    <i class="fa-solid fa-umbrella-beach"></i><span>Férias</span>
+  </button>
   <button class="mobile-nav-btn" onclick="showSection('comparativa')" data-mobilesec="comparativa">
     <i class="fa-solid fa-chart-column"></i><span>Comp.</span>
   </button>
@@ -1739,6 +1874,12 @@ let compCurrentTab = 'obras';
 let compEvoMetric = 'custo';
 let compEvoHidden = {};
 
+/* ── FÉRIAS GLOBALS ──────────────────────────────────── */
+let feriasAllRows   = [];
+let feriasSortCol   = 'nome';
+let feriasSortAsc   = true;
+let feriasSelected  = null;
+
 /* ── FORMATTERS ─────────────────────────────────────────── */
 const fmt  = v => (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const fmtN = v => typeof v === 'number' ? v.toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : v;
@@ -1782,6 +1923,7 @@ const sectionTitles = {
   deslocacoes:  'Deslocações',
   equipa:       'Equipa',
   assiduidade:  'Assiduidade',
+  ferias:       'Férias',
   comparativa:  'Análise Comparativa'
 };
 
@@ -1887,6 +2029,7 @@ function buildAll() {
   buildEquipa();
   buildAssidTable();
   buildComparativa();
+  buildFerias();
 }
 
 function buildObrasSidebar() {
@@ -3592,6 +3735,274 @@ function initResizeObservers() {
   // Observe main content for size changes
   const main = document.getElementById('main-content');
   if (main) observer.observe(main);
+}
+
+/* ══════════════════════════════════════════════════════════
+   FÉRIAS
+   ══════════════════════════════════════════════════════════ */
+
+function buildFerias() {
+  if (!DATA || !DATA.ferias) return;
+  const colabs = DATA.colaboradores || [];
+
+  // Mapa nome → funcao
+  const funcaoMap = {};
+  colabs.forEach(c => { funcaoMap[c.Nome] = c.Funcao || '—'; });
+
+  feriasAllRows = DATA.ferias.map(f => ({
+    nome:             f.nome,
+    funcao:           funcaoMap[f.nome] || '—',
+    data_admissao:    f.data_admissao,
+    ano_ref_inicio:   f.ano_ref_inicio,
+    ano_ref_fim:      f.ano_ref_fim,
+    dias_total:       f.dias_total,
+    dias_usados:      f.dias_usados,
+    dias_disponiveis: f.dias_disponiveis
+  }));
+
+  feriasSortCol = 'nome';
+  feriasSortAsc = true;
+  feriasSelected = null;
+
+  document.getElementById('ferias-cal-card').style.display = 'none';
+  document.getElementById('ferias-search').value = '';
+  renderFeriasTable();
+}
+
+function renderFeriasTable() {
+  const search = (document.getElementById('ferias-search').value || '').toLowerCase();
+
+  let rows = feriasAllRows.filter(r =>
+    !search || r.nome.toLowerCase().includes(search)
+  );
+
+  rows.sort((a, b) => {
+    const va = a[feriasSortCol], vb = b[feriasSortCol];
+    if (typeof va === 'string')
+      return feriasSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return feriasSortAsc ? va - vb : vb - va;
+  });
+
+  const fmtDate = s => {
+    if (!s || s.length < 10) return '—';
+    const p = s.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  };
+
+  const saldoBadge = d => {
+    if (d > 5)  return '<span class="ferias-saldo-badge ok">' + d + ' dias</span>';
+    if (d >= 1) return '<span class="ferias-saldo-badge warn">' + d + ' dias</span>';
+    return '<span class="ferias-saldo-badge neg"><i class="fa-solid fa-triangle-exclamation"></i>' + d + ' dias</span>';
+  };
+
+  const tbody = document.getElementById('ferias-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;' +
+      'color:var(--text-dim)">Sem dados de férias. Preenche a aba FERIAS no ficheiro central.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const isSelected = feriasSelected === r.nome;
+    const periodo = fmtDate(r.ano_ref_inicio) + ' → ' + fmtDate(r.ano_ref_fim);
+    const escNome = r.nome.replace(/'/g, "\\'");
+    return '<tr style="cursor:pointer' + (isSelected ? ';background:rgba(99,179,237,.08)' : '') + '"' +
+      ' onclick="feriasSelectWorker(\'' + escNome + '\')">' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong></td>' +
+      '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
+      '<td data-label="Período" style="font-size:11px;color:var(--text-muted)">' + periodo + '</td>' +
+      '<td data-label="Total" class="td-center td-mono">' + r.dias_total + '</td>' +
+      '<td data-label="Usados" class="td-center td-mono">' + r.dias_usados + '</td>' +
+      '<td data-label="Disponíveis" class="td-center">' + saldoBadge(r.dias_disponiveis) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  // Indicadores de ordenação
+  const colMap = { nome:0, funcao:1, periodo:2, dias_total:3, dias_usados:4, dias_disponiveis:5 };
+  const ths = document.querySelectorAll('#ferias-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const ic = th.querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[feriasSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const ic = ths[idx].querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid ' +
+      (feriasSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+
+function sortFerias(col) {
+  feriasSortAsc = feriasSortCol === col ? !feriasSortAsc
+    : (col === 'nome' || col === 'funcao');
+  feriasSortCol = col;
+  renderFeriasTable();
+}
+
+function feriasSelectWorker(nome) {
+  feriasSelected = feriasSelected === nome ? null : nome;
+  renderFeriasTable();
+
+  const card = document.getElementById('ferias-cal-card');
+  if (!feriasSelected) { card.style.display = 'none'; return; }
+
+  const row = feriasAllRows.find(r => r.nome === nome);
+  if (!row) return;
+
+  // Recolher dias de férias desta pessoa de todas as obras
+  const feriasDays = {}; // "YYYY-MM-DD" → { obra, fase }
+  const obras = DATA.obras || {};
+  Object.keys(obras).forEach(obraNome => {
+    const assid = obras[obraNome].assiduidade || [];
+    const worker = assid.find(a => a.nome === nome);
+    if (!worker) return;
+    Object.entries(worker.dias).forEach(([dateStr, d]) => {
+      if (!d.falta) return;
+      const motivo = (d.motivo || '').toLowerCase();
+      if (motivo !== 'férias' && motivo !== 'ferias') return;
+      // Apenas dias no período activo
+      if (dateStr < row.ano_ref_inicio || dateStr > row.ano_ref_fim) return;
+      feriasDays[dateStr] = {
+        obra:  obraNome,
+        fase:  (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '—'
+      };
+    });
+  });
+
+  document.getElementById('ferias-cal-title').textContent =
+    nome.split(' ').slice(0, 2).join(' ') + ' — Calendário de Férias';
+  document.getElementById('ferias-cal-body').innerHTML =
+    buildFeriasCal(row, feriasDays);
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function buildFeriasCal(row, feriasDays) {
+  if (!Object.keys(feriasDays).length) {
+    return '<div style="text-align:center;padding:32px;color:var(--text-dim)">' +
+      '<i class="fa-solid fa-sun" style="font-size:28px;display:block;' +
+      'margin-bottom:12px;opacity:.4"></i>Sem dias de férias registados no período activo</div>';
+  }
+
+  // Determinar meses a mostrar (apenas meses com férias)
+  const months = [...new Set(Object.keys(feriasDays).map(d => d.slice(0, 7)))].sort();
+  const dayLabels = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  const blocksHtml = months.map(ym => {
+    const [y, m] = ym.split('-').map(Number);
+    const firstDay = new Date(y, m - 1, 1);
+    const totalDays = new Date(y, m, 0).getDate();
+    // Offset: Monday=0
+    let offset = firstDay.getDay() - 1;
+    if (offset < 0) offset = 6;
+
+    let html = '<div class="ferias-month-block">' +
+      '<div class="ferias-month-title">' + monthNames[m - 1] + ' ' + y + '</div>' +
+      '<div class="ferias-month-days">';
+
+    // Day labels
+    dayLabels.forEach(l => {
+      html += '<div class="ferias-day-label">' + l + '</div>';
+    });
+
+    // Empty cells before first day
+    for (let i = 0; i < offset; i++) {
+      html += '<div class="ferias-day empty"></div>';
+    }
+
+    // Day cells
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const isFerias = feriasDays[dateStr];
+      if (isFerias) {
+        const escDate = dateStr.replace(/'/g, "\\'");
+        html += '<div class="ferias-day has-ferias"' +
+          ' onclick="feriasShowDayPopup(event,\'' + escDate + '\')"' +
+          ' title="' + d + '">' + d + '</div>';
+      } else {
+        html += '<div class="ferias-day">' + d + '</div>';
+      }
+    }
+
+    html += '</div></div>';
+    return html;
+  }).join('');
+
+  return '<div class="ferias-cal-grid">' + blocksHtml + '</div>';
+}
+
+function feriasShowDayPopup(event, dateStr) {
+  event.stopPropagation();
+  if (!feriasSelected) return;
+
+  // Recolher dados do dia
+  const obras = DATA.obras || {};
+  let obraNome = '—', fase = '—';
+  Object.keys(obras).forEach(o => {
+    const assid = obras[o].assiduidade || [];
+    const worker = assid.find(a => a.nome === feriasSelected);
+    if (!worker || !worker.dias[dateStr]) return;
+    const d = worker.dias[dateStr];
+    if (d.falta && (d.motivo || '').toLowerCase().includes('rias')) {
+      obraNome = o;
+      fase = (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '—';
+    }
+  });
+
+  const parts = dateStr.split('-');
+  const dateDisplay = parts[2] + '/' + parts[1] + '/' + parts[0];
+
+  const bodyHtml =
+    '<div class="ferias-popup-row">' +
+      '<i class="fa-solid fa-calendar" style="color:var(--info);font-size:11px"></i>' +
+      '<span style="color:var(--text-muted);min-width:50px">Data</span>' +
+      '<strong>' + dateDisplay + '</strong>' +
+    '</div>' +
+    '<div class="ferias-popup-row">' +
+      '<i class="fa-solid fa-building" style="color:var(--info);font-size:11px"></i>' +
+      '<span style="color:var(--text-muted);min-width:50px">Obra</span>' +
+      '<span>' + obraNome + '</span>' +
+    '</div>' +
+    '<div class="ferias-popup-row">' +
+      '<i class="fa-solid fa-layer-group" style="color:var(--info);font-size:11px"></i>' +
+      '<span style="color:var(--text-muted);min-width:50px">Fase</span>' +
+      '<span style="font-size:11px">' + fase + '</span>' +
+    '</div>';
+
+  const container = document.getElementById('ferias-popup-container');
+  container.innerHTML =
+    '<div class="ferias-popup-overlay" onclick="feriasPopupClose()"></div>' +
+    '<div class="ferias-popup" id="ferias-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="ferias-popup-header">' +
+        '<span><i class="fa-solid fa-umbrella-beach" style="margin-right:8px;' +
+        'color:var(--info)"></i>Férias — ' + dateDisplay + '</span>' +
+        '<button class="ferias-popup-close" onclick="feriasPopupClose()">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="ferias-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('ferias-popup-inner');
+    if (!popup) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pw = popup.offsetWidth  || 260;
+    const ph = popup.offsetHeight || 140;
+    let top  = rect.bottom + 8;
+    let left = rect.left;
+    if (left + pw > window.innerWidth  - 12) left = window.innerWidth  - pw - 12;
+    if (top  + ph > window.innerHeight - 12) top  = rect.top - ph - 8;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function feriasPopupClose() {
+  document.getElementById('ferias-popup-container').innerHTML = '';
 }
 
 /* ══════════════════════════════════════════════════════════
