@@ -1,117 +1,221 @@
-# Copilot Instructions: Doutor Martelo Dashboard
+# Copilot Instructions — Dashboard Doutor Martelo
 
-## Project Overview
-**Doutor Martelo** is a Google Apps Script web app for construction project cost management. It aggregates data from multiple Google Sheets (written by **AppSheet**) and presents an interactive dashboard with cost tracking, worker assiduity, travel logistics, and cross-obra comparative analysis.
+## Contexto do Projecto
+Dashboard de gestão de obra para empresa de construção civil portuguesa.
+Servido como Google Apps Script Web App via `HtmlService`.
+Toda a UI vive num único ficheiro `index.html`.
 
-- **Type**: Google Apps Script (GAS) web app — single-file HTML frontend (`index.html` ~4100 lines, inline CSS + JS)
-- **Runtime**: V8 (ES6+) — no npm, no build step, no bundler
-- **CDNs**: Google Fonts (Inter 300-700), Font Awesome 6.5.1, Chart.js v4
-- **Timezone**: `Europe/Lisbon` — hardcoded in `TZ` constant and `appsscript.json`
-- **Data entry**: AppSheet writes to Google Sheets; this codebase is read-only against the sheets
+---
 
-## Architecture
+## Stack e Restrições ABSOLUTAS
+- **HTML5 + CSS3 + JavaScript ES6 vanilla** — sem frameworks, sem bundlers
+- **Nunca sugerir:** React, Vue, Angular, npm, webpack, import/export, require()
+- **Chart.js v4** (CDN) — único para todos os gráficos
+- **Font Awesome 6** (CDN) — ícones
+- **Google Fonts: Inter** — tipografia
+- Tudo em **funções globais** — o GAS concatena e serve como HTML único
+- Compatível com **Google Apps Script HtmlService** (sem acesso ao DOM server-side)
 
-### Backend (`main.gs`)
-1. `doGet()` → serves `index` template (GAS strips `.html` extension)
-2. `getDashboardData()` → JSON endpoint; wraps errors as `{error: message}`
-3. `buildData_(ss)` → reads 5 sheets, aggregates hierarchically, serializes Sets (`.size` / `Array.from()`) before `JSON.stringify`
+---
 
-### Frontend (`index.html`)
-1. `initTheme()` + `initKeyboardNav()` + `initResizeObservers()` run at script load
-2. `window.onload` → `loadData()` → `google.script.run.getDashboardData()`
-3. `onDataLoaded(jsonStr)` → `JSON.parse` → `buildAll()` → `stopRefreshSpinner()` → `checkAlerts()`
-4. `buildAll()` chains 6 section builders + sidebar population
+## Ficheiros do Projecto
+| Ficheiro | Função |
+|---|---|
+| `index.html` | Toda a UI: CSS + HTML + JS (~4100 linhas) |
+| `main.gs` | Backend GAS: lê o Google Sheets e devolve JSON |
+| `appsscript.json` | Configuração do GAS (não alterar) |
+| `.clasp.json` | Config do clasp CLI (não alterar) |
 
-### Navigation — Section-Based (not views/tabs)
-Six sections toggled via `showSection(id)` — updates sidebar active state, breadcrumb, mobile nav:
+---
 
-| Section ID | Title | Builder(s) | Chart Registry |
-|---|---|---|---|
-| `overview` | Visão Geral | `buildOverview()` | (none — KPI cards only) |
-| `obra-detail` | Detalhe da Obra | `buildObraKpis/Charts/WorkersTable()` | `obraCharts{}` (daily, weekly, workers, fases) |
-| `deslocacoes` | Deslocações | `buildDeslocacoes()` | `deslCharts{}` (obra, time) |
-| `equipa` | Equipa | `buildEquipa()` | `equipaCharts{}` (funcao, top) + `equipaDetailChart` |
-| `assiduidade` | Assiduidade | `buildAssiduidade()` via `assidSelectObra/Worker` | (none — heatmap calendar) |
-| `comparativa` | Análise Comparativa | `buildCompCustos/Radar/Fases/Evo()` | `compCharts{}` (custos, radar, fasecusto, fasehoras, evo) |
+## Como os Dados Chegam ao Frontend
+```js
+// Chamada assíncrona ao backend GAS
+google.script.run
+  .withSuccessHandler(onDataLoaded)
+  .withFailureHandler(onDataError)
+  .getDashboardData();
 
-HTML pattern: `<div class="section" id="section-{id}">`. Sidebar nav items use `data-section="{id}"`.
-
-## Sheet Structure & Readers
-
-| Constant | Sheet Name | Reader | Key Fields |
-|---|---|---|---|
-| `SHEET_REGISTOS` | `REGISTOS_POR_DIA` | `readRegistos_()` | `data, nome, funcao, obra, fase, horas, atraso_min, falta, motivo, eur_h, custo` |
-| `SHEET_OBRAS` | `OBRAS` | `readObras_()` | `Obra_ID, Local_ID, Ativa` |
-| `SHEET_COLAB` | `COLABORADORES` | `readColabs_()` | `Nome, Funcao, Eur_h` |
-| `SHEET_VIAGENS` | `VIAGENS_DIARIAS` | `readViagens_()` | `Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia` |
-| `SHEET_DESLOCACOES` | `REGISTO_DESLOCACOES` | `readDeslocacoes_()` | `data, obra, origem, qtd, custo` |
-
-**Viagens vs Deslocações**: `VIAGENS_DIARIAS` = vehicle-level daily trips (generic). `REGISTO_DESLOCACOES` = obra-attributed trip costs (what the frontend section uses as `DATA.deslocacoes`).
-
-## Frontend Data Structure
-```javascript
-DATA.global       // {custo_total, custo_mao_obra, custo_deslocacoes, horas_total, total_atrasos, obras_ativas, colaboradores, faltas, custo_viagens, total_viagens, last_update}
-DATA.obras[nome]  // {custo_total, custo_mao_obra, custo_deslocacoes, horas_total, atraso_total, trabalhadores, faltas, dias, all_dates[], daily[], weekly[], monthly[], workers[], assiduidade[], fases[]}
-DATA.obras_info   // [{Obra_ID, Local_ID, Ativa}] — indexed by Local_ID (display name), NOT Obra_ID
-DATA.deslocacoes  // [{data, obra, origem, qtd, custo}]
-DATA.viagens      // [{Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia}]
-DATA.colaboradores // [{Nome, Funcao, Eur_h}]
+// onDataLoaded recebe uma string JSON
+function onDataLoaded(jsonStr) {
+  dashData = JSON.parse(jsonStr);
+  // dashData é a variável global com todos os dados
+}
 ```
 
-**Date filtering caveat**: `DATA.obras[nome].workers` is pre-aggregated (no per-date granularity) — cannot be date-filtered. Only `daily[]`, `assiduidade[].dias{}`, and `DATA.deslocacoes[]` support `dateInRange()` filtering. `weekly[]` uses `YYYY-SWW` format and is not date-filtered.
-
-## Chart.js Patterns
-- **14 chart instances** across 4 dictionaries + 1 standalone — always destroy before rebuild: `destroyObraCharts()`, etc.
-- **Theme-aware**: `updateAllChartsTheme()` iterates all registries, updates grid/tick colors, calls `chart.update('none')`
-- **Global defaults** set in `applyTheme()`: `Chart.defaults.color`, `Chart.defaults.borderColor`
-- **Palette**: `CHART_PALETTE` array with 10 colors; `generateDistinctColors(n)` for N>10
-
-## Polishing Systems (recent additions)
-
-| Feature | Key Functions | Storage |
-|---|---|---|
-| **Theme toggle** (dark/light) | `initTheme()`, `toggleTheme()`, `applyTheme()`, `updateAllChartsTheme()` | `localStorage('dm-theme')` with try/catch for GAS sandbox |
-| **Global date filter** | `dateInRange()`, `applyGlobalFilter()`, `setQuickFilter(preset)`, `computeFilteredGlobal()` | `globalDateFrom/To` globals |
-| **Toast notifications** | `showToast(msg, type, duration)`, `checkAlerts()` | `#toast-container` DOM |
-| **Skeleton loading** | `showSkeletons()`, `startRefreshSpinner()`, `stopRefreshSpinner()` | CSS `.skeleton` class |
-| **KPI tooltips** | `KPI_TOOLTIPS{}` map → injected as `?` icon in `buildOverview()` | CSS hover visibility |
-| **Keyboard nav** | `initKeyboardNav()` — Alt+1-6 sections, Escape close panels | keydown listener |
-| **Breadcrumb** | `updateBreadcrumb()` — reflects section + obra + worker context | `#breadcrumb` DOM |
-| **Mobile bottom nav** | `updateMobileNav()` — replaces sidebar at <600px | `#mobile-bottom-nav` |
-| **Print** | `printReport()` → `window.print()` | `@media print` CSS |
-| **ResizeObserver** | `initResizeObservers()` — resizes all visible charts on container resize | Observes `#main-content` |
-
-## Critical Patterns
-
-- **Equipa re-aggregates from `DATA.obras`**: iterates `DATA.obras[*].workers[]` across all obras. `DATA.colaboradores` is only for base-rate roster.
-- **`obras_info` keyed on `Local_ID`**: lookup is `infoMap[nome]` where `nome` is the obra key in `DATA.obras`.
-- **Set serialization**: aggregation uses `new Set()` for unique counts — must convert via `.size`/`Array.from()` before `JSON.stringify`.
-- **ISO week format**: `"YYYY-SWW"` via `isoWeek_()` — custom algorithm counting from Jan 1 (non-standard).
-
-## Conventions
-- **Portuguese throughout**: sheet names, UI labels, error messages, commit messages
-- **Date format**: `Utilities.formatDate(date, TZ, "yyyy-MM-dd")` in backend; `"YYYY-MM-DD"` strings in frontend
-- **Fallback values**: `parseFloat(x) || 0`, `String(x).trim() || ""`
-- **Formatters**: `fmt(v)` → `"1.234,56 €"` (pt-PT), `fmtN(v)` → `"42,5"`, `initials(name)` → `"DM"`
-- **CSS variables**: `:root` for dark theme defaults, `[data-theme="light"]` override block
-- **Font**: Inter (Google Fonts) — weights 300-700
-
-## Deployment
-```powershell
-clasp push        # Push main.gs + index.html to Google Apps Script
-clasp open web    # Open deployed web app in browser
+## Estrutura do JSON (dashData)
+```js
+dashData = {
+  global: {
+    custo_total,        // número, €
+    custo_mao_obra,     // número, €
+    custo_deslocacoes,  // número, €
+    horas_total,        // número
+    total_atrasos,      // número, minutos
+    obras_ativas,       // número
+    colaboradores,      // número (únicos)
+    faltas,             // número
+    custo_viagens,      // número, €
+    total_viagens,      // número
+    last_update         // string "dd/MM/yyyy HH:mm"
+  },
+  obras: {
+    "Nome da Obra": {
+      custo_mao_obra, custo_deslocacoes, custo_total,
+      horas_total, atraso_total, trabalhadores, faltas, dias,
+      all_dates,  // array de strings "YYYY-MM-DD"
+      daily:    [{ DATA_str, Custo, Horas, Atraso, Trabalhadores, Faltas }],
+      weekly:   [{ Semana, Custo, Horas }],
+      monthly:  [{ Mes, Custo, Horas }],
+      workers:  [{ "Nome (auto)", "Função (auto)", Fase, Custo, Horas, Atraso, Dias, Faltas }],
+      assiduidade: [{ nome, funcao, dias: { "YYYY-MM-DD": { horas, falta, custo, atraso_min, motivo } } }],
+      fases:    [{ Fase, Custo, Horas, Workers, Dias, Faltas }]
+    }
+  },
+  obras_info:    [{ Obra_ID, Local_ID, Ativa }],
+  colaboradores: [{ Nome, Funcao, Eur_h }],
+  deslocacoes:   [{ data, obra, origem, qtd, custo }],
+  viagens:       [{ Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia }]
+}
 ```
-No build step. `.clasp.json` maps to GAS project via `scriptId`. Config in `appsscript.json` (V8, `Europe/Lisbon`, Stackdriver).
 
-## When Adding Features
-1. **New sheet** → add `SHEET_X` constant + `readX_()` reader (normalize dates, trim strings, parse floats), call from `buildData_()`, add to return
-2. **New section** → add `<div class="section" id="section-X">`, builder function, wire into `buildAll()`, add sidebar `.nav-item[data-section="X"]`, add to `sectionTitles`, add mobile nav button, update keyboard nav map
-3. **New chart** → add canvas in section HTML, builder function with `destroy` guard, register in appropriate `xxxCharts{}` dictionary so theme/resize updates work
-4. **New KPI** → add to `buildOverview()` cards array + `KPI_TOOLTIPS` map
-5. **New alert** → add condition check in `checkAlerts()`, call `showToast()` with appropriate type
+---
 
-## Key Files
-- [`main.gs`](../main.gs) — backend: 5 readers, aggregation, web app entry point
-- [`index.html`](../index.html) — frontend: inline CSS (~1120 lines) + JS (~3000 lines), all section builders
-- [`appsscript.json`](../appsscript.json) — runtime config (V8, timezone, web app access)
-- [`.clasp.json`](../.clasp.json) — deployment target (`scriptId`)
+## Variáveis Globais Principais (definidas no `<script>` do index.html)
+```js
+let dashData = null;        // todos os dados, populado após getDashboardData()
+let currentObra = null;     // nome da obra actualmente seleccionada
+let currentSection = null;  // secção activa da sidebar
+// Instâncias de gráficos (Chart.js) — sempre destruir antes de recriar:
+//   dailyChart, weeklyChart, workersChart, fasesChart,
+//   deslObraChart, deslTimeChart, equipaFuncaoChart, equipaTopChart,
+//   compCustosChart, compRadarChart, compEvoChart,
+//   compFaseCustoChart, compFaseHorasChart
+```
+
+---
+
+## Secções do Dashboard (sidebar nav)
+1. **Overview** — KPIs globais animados
+2. **Obras** — selecção de obra + gráficos diário/semanal/mensal + workers + fases
+3. **Deslocações** — custos e viagens por obra/origem
+4. **Equipa** — colaboradores, assiduidade, ranking
+5. **Comparativa** — análise entre obras, radar, evolução temporal
+6. **Assiduidade** — heatmap estilo GitHub por colaborador e obra
+
+---
+
+## Fases de Obra (valores possíveis)
+```
+A - projetos
+B - abertura estaleiro
+C - movimentação terras
+D - estrutura
+E - paredes exteriores e interiores
+F - capoto/isolamento
+G - eletricidade
+(podem existir outras)
+```
+
+---
+
+## Convenções de Código OBRIGATÓRIAS
+
+### Formatação
+```js
+// Moeda — sempre assim:
+valor.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })
+
+// Datas internas — sempre string "YYYY-MM-DD"
+// Datas para display — converter para "DD/MM/YYYY"
+
+// Horas — ex: 125.5 → "125h 30m"
+function fmtHoras(h) {
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  return mm > 0 ? `${hh}h ${mm}m` : `${hh}h`;
+}
+
+// Atrasos — minutos → "Xh Ym"
+function fmtMinutos(min) {
+  if (!min) return '—';
+  const h = Math.floor(min / 60), m = min % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+```
+
+### Gráficos Chart.js
+```js
+// SEMPRE destruir antes de recriar — nunca omitir este passo
+if (window.xyzChart instanceof Chart) window.xyzChart.destroy();
+window.xyzChart = new Chart(ctx, { ... });
+
+// Cores padrão do tema
+const CORES = {
+  accent:   '#e94560',
+  accent2:  '#ff6b6b',
+  info:     '#63b3ed',
+  success:  '#48bb78',
+  warning:  '#f6ad55',
+  muted:    '#a0aec0'
+};
+```
+
+### Toasts / Feedback
+```js
+// Usar sempre para feedback ao utilizador
+showToast('Mensagem', 'success');  // tipos: success | warning | error | info
+```
+
+### CSS Custom Properties (não alterar os nomes)
+```css
+--bg-dark, --bg-card, --bg-sidebar, --bg-hover
+--accent, --accent2
+--text, --text-muted, --text-dim
+--border, --success, --warning, --info
+--radius, --radius-sm
+--sidebar-w, --sidebar-wc, --topbar-h
+--transition
+```
+
+---
+
+## Regras de Edição do index.html
+- O ficheiro tem ~4100 linhas. Ao editar, **nunca reescrever blocos inteiros** sem necessidade.
+- Usar `str_replace` ou edições cirúrgicas sempre que possível.
+- Ao adicionar um novo gráfico: declarar a variável no topo do `<script>`, destruir no `destroyXxxCharts()` correspondente.
+- Ao adicionar uma nova secção: criar o botão na sidebar, o painel HTML, e a lógica em `showSection()`.
+- **Nunca** usar `document.write()`.
+- **Nunca** usar `eval()`.
+- **Nunca** adicionar `<script>` tags extra dentro de event handlers HTML inline; usar `addEventListener` ou funções globais referenciadas por `onclick`.
+
+---
+
+## Idioma
+- Toda a UI em **Português europeu** (não brasileiro)
+- Comentários no código podem ser em inglês ou português
+- Labels, tooltips, mensagens de erro: sempre PT-PT
+- Exemplos: "Guardar" não "Salvar", "Eliminar" não "Deletar", "Seleccionar" ou "Selecionar"
+
+---
+
+## Sheets do Google Sheets (backend — não alterar nomes)
+| Constante GAS | Nome real da Sheet |
+|---|---|
+| SHEET_REGISTOS | `REGISTOS_POR_DIA` |
+| SHEET_OBRAS | `OBRAS` |
+| SHEET_COLAB | `COLABORADORES` |
+| SHEET_VIAGENS | `VIAGENS_DIARIAS` |
+| SHEET_DESLOCACOES | `REGISTO_DESLOCACOES` |
+
+---
+
+## O que NÃO fazer (aprendido com sessões anteriores)
+- Não sugerir separar o index.html em múltiplos ficheiros (decisão tomada: manter num único ficheiro)
+- Não usar `localStorage` para guardar dados de negócio (apenas preferências de UI como tema)
+- Não fazer chamadas directas ao Google Sheets pelo frontend — tudo passa pelo `getDashboardData()`
+- Não adicionar dependências CDN novas sem confirmação explícita
+- Não reescrever funções existentes que funcionam — preferir estender
+
+## Testes mobile
+Testar sempre no Chrome mobile (Android/iOS).
+Brave browser distorce o layout — não usar como referência.

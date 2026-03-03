@@ -14,6 +14,7 @@ const SHEET_COLAB      = "COLABORADORES";
 const SHEET_VIAGENS    = "VIAGENS_DIARIAS";
 const SHEET_DESLOCACOES = "REGISTO_DESLOCACOES"; // viagens por obra (AppSheet)
 const SHEET_FERIAS      = "FERIAS";
+const SHEET_MATERIAIS_MOV = "MATERIAIS_MOV";
 const TZ               = "Europe/Lisbon";
 
 
@@ -48,15 +49,31 @@ function buildData_(ss) {
   const viaSheet    = ss.getSheetByName(SHEET_VIAGENS);
   const deslocSheet = ss.getSheetByName(SHEET_DESLOCACOES);
   const feriasSheet = ss.getSheetByName(SHEET_FERIAS);
+  const matSheet    = ss.getSheetByName(SHEET_MATERIAIS_MOV);
 
   if (!regSheet) throw new Error("Folha não encontrada: " + SHEET_REGISTOS);
 
-  const registos    = readRegistos_(regSheet);
   const obrasInfo   = readObras_(obraSheet);
   const colabs      = readColabs_(colabSheet);
+
+  // Mapa nome→€/h lido directamente da sheet (desde linha 1, igual a debugCustos)
+  // readColabs_ começa na linha 3 e pode saltar trabalhadores na linha 2
+  const colabRateMap = {};
+  if (colabSheet) {
+    const clLast = colabSheet.getLastRow();
+    if (clLast >= 2) {
+      colabSheet.getRange(1, 1, clLast, 3).getValues().forEach(r => {
+        const n = String(r[0] || "").trim();
+        if (n && n !== "Nome") colabRateMap[n] = parseFloat(r[2]) || 0;
+      });
+    }
+  }
+
+  const registos    = readRegistos_(regSheet, colabRateMap);
   const viagens     = readViagens_(viaSheet);
   const deslocacoes = readDeslocacoes_(deslocSheet);
   const ferias      = readFerias_(feriasSheet);
+  const materiaisMov = readMateriaisMov_(matSheet);
 
   // ── Agregar por obra ────────────────────────────────────────
   const obraMap = {};
@@ -142,6 +159,34 @@ function buildData_(ss) {
     deslocMap[d.obra].qtd   += d.qtd;
   });
 
+  // ── Materiais (CONSUMO) por obra e por fase ─────────────────
+  const matPorObra = {};       // obra -> { custo, qtd }
+  const matPorObraFase = {};   // obra -> fase -> { custo, qtd }
+  let custoMateriais = 0;
+
+  (materiaisMov || []).forEach(m => {
+    const tipo = String(m.tipo || "").trim().toUpperCase();
+    if (tipo !== "CONSUMO") return;
+
+    const obra = String(m.obra || "").trim();
+    if (!obra) return;
+
+    const fase = String(m.fase || "—").trim() || "—";
+    const custo = parseFloat(m.custo) || 0;
+    const qtd = parseFloat(m.qtd) || 0;
+
+    custoMateriais += custo;
+
+    if (!matPorObra[obra]) matPorObra[obra] = { custo: 0, qtd: 0 };
+    matPorObra[obra].custo += custo;
+    matPorObra[obra].qtd   += qtd;
+
+    if (!matPorObraFase[obra]) matPorObraFase[obra] = {};
+    if (!matPorObraFase[obra][fase]) matPorObraFase[obra][fase] = { custo: 0, qtd: 0 };
+    matPorObraFase[obra][fase].custo += custo;
+    matPorObraFase[obra][fase].qtd   += qtd;
+  });
+
   // ── Serializar obra map ─────────────────────────────────────
   const obras = {};
   Object.keys(obraMap).sort().forEach(nome => {
@@ -151,7 +196,10 @@ function buildData_(ss) {
       custo_mao_obra:    o.custo_total,
       custo_deslocacoes: (deslocMap[nome] || {}).custo || 0,
       qtd_deslocacoes:   (deslocMap[nome] || {}).qtd   || 0,
-      custo_total:       o.custo_total + ((deslocMap[nome] || {}).custo || 0),
+      custo_materiais:   (matPorObra[nome] || {}).custo || 0,
+      custo_total:       o.custo_total
+                          + ((deslocMap[nome] || {}).custo || 0)
+                          + ((matPorObra[nome] || {}).custo || 0),
       horas_total:   o.horas_total,
       atraso_total:  o.atraso_total,
       trabalhadores: o.trabalhadores.size,
@@ -198,14 +246,21 @@ function buildData_(ss) {
           Dias:    o.faseMap[f].Dias.size,
           Faltas:  o.faseMap[f].Faltas
         }))
-        .sort((a, b) => b.Custo - a.Custo)
+        .sort((a, b) => b.Custo - a.Custo),
+      materiais_fases: (matPorObraFase[nome])
+        ? Object.keys(matPorObraFase[nome]).map(f => ({
+            Fase: f,
+            Custo: matPorObraFase[nome][f].custo,
+            Qtd:   matPorObraFase[nome][f].qtd
+          })).sort((a,b) => b.Custo - a.Custo)
+        : [],
     };
   });
 
   // ── Global KPIs ─────────────────────────────────────────────
-  const custoMaoObra    = registos.reduce((s, r) => s + r.custo, 0);
+  const custoMaoObra     = registos.reduce((s, r) => s + r.custo, 0);
   const custoDeslocacoes = deslocacoes.reduce((s, d) => s + d.custo, 0);
-  const custoTotal      = custoMaoObra + custoDeslocacoes;
+  const custoTotal       = custoMaoObra + custoDeslocacoes + custoMateriais;
   const horasTotal      = registos.reduce((s, r) => s + r.horas, 0);
   const totalAtrasos    = registos.reduce((s, r) => s + r.atraso_min, 0);
   const totalFaltas     = registos.filter(r => r.falta).length;
@@ -219,6 +274,7 @@ function buildData_(ss) {
       custo_total:        custoTotal,
       custo_mao_obra:     custoMaoObra,
       custo_deslocacoes:  custoDeslocacoes,
+      custo_materiais:    custoMateriais,
       horas_total:        horasTotal,
       total_atrasos:      totalAtrasos,
       obras_ativas:       Object.keys(obras).length,
@@ -233,13 +289,14 @@ function buildData_(ss) {
     colaboradores: colabs,
     viagens:      viagens,
     deslocacoes:  deslocacoes,
-    ferias:       ferias
+    ferias:       ferias,
+    materiais_mov: materiaisMov
   };
 }
 
 // ── READERS ───────────────────────────────────────────────────
 
-function readRegistos_(sheet) {
+function readRegistos_(sheet, colabRateMap) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
@@ -258,18 +315,32 @@ function readRegistos_(sheet) {
       ? Utilities.formatDate(rawData, TZ, "yyyy-MM-dd")
       : String(rawData).slice(0, 10);
 
+    const nome      = String(row[2] || "").trim();
+    const horas     = parseFloat(row[6]) || 0;
+    const atrasoMin = parseFloat(row[7]) || 0;
+    const falta     = row[8] === true || String(row[8]).toLowerCase() === "true";
+
+    // Recalcular €/h e custo a partir de COLABORADORES (AppSheet pode gravar valores errados)
+    // Fórmula igual à AppSheet: Horas_Efetivas = Horas - (Atraso_Minutos/60)
+    //                           Custo = Falta ? 0 : Horas_Efetivas * €/h
+    const rateFromColab = (colabRateMap && colabRateMap[nome] !== undefined)
+      ? colabRateMap[nome]
+      : parseFloat(row[10]) || 0;
+    const horasEfetivas = horas - (atrasoMin / 60);
+    const custoCalc     = falta ? 0 : horasEfetivas * rateFromColab;
+
     results.push({
       data:       dateStr,
-      nome:       String(row[2] || "").trim(),   // C
+      nome:       nome,
       funcao:     String(row[3] || "").trim(),   // D
       obra:       obra,                          // E
       fase:       String(row[5] || "").trim(),   // F
-      horas:      parseFloat(row[6]) || 0,       // G
-      atraso_min: parseFloat(row[7]) || 0,       // H — Atraso_Minutos (novo)
-      falta:      row[8] === true || String(row[8]).toLowerCase() === "true",  // I
-      motivo:     String(row[9] || "").trim(),   // J — Motivo Falta (novo)
-      eur_h:      parseFloat(row[10]) || 0,      // K
-      custo:      parseFloat(row[11]) || 0,      // L
+      horas:      horas,                         // G
+      atraso_min: atrasoMin,                     // H
+      falta:      falta,                         // I
+      motivo:     String(row[9] || "").trim(),   // J
+      eur_h:      rateFromColab,
+      custo:      custoCalc,
     });
   });
 
@@ -369,6 +440,100 @@ function readDeslocacoes_(sheet) {
     });
 }
 
+function readMateriaisMov_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+    .map(h => String(h || "").trim());
+  const lower = header.map(h => h.toLowerCase());
+
+  function findCol_(variants) {
+    for (let i = 0; i < variants.length; i++) {
+      const v = String(variants[i]).toLowerCase();
+      let idx = lower.indexOf(v);
+      if (idx >= 0) return idx;
+    }
+    for (let i = 0; i < variants.length; i++) {
+      const v = String(variants[i]).toLowerCase();
+      let idx = lower.findIndex(h => h.includes(v));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  const cId        = findCol_(["id_mov", "id_movimento", "id"]);
+  const cData      = findCol_(["data"]);
+  const cTipo      = findCol_(["tipo"]);
+  const cObra      = findCol_(["obra"]);
+  const cFase      = findCol_(["fase"]);
+  const cMaterial  = findCol_(["material"]);
+  const cUnidade   = findCol_(["unidade"]);
+  const cQtd       = findCol_(["quantidade"]);
+  const cCustoTot  = findCol_(["custo_total", "custo total"]);
+  const cCustoUnit = findCol_(["custo_unit", "custo unit"]);
+  const cDocFatura = findCol_(["nº doc/fatura", "n doc/fatura", "doc_fatura", "doc/fatura"]);
+  const cLote      = findCol_(["lote"]);
+  const cObs       = findCol_(["observação", "observacao", "obs"]);
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    const s = String(v || "").replace(/\s/g, "").replace(",", ".");
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const out = [];
+
+  rows.forEach((r, i) => {
+    const tipo = cTipo >= 0 ? String(r[cTipo] || "").trim().toUpperCase() : "";
+    if (!tipo) return;
+
+    const rawD = cData >= 0 ? r[cData] : null;
+    const dateStr = rawD instanceof Date
+      ? Utilities.formatDate(rawD, TZ, "yyyy-MM-dd")
+      : String(rawD || "").slice(0, 10);
+
+    // Data é obrigatória (senão o filtro "Hoje" fica errado)
+    if (!dateStr) return;
+
+    const material = cMaterial >= 0 ? String(r[cMaterial] || "").trim() : "";
+    if (!material) return;
+
+    const id = (cId >= 0 && r[cId]) ? String(r[cId]).trim() : ("MOV-" + (i + 2));
+
+    const qtd = cQtd >= 0 ? num_(r[cQtd]) : 0;
+    const custoUnit = cCustoUnit >= 0 ? num_(r[cCustoUnit]) : 0;
+    const custoTot = cCustoTot >= 0 ? num_(r[cCustoTot]) : (qtd * custoUnit);
+
+    out.push({
+      id_mov: id,
+      data: dateStr,
+      tipo,
+      obra: cObra >= 0 ? String(r[cObra] || "").trim() : "",
+      fase: cFase >= 0 ? String(r[cFase] || "").trim() : "",
+      material,
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      quantidade: qtd,
+      custo_unit: custoUnit,
+      custo_total: custoTot,
+      doc_fatura: cDocFatura >= 0 ? String(r[cDocFatura] || "").trim() : "",
+      lote:       cLote >= 0 ? String(r[cLote] || "").trim() : "",
+      observacao: cObs >= 0 ? String(r[cObs] || "").trim() : "",
+
+      // aliases para agregação (matPorObra usa m.custo / m.qtd)
+      id: id,
+      qtd: qtd,
+      custo: custoTot
+    });
+  });
+
+  return out;
+}
+
 
 // ════════════════════════════════════════════════════════════
 //  SECÇÃO 2 — MENU & HELPERS
@@ -386,6 +551,7 @@ function readDeslocacoes_(sheet) {
 function onSheetChange(e) {
   if (e && e.changeType !== "REMOVE_ROW" && e.changeType !== "EDIT") return;
   limparLinhasVazias_();
+  corrigirCustosRegistos_();
 }
 
 /**
@@ -450,6 +616,129 @@ function uninstallOnChangeTrigger() {
 function limparLinhasVaziasManual() {
   limparLinhasVazias_();
   SpreadsheetApp.getUi().alert("✅ Linhas vazias eliminadas de REGISTOS_POR_DIA.");
+}
+
+/**
+ * Corrige €/h (col K) e Custo_Dia (col L) em REGISTOS_POR_DIA
+ * usando as taxas de COLABORADORES. Só escreve se o valor estiver errado.
+ * Fórmula: Horas_Efetivas = Horas - (Atraso/60); Custo = Falta ? 0 : Horas_Efetivas * €/h
+ */
+function corrigirCustosRegistos_() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_REGISTOS);
+  if (!sheet) return;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  // Mapa nome→€/h desde COLABORADORES (linha 1+, filtra cabeçalho)
+  const colabSheet = ss.getSheetByName(SHEET_COLAB);
+  if (!colabSheet) return;
+  const rateMap = {};
+  colabSheet.getRange(1, 1, colabSheet.getLastRow(), 3).getValues().forEach(r => {
+    const n = String(r[0] || "").trim();
+    if (n && n !== "Nome") rateMap[n] = parseFloat(r[2]) || 0;
+  });
+
+  const numRows = lastRow - 1;
+  const data    = sheet.getRange(2, 1, numRows, 12).getValues();
+  const updates = []; // [[row, col, value], ...]
+
+  data.forEach((row, i) => {
+    const nome      = String(row[2] || "").trim();
+    if (!nome || rateMap[nome] === undefined) return;
+
+    const horas     = parseFloat(row[6]) || 0;
+    const atrasoMin = parseFloat(row[7]) || 0;
+    const falta     = row[8] === true || String(row[8]).toLowerCase() === "true";
+    const sheetRate = parseFloat(row[10]) || 0;
+    const sheetCost = parseFloat(row[11]) || 0;
+
+    const correctRate = rateMap[nome];
+    const horasEfet   = horas - (atrasoMin / 60);
+    const correctCost = falta ? 0 : horasEfet * correctRate;
+
+    const sheetRow = i + 2; // +2: cabeçalho + 0-based
+    if (Math.abs(sheetRate - correctRate) > 0.001) {
+      updates.push([sheetRow, 11, correctRate]);   // col K = 11
+    }
+    if (Math.abs(sheetCost - correctCost) > 0.01) {
+      updates.push([sheetRow, 12, Math.round(correctCost * 100) / 100]); // col L = 12
+    }
+  });
+
+  // Escrever apenas as células que precisam de correcção
+  updates.forEach(u => {
+    sheet.getRange(u[0], u[1]).setValue(u[2]);
+  });
+}
+
+/**
+ * DIAGNÓSTICO — Executar manualmente no editor do Apps Script.
+ * Compara nomes e €/h entre COLABORADORES e REGISTOS_POR_DIA.
+ * Resultado: ver em View > Logs (ou Executions).
+ */
+function debugCustos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1. Ler COLABORADORES — mostrar todos os nomes e taxas
+  const colabSheet = ss.getSheetByName(SHEET_COLAB);
+  const colabLast = colabSheet.getLastRow();
+  const colabData = colabSheet.getRange(1, 1, colabLast, 3).getValues();
+  Logger.log("══ COLABORADORES (raw, todas as linhas) ══");
+  colabData.forEach((r, i) => {
+    const nome = String(r[0] || "");
+    const funcao = String(r[1] || "");
+    const eurh = r[2];
+    Logger.log("  Linha " + (i+1) + ": Nome=[" + nome + "] len=" + nome.length +
+      " | Funcao=[" + funcao + "] | €/h=" + eurh + " (tipo:" + typeof eurh + ")");
+  });
+
+  // 2. Ler REGISTOS_POR_DIA — filtrar apenas trabalhadores com €/h != esperado
+  const regSheet = ss.getSheetByName(SHEET_REGISTOS);
+  const regLast = regSheet.getLastRow();
+  if (regLast < 2) { Logger.log("REGISTOS vazio."); return; }
+
+  const regData = regSheet.getRange(2, 1, regLast - 1, 12).getValues();
+
+  // Mapa colaboradores
+  const rateMap = {};
+  colabData.forEach(r => {
+    const nome = String(r[0] || "").trim();
+    if (nome && nome !== "Nome") rateMap[nome] = parseFloat(r[2]) || 0;
+  });
+
+  Logger.log("\n══ MAPA COLABORADORES (trimmed) ══");
+  Object.keys(rateMap).sort().forEach(n => {
+    Logger.log("  [" + n + "] → " + rateMap[n] + " €/h");
+  });
+
+  Logger.log("\n══ REGISTOS COM PROBLEMAS ══");
+  let problemas = 0;
+  regData.forEach((row, i) => {
+    const nome = String(row[2] || "").trim();  // col C
+    if (!nome) return;
+    const sheetRate = parseFloat(row[10]) || 0; // col K
+    const sheetCost = parseFloat(row[11]) || 0; // col L
+    const horas = parseFloat(row[6]) || 0;      // col G
+    const expectedRate = rateMap[nome];
+
+    if (expectedRate === undefined) {
+      Logger.log("  ❌ Linha " + (i+2) + ": [" + nome + "] NÃO EXISTE em COLABORADORES!");
+      problemas++;
+    } else if (Math.abs(sheetRate - expectedRate) > 0.001) {
+      Logger.log("  ⚠️ Linha " + (i+2) + ": [" + nome + "] sheet €/h=" + sheetRate +
+        " mas COLABORADORES=" + expectedRate +
+        " | Horas=" + horas + " | Custo sheet=" + sheetCost +
+        " vs esperado=" + (horas * expectedRate).toFixed(2));
+      problemas++;
+    }
+  });
+
+  if (problemas === 0) {
+    Logger.log("  ✅ Todos os registos têm €/h consistente com COLABORADORES.");
+  }
+  Logger.log("\nTotal problemas: " + problemas);
 }
 
 function readFerias_(sheet) {

@@ -1646,6 +1646,29 @@ body.has-subbar .section { animation-delay: 0s; }
         </div>
       </div>
     </div>
+
+    <!-- Materiais (consumo) por fase -->
+    <div class="card" id="obra-materiais-card" style="display:none">
+      <div class="card-header">
+        <i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr>
+                <th>Fase</th>
+                <th>Material</th>
+                <th>Unidade</th>
+                <th class="td-right">Quantidade</th>
+                <th class="td-right">Custo (&euro;)</th>
+              </tr>
+            </thead>
+            <tbody id="obra-materiais-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Deslocações -->
@@ -1918,6 +1941,9 @@ let feriasSortCol   = 'nome';
 let feriasSortAsc   = true;
 let feriasSelected  = null;
 
+/* ── MATERIAIS GLOBALS ─────────────────────────────────── */
+let matMovAll = [];
+
 /* ── FORMATTERS ─────────────────────────────────────────── */
 const fmt  = v => (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const fmtN = v => typeof v === 'number' ? v.toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : v;
@@ -1939,9 +1965,10 @@ let globalDateTo = '';
 let activeQuickFilter = 'hoje';
 
 const KPI_TOOLTIPS = {
-  'Custo Total':       'Soma de todos os custos de mão de obra e deslocações em todas as obras.',
+  'Custo Total':       'Soma de todos os custos de mão de obra, deslocações e materiais em todas as obras.',
   'Mão de Obra':       'Custo total dos trabalhadores (horas × valor/hora) em todas as obras.',
   'Deslocações':       'Custo total de viagens e deslocações para as obras.',
+  'Materiais':         'Custo total de materiais consumidos (tipo CONSUMO) em todas as obras.',
   'Horas Trabalhadas': 'Total de horas registadas por todos os trabalhadores em todas as obras.',
   'Obras Ativas':      'Número de obras atualmente em andamento (marcadas como ativas).',
   'Colaboradores':     'Número total de trabalhadores únicos registados no sistema.',
@@ -1984,6 +2011,7 @@ function onDataLoaded(jsonStr) {
   try {
     DATA = JSON.parse(jsonStr);
     if (DATA.error) { onDataError(DATA.error); return; }
+    matMovAll = DATA.materiais_mov || [];
     buildAll();
     setQuickFilter('hoje');
     hideOverlay();
@@ -2117,6 +2145,7 @@ function openObra(nome) {
   buildObraKpis(nome);
   buildObraCharts(nome);
   buildObraWorkersTable(nome);
+  buildObraMateriais(nome);
   updateBreadcrumb();
 }
 
@@ -2138,7 +2167,7 @@ function buildObraKpis(nome) {
   // Se não há filtro activo, usar totais brutos directamente
   const semFiltro = !globalDateFrom && !globalDateTo;
 
-  let custoMO = 0, horas = 0, faltas = 0, atrasos = 0, custoDesl = 0;
+  let custoMO = 0, horas = 0, faltas = 0, atrasos = 0, custoDesl = 0, custoMat = 0;
   let workerSet = new Set();
   let diasSet = new Set();
 
@@ -2148,6 +2177,7 @@ function buildObraKpis(nome) {
     faltas     = o.faltas            || 0;
     atrasos    = o.atraso_total      || 0;
     custoDesl  = o.custo_deslocacoes || 0;
+    custoMat   = o.custo_materiais   || 0;
     workerSet  = { size: o.trabalhadores || 0 };
     diasSet    = { size: o.dias          || 0 };
   } else {
@@ -2173,9 +2203,12 @@ function buildObraKpis(nome) {
     (DATA.deslocacoes || []).forEach(d => {
       if (d.obra === nome && dateInRange(d.data)) custoDesl += d.custo || 0;
     });
+
+    // Materiais CONSUMO filtrados por obra
+    custoMat = sumMateriaisByObra(nome);
   }
 
-  const custoTotal = custoMO + custoDesl;
+  const custoTotal = custoMO + custoDesl + custoMat;
   const nWorkers   = semFiltro ? workerSet.size : workerSet.size;
   const nDias      = semFiltro ? diasSet.size   : diasSet.size;
 
@@ -2186,6 +2219,7 @@ function buildObraKpis(nome) {
     { val: faltas,                 label: 'Faltas' },
     { val: nDias,                  label: 'Dias Trabalhados' },
     { val: fmt(custoDesl),         label: 'Deslocações' },
+    { val: fmt(custoMat),          label: 'Materiais' },
   ];
   container.innerHTML = items.map(i => `
     <div class="obra-kpi">
@@ -2374,6 +2408,52 @@ function filterWorkers() { renderWorkerRows(); }
 
 function exportWorkersCSV() { /* disabled */ }
 
+/* ══════════════════════════════════════════════════════════
+   OBRA — MATERIAIS (consumo) por fase
+   ══════════════════════════════════════════════════════════ */
+function buildObraMateriais(nome) {
+  const card  = document.getElementById('obra-materiais-card');
+  const tbody = document.getElementById('obra-materiais-tbody');
+  if (!card || !tbody) return;
+
+  // Filtrar CONSUMO da obra, respeitando filtro de datas global
+  const rows = matMovAll.filter(m =>
+    m.tipo && m.tipo.toUpperCase() === 'CONSUMO' &&
+    m.obra === nome &&
+    dateInRange(m.data)
+  );
+
+  if (!rows.length) {
+    card.style.display = 'none';
+    tbody.innerHTML = '';
+    return;
+  }
+
+  // Agrupar por fase + material + unidade
+  const map = {};
+  rows.forEach(m => {
+    const fase = m.fase || '\u2014';
+    const key  = fase + '||' + m.material + '||' + (m.unidade || '');
+    if (!map[key]) map[key] = { fase: fase, material: m.material, unidade: m.unidade || '', qtd: 0, custo: 0 };
+    map[key].qtd   += parseFloat(m.quantidade) || 0;
+    map[key].custo += parseFloat(m.custo_total) || 0;
+  });
+
+  const grouped = Object.values(map).sort((a, b) => b.custo - a.custo);
+
+  tbody.innerHTML = grouped.map(g =>
+    '<tr>' +
+    '<td>' + g.fase + '</td>' +
+    '<td>' + g.material + '</td>' +
+    '<td>' + g.unidade + '</td>' +
+    '<td class="td-right">' + fmtN(g.qtd) + '</td>' +
+    '<td class="td-right">' + fmt(g.custo) + '</td>' +
+    '</tr>'
+  ).join('');
+
+  card.style.display = '';
+}
+
 /* ── SECTION BUILDERS (placeholders) ────────────────────── */
 function buildOverview() {
   if (!DATA || !DATA.global) return;
@@ -2381,16 +2461,18 @@ function buildOverview() {
 
   const pctMO   = g.custo_total > 0 ? ((g.custo_mao_obra / g.custo_total) * 100).toFixed(1) : '0';
   const pctDesl = g.custo_total > 0 ? ((g.custo_deslocacoes / g.custo_total) * 100).toFixed(1) : '0';
+  const pctMat  = g.custo_total > 0 ? (((g.custo_materiais || 0) / g.custo_total) * 100).toFixed(1) : '0';
 
   const cards = [
-    { icon: 'fa-coins',                theme: 'warning', label: 'Custo Total',       value: g.custo_total,       format: 'euro',    sub: g.obras_ativas + ' obras ativas' },
-    { icon: 'fa-hammer',               theme: 'info',    label: 'Mão de Obra',       value: g.custo_mao_obra,    format: 'euro',    sub: pctMO + '% do custo total' },
-    { icon: 'fa-car',                  theme: 'accent',  label: 'Deslocações',       value: g.custo_deslocacoes, format: 'euro',    sub: pctDesl + '% do custo total', link: 'deslocacoes' },
-    { icon: 'fa-clock',                theme: 'success', label: 'Horas Trabalhadas', value: g.horas_total,       format: 'hours',   sub: 'Total acumulado' },
-    { icon: 'fa-building',             theme: 'info',    label: 'Obras Ativas',      value: g.obras_ativas,      format: 'int',     sub: 'Em andamento' },
-    { icon: 'fa-users',                theme: 'success', label: 'Colaboradores',     value: g.colaboradores,     format: 'int',     sub: 'Trabalhadores únicos', link: 'equipa' },
-    { icon: 'fa-user-xmark',           theme: 'accent',  label: 'Faltas Totais',     value: g.faltas,            format: 'int',     sub: 'Registos de ausência', badge: g.faltas > 5, link: 'assiduidade' },
-    { icon: 'fa-triangle-exclamation', theme: 'warning', label: 'Total Atrasos',     value: g.total_atrasos,     format: 'minutes', sub: fmtMin(g.total_atrasos) + ' acumulados' },
+    { icon: 'fa-coins',                theme: 'warning', label: 'Custo Total',       value: g.custo_total,            format: 'euro',    sub: g.obras_ativas + ' obras ativas' },
+    { icon: 'fa-hammer',               theme: 'info',    label: 'Mão de Obra',       value: g.custo_mao_obra,         format: 'euro',    sub: pctMO + '% do custo total' },
+    { icon: 'fa-car',                  theme: 'accent',  label: 'Deslocações',       value: g.custo_deslocacoes,      format: 'euro',    sub: pctDesl + '% do custo total', link: 'deslocacoes' },
+    { icon: 'fa-boxes-stacked',        theme: 'info',    label: 'Materiais',         value: g.custo_materiais || 0,   format: 'euro',    sub: pctMat + '% do custo total' },
+    { icon: 'fa-clock',                theme: 'success', label: 'Horas Trabalhadas', value: g.horas_total,            format: 'hours',   sub: 'Total acumulado' },
+    { icon: 'fa-building',             theme: 'info',    label: 'Obras Ativas',      value: g.obras_ativas,           format: 'int',     sub: 'Em andamento' },
+    { icon: 'fa-users',                theme: 'success', label: 'Colaboradores',     value: g.colaboradores,          format: 'int',     sub: 'Trabalhadores únicos', link: 'equipa' },
+    { icon: 'fa-user-xmark',           theme: 'accent',  label: 'Faltas Totais',     value: g.faltas,                 format: 'int',     sub: 'Registos de ausência', badge: g.faltas > 5, link: 'assiduidade' },
+    { icon: 'fa-triangle-exclamation', theme: 'warning', label: 'Total Atrasos',     value: g.total_atrasos,          format: 'minutes', sub: fmtMin(g.total_atrasos) + ' acumulados' },
   ];
 
   let html = '<div class="kpi-grid">';
@@ -3610,12 +3692,27 @@ function clearGlobalFilter() {
   setQuickFilter('tudo');
 }
 
+/* ── MATERIAIS HELPERS ──────────────────────────────────── */
+function filterMateriaisByDate() {
+  return matMovAll.filter(m =>
+    m.tipo && m.tipo.toUpperCase() === 'CONSUMO' && dateInRange(m.data)
+  );
+}
+function sumMateriaisGlobal() {
+  return filterMateriaisByDate().reduce((s, m) => s + (parseFloat(m.custo_total) || 0), 0);
+}
+function sumMateriaisByObra(nome) {
+  return filterMateriaisByDate()
+    .filter(m => m.obra === nome)
+    .reduce((s, m) => s + (parseFloat(m.custo_total) || 0), 0);
+}
+
 function computeFilteredGlobal() {
   if (!DATA || !DATA.obras) return DATA ? DATA.global : {};
   if (!globalDateFrom && !globalDateTo) return DATA.global;
 
   // Re-aggregate from daily data
-  let custoTotal = 0, horasTotal = 0, faltas = 0, totalAtrasos = 0;
+  let custoMO = 0, horasTotal = 0, faltas = 0, totalAtrasos = 0;
   const workerSet = new Set();
   const obraSet = new Set();
   let custoDesl = 0;
@@ -3624,7 +3721,7 @@ function computeFilteredGlobal() {
     const obra = DATA.obras[nome];
     (obra.daily || []).forEach(d => {
       if (!dateInRange(d.DATA_str)) return;
-      custoTotal += d.Custo || 0;
+      custoMO += d.Custo || 0;
       horasTotal += d.Horas || 0;
       obraSet.add(nome);
     });
@@ -3644,12 +3741,16 @@ function computeFilteredGlobal() {
     if (dateInRange(d.data)) custoDesl += d.custo || 0;
   });
 
-  custoTotal += custoDesl;
+  // Materiais CONSUMO filtrados
+  const custoMat = sumMateriaisGlobal();
+
+  const custoTotal = custoMO + custoDesl + custoMat;
 
   return {
     custo_total: custoTotal,
-    custo_mao_obra: custoTotal - custoDesl,
+    custo_mao_obra: custoMO,
     custo_deslocacoes: custoDesl,
+    custo_materiais: custoMat,
     horas_total: horasTotal,
     obras_ativas: obraSet.size,
     colaboradores: workerSet.size,
