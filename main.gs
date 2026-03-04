@@ -15,7 +15,10 @@ const SHEET_VIAGENS    = "VIAGENS_DIARIAS";
 const SHEET_DESLOCACOES = "REGISTO_DESLOCACOES"; // viagens por obra (AppSheet)
 const SHEET_FERIAS      = "FERIAS";
 const SHEET_MATERIAIS_MOV = "MATERIAIS_MOV";
+const SHEET_NAO_REGISTADOS = "NAO_REGISTADOS_HIST";
 const TZ               = "Europe/Lisbon";
+const NREG_HOUR        = 23;
+const NREG_MINUTE      = 45;
 
 
 // ════════════════════════════════════════════════════════════
@@ -630,6 +633,130 @@ function uninstallOnChangeTrigger() {
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   Logger.log("Trigger removido.");
+}
+
+/**
+ * Instala o trigger diário (dias úteis) que grava os trabalhadores não registados.
+ * Usa uma cadeia de triggers one-shot para garantir agendamento no próximo dia útil às 23:45.
+ */
+function installDailyNaoRegistadosTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "executarRegistoNaoRegistadosAgendado_")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  agendarProximoNaoRegistados_();
+  Logger.log("Trigger de não registados agendado para o próximo dia útil às 23:45.");
+}
+
+/**
+ * Remove o trigger diário dos não registados.
+ */
+function uninstallDailyNaoRegistadosTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "executarRegistoNaoRegistadosAgendado_")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  Logger.log("Trigger de não registados removido.");
+}
+
+/**
+ * Handler do trigger agendado. Não executar manualmente.
+ */
+function executarRegistoNaoRegistadosAgendado_() {
+  try {
+    registarNaoRegistadosDoDia_();
+  } finally {
+    agendarProximoNaoRegistados_();
+  }
+}
+
+/**
+ * Agenda a próxima execução para as 23:45 do próximo dia útil.
+ */
+function agendarProximoNaoRegistados_() {
+  const agora = new Date();
+  let proximo = new Date(agora);
+  proximo.setHours(NREG_HOUR, NREG_MINUTE, 0, 0);
+
+  if (proximo.getTime() <= agora.getTime()) {
+    proximo.setDate(proximo.getDate() + 1);
+    proximo.setHours(NREG_HOUR, NREG_MINUTE, 0, 0);
+  }
+
+  while (ehFimDeSemana_(proximo)) {
+    proximo.setDate(proximo.getDate() + 1);
+    proximo.setHours(NREG_HOUR, NREG_MINUTE, 0, 0);
+  }
+
+  ScriptApp.newTrigger("executarRegistoNaoRegistadosAgendado_")
+    .timeBased()
+    .at(proximo)
+    .create();
+}
+
+/**
+ * Grava em NAO_REGISTADOS_HIST a fotografia dos colaboradores que ficaram por registar no dia.
+ * Guarda DATA_REF, Nome e Funcao. Não corrige retroativamente.
+ */
+function registarNaoRegistadosDoDia_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const histSheet = ss.getSheetByName(SHEET_NAO_REGISTADOS);
+  const colabSheet = ss.getSheetByName(SHEET_COLAB);
+  const regSheet = ss.getSheetByName(SHEET_REGISTOS);
+  if (!histSheet || !colabSheet || !regSheet) return;
+
+  const agora = new Date();
+  if (ehFimDeSemana_(agora)) return;
+
+  const dataRef = Utilities.formatDate(agora, TZ, "yyyy-MM-dd");
+
+  // Evitar duplicados para o mesmo dia caso a função seja disparada mais do que uma vez.
+  const histLastRow = histSheet.getLastRow();
+  if (histLastRow >= 2) {
+    const datasExistentes = histSheet.getRange(2, 1, histLastRow - 1, 1).getValues();
+    const jaExiste = datasExistentes.some(r => {
+      const raw = r[0];
+      const data = raw instanceof Date
+        ? Utilities.formatDate(raw, TZ, "yyyy-MM-dd")
+        : String(raw || "").trim();
+      return data === dataRef;
+    });
+    if (jaExiste) return;
+  }
+
+  const nomesRegistados = new Set();
+  const regLastRow = regSheet.getLastRow();
+  if (regLastRow >= 2) {
+    const regData = regSheet.getRange(2, 2, regLastRow - 1, 2).getValues(); // B=data, C=nome
+    regData.forEach(r => {
+      const rawData = r[0];
+      const data = rawData instanceof Date
+        ? Utilities.formatDate(rawData, TZ, "yyyy-MM-dd")
+        : String(rawData || "").slice(0, 10);
+      const nome = String(r[1] || "").trim();
+      if (data === dataRef && nome) nomesRegistados.add(nome);
+    });
+  }
+
+  const linhas = [];
+  const colabLastRow = colabSheet.getLastRow();
+  if (colabLastRow >= 1) {
+    const colabData = colabSheet.getRange(1, 1, colabLastRow, 2).getValues();
+    colabData.forEach(r => {
+      const nome = String(r[0] || "").trim();
+      const funcao = String(r[1] || "").trim();
+      if (!nome || nome === "Nome") return;
+      if (!nomesRegistados.has(nome)) linhas.push([dataRef, nome, funcao]);
+    });
+  }
+
+  if (!linhas.length) return;
+  histSheet.getRange(histSheet.getLastRow() + 1, 1, linhas.length, 3).setValues(linhas);
+}
+
+function ehFimDeSemana_(dateObj) {
+  const dow = parseInt(Utilities.formatDate(dateObj, TZ, "u"), 10); // 1=Seg ... 7=Dom
+  return dow === 6 || dow === 7;
 }
 
 /**

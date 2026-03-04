@@ -1,221 +1,246 @@
-# Copilot Instructions — Dashboard Doutor Martelo
+# Copilot Instructions - Dashboard Doutor Martelo
 
-## Contexto do Projecto
-Dashboard de gestão de obra para empresa de construção civil portuguesa.
-Servido como Google Apps Script Web App via `HtmlService`.
-Toda a UI vive num único ficheiro `index.html`.
+## Contexto do Projeto
+Dashboard de gestao de obra para empresa de construcao civil portuguesa.
+O backend e Google Apps Script (`main.gs`) e a UI e servida como Web App via `HtmlService`.
+Toda a interface continua concentrada num unico ficheiro `index.html`.
 
----
-
-## Stack e Restrições ABSOLUTAS
-- **HTML5 + CSS3 + JavaScript ES6 vanilla** — sem frameworks, sem bundlers
-- **Nunca sugerir:** React, Vue, Angular, npm, webpack, import/export, require()
-- **Chart.js v4** (CDN) — único para todos os gráficos
-- **Font Awesome 6** (CDN) — ícones
-- **Google Fonts: Inter** — tipografia
-- Tudo em **funções globais** — o GAS concatena e serve como HTML único
-- Compatível com **Google Apps Script HtmlService** (sem acesso ao DOM server-side)
+O projeto atual integra:
+- AppSheet para input operacional diario
+- Google Sheets como base de dados operacional
+- Google Apps Script para agregacao, saneamento e automacoes
+- Dashboard web em `index.html`
 
 ---
 
-## Ficheiros do Projecto
-| Ficheiro | Função |
+## Stack e Restricoes Absolutas
+- HTML5 + CSS3 + JavaScript ES6 vanilla
+- Nunca sugerir React, Vue, Angular, npm, webpack, import/export ou require()
+- Chart.js v4 via CDN para graficos
+- Font Awesome 6 via CDN para icones
+- Google Fonts: Inter
+- Tudo em funcoes globais, compativel com Apps Script `HtmlService`
+- O frontend nao fala diretamente com Google Sheets; tudo passa pelo GAS
+
+---
+
+## Ficheiros do Projeto
+| Ficheiro | Funcao |
 |---|---|
-| `index.html` | Toda a UI: CSS + HTML + JS (~4100 linhas) |
-| `main.gs` | Backend GAS: lê o Google Sheets e devolve JSON |
-| `appsscript.json` | Configuração do GAS (não alterar) |
-| `.clasp.json` | Config do clasp CLI (não alterar) |
+| `index.html` | UI completa: HTML + CSS + JS |
+| `main.gs` | Backend GAS: leitura de sheets, agregacao, trigger e automacoes |
+| `appsscript.json` | Configuracao do Apps Script |
+| `.clasp.json` | Configuracao do clasp |
+| `REGRAS_DE_NEGOCIO.md` | Documento de regras, estrutura e migracao |
 
 ---
 
 ## Como os Dados Chegam ao Frontend
 ```js
-// Chamada assíncrona ao backend GAS
 google.script.run
   .withSuccessHandler(onDataLoaded)
   .withFailureHandler(onDataError)
   .getDashboardData();
 
-// onDataLoaded recebe uma string JSON
 function onDataLoaded(jsonStr) {
-  dashData = JSON.parse(jsonStr);
-  // dashData é a variável global com todos os dados
+  DATA = JSON.parse(jsonStr);
 }
 ```
 
-## Estrutura do JSON (dashData)
+No frontend, a variavel global principal e `DATA` (nao `dashData`).
+
+---
+
+## Estrutura Atual do JSON (`DATA`)
 ```js
-dashData = {
+DATA = {
   global: {
-    custo_total,        // número, €
-    custo_mao_obra,     // número, €
-    custo_deslocacoes,  // número, €
-    horas_total,        // número
-    total_atrasos,      // número, minutos
-    obras_ativas,       // número
-    colaboradores,      // número (únicos)
-    faltas,             // número
-    custo_viagens,      // número, €
-    total_viagens,      // número
-    last_update         // string "dd/MM/yyyy HH:mm"
+    custo_total,
+    custo_mao_obra,
+    custo_deslocacoes,
+    custo_materiais,
+    horas_total,
+    total_atrasos,
+    obras_ativas,
+    colaboradores,
+    faltas,
+    custo_viagens,
+    total_viagens,
+    last_update
   },
   obras: {
     "Nome da Obra": {
-      custo_mao_obra, custo_deslocacoes, custo_total,
-      horas_total, atraso_total, trabalhadores, faltas, dias,
-      all_dates,  // array de strings "YYYY-MM-DD"
-      daily:    [{ DATA_str, Custo, Horas, Atraso, Trabalhadores, Faltas }],
-      weekly:   [{ Semana, Custo, Horas }],
-      monthly:  [{ Mes, Custo, Horas }],
-      workers:  [{ "Nome (auto)", "Função (auto)", Fase, Custo, Horas, Atraso, Dias, Faltas }],
-      assiduidade: [{ nome, funcao, dias: { "YYYY-MM-DD": { horas, falta, custo, atraso_min, motivo } } }],
-      fases:    [{ Fase, Custo, Horas, Workers, Dias, Faltas }]
+      custo_mao_obra,
+      custo_deslocacoes,
+      qtd_deslocacoes,
+      custo_materiais,
+      custo_total,
+      horas_total,
+      atraso_total,
+      trabalhadores,
+      faltas,
+      dias,
+      all_dates,
+      daily: [{ DATA_str, Custo, Horas, Atraso, Trabalhadores, Faltas }],
+      weekly: [{ Semana, Custo, Horas }],
+      monthly: [{ Mes, Custo, Horas }],
+      workers: [{ "Nome (auto)", "Funcao (auto)", Fase, Custo, Horas, Atraso, Dias, Faltas }],
+      assiduidade: [{
+        nome,
+        funcao,
+        dias: {
+          "YYYY-MM-DD": { horas, falta, dispensado, custo, atraso_min, motivo, fases }
+        }
+      }],
+      fases: [{ Fase, Custo, Horas, Workers, Dias, Faltas }],
+      materiais_fases: [{ Fase, Custo, Qtd }]
     }
   },
-  obras_info:    [{ Obra_ID, Local_ID, Ativa }],
+  obras_info: [{ Obra_ID, Local_ID, Ativa }],
   colaboradores: [{ Nome, Funcao, Eur_h }],
-  deslocacoes:   [{ data, obra, origem, qtd, custo }],
-  viagens:       [{ Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia }]
+  viagens: [{ Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia }],
+  deslocacoes: [{ data, obra, veiculo, motorista, origem, qtd, custo }],
+  ferias: [{ nome, data_admissao, dias_total, ano_ref_inicio, ano_ref_fim, dias_usados, dias_disponiveis }],
+  materiais_mov: [{ id_mov, data, tipo, obra, fase, material, quantidade, custo_total }]
 }
 ```
 
 ---
 
-## Variáveis Globais Principais (definidas no `<script>` do index.html)
+## Estrutura Atual de `REGISTOS_POR_DIA`
+Ordem real atual das colunas na Google Sheet:
+
+1. `DATA_ARQUIVO`
+2. `DATA_REGISTO`
+3. `Nome`
+4. `Funcao`
+5. `Obra`
+6. `Fase de Obra`
+7. `Horas`
+8. `Atraso_Minutos`
+9. `Falta`
+10. `Motivo Falta`
+11. `EUR_h`
+12. `Custo Dia (€)`
+13. `Observacao`
+14. `ID_Registo`
+15. `Dispensado`
+16. `Dispensa_Processada_Em`
+
+Notas importantes:
+- `main.gs` le `A:P`
+- `Dispensado` e um `Yes/No` funcional para AppSheet e dashboard
+- `Dispensa_Processada_Em` e tecnico; o GAS usa-o para evitar reprocessar a mesma dispensa
+
+---
+
+## Estrutura Atual de `NAO_REGISTADOS_HIST`
+Ordem atual das colunas na Google Sheet:
+
+1. `DATA_REF`
+2. `Nome`
+3. `Funcao`
+
+Notas importantes:
+- Esta sheet e preenchida apenas pelo GAS
+- O registo e um snapshot do fecho do dia util
+- Guarda os colaboradores que nao tiveram qualquer registo em `REGISTOS_POR_DIA` nessa data
+- `Falta` e `Dispensado` contam como "registado", por isso esses nomes nao entram aqui
+
+---
+
+## Comportamento Atual de `Dispensado`
+- O campo `Dispensado` e marcado na mesma linha de `REGISTOS_POR_DIA`
+- Pode coexistir com `Falta = true`
+- Pode coexistir com `Motivo Falta` preenchido
+- Se `Falta = true`, o custo continua a ser `0`, mesmo com `Dispensado = true`
+- Quando `Dispensado = true` e `Dispensa_Processada_Em` esta vazio:
+  - o trigger `onSheetChange(e)` processa a linha
+  - o colaborador e removido fisicamente da sheet `COLABORADORES`
+  - o GAS grava a data/hora em `Dispensa_Processada_Em`
+
+---
+
+## Secoes Atuais do Dashboard
+1. `overview` - KPIs globais
+2. `obra-detail` - detalhe de uma obra
+3. `deslocacoes` - custos e tabela de deslocacoes
+4. `equipa` - tabela de colaboradores agregados no periodo
+5. `assiduidade` - lista de faltas e registos com `dispensado`
+6. `ferias` - saldo e calendario de ferias
+7. `comparativa` - comparacao entre obras
+
+Notas:
+- A secao `assiduidade` nao usa heatmap; a implementacao ativa e uma tabela
+- A secao `assiduidade` mostra trabalhadores com faltas ou com registos `dispensado` no periodo
+- Na tabela de assiduidade, um badge `Disp X` aparece ao lado do nome quando existem registos `dispensado`
+
+---
+
+## Variaveis Globais Principais no `index.html`
 ```js
-let dashData = null;        // todos os dados, populado após getDashboardData()
-let currentObra = null;     // nome da obra actualmente seleccionada
-let currentSection = null;  // secção activa da sidebar
-// Instâncias de gráficos (Chart.js) — sempre destruir antes de recriar:
-//   dailyChart, weeklyChart, workersChart, fasesChart,
-//   deslObraChart, deslTimeChart, equipaFuncaoChart, equipaTopChart,
-//   compCustosChart, compRadarChart, compEvoChart,
-//   compFaseCustoChart, compFaseHorasChart
+let DATA = null;
+let currentSection = 'overview';
+let currentObraName = null;
+let matMovAll = [];
+
+let obraCharts = {};
+let deslCharts = {};
+let equipaCharts = {};
+let compCharts = {};
 ```
 
 ---
 
-## Secções do Dashboard (sidebar nav)
-1. **Overview** — KPIs globais animados
-2. **Obras** — selecção de obra + gráficos diário/semanal/mensal + workers + fases
-3. **Deslocações** — custos e viagens por obra/origem
-4. **Equipa** — colaboradores, assiduidade, ranking
-5. **Comparativa** — análise entre obras, radar, evolução temporal
-6. **Assiduidade** — heatmap estilo GitHub por colaborador e obra
+## Convencoes de Codigo Obrigatorias
 
----
+### Edicao do `index.html`
+- Fazer edicoes cirurgicas
+- Nunca reestruturar o ficheiro inteiro sem necessidade
+- Ao adicionar UI nova, preservar o padrao atual de funcoes globais
+- Nunca adicionar dependencias novas sem aprovacao explicita
+- Nao usar `eval()`
+- Nao usar `document.write()`
 
-## Fases de Obra (valores possíveis)
-```
-A - projetos
-B - abertura estaleiro
-C - movimentação terras
-D - estrutura
-E - paredes exteriores e interiores
-F - capoto/isolamento
-G - eletricidade
-(podem existir outras)
-```
+### Edicao do `main.gs`
+- Preservar compatibilidade com o Google Sheets atual
+- Ao mexer em `REGISTOS_POR_DIA`, respeitar sempre a ordem real `A:P`
+- Nao assumir que `VIAGENS_DIARIAS` existe em todas as copias locais; a fonte operacional e a Google Sheet real
+- Automatismos de trigger devem ser idempotentes sempre que possivel
 
----
-
-## Convenções de Código OBRIGATÓRIAS
-
-### Formatação
+### Formatos
 ```js
-// Moeda — sempre assim:
-valor.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })
+// Datas internas: "YYYY-MM-DD"
+// Datas de display: "DD/MM/YYYY" ou "DD/MM"
 
-// Datas internas — sempre string "YYYY-MM-DD"
-// Datas para display — converter para "DD/MM/YYYY"
-
-// Horas — ex: 125.5 → "125h 30m"
-function fmtHoras(h) {
-  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
-  return mm > 0 ? `${hh}h ${mm}m` : `${hh}h`;
-}
-
-// Atrasos — minutos → "Xh Ym"
-function fmtMinutos(min) {
-  if (!min) return '—';
-  const h = Math.floor(min / 60), m = min % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-```
-
-### Gráficos Chart.js
-```js
-// SEMPRE destruir antes de recriar — nunca omitir este passo
-if (window.xyzChart instanceof Chart) window.xyzChart.destroy();
-window.xyzChart = new Chart(ctx, { ... });
-
-// Cores padrão do tema
-const CORES = {
-  accent:   '#e94560',
-  accent2:  '#ff6b6b',
-  info:     '#63b3ed',
-  success:  '#48bb78',
-  warning:  '#f6ad55',
-  muted:    '#a0aec0'
-};
-```
-
-### Toasts / Feedback
-```js
-// Usar sempre para feedback ao utilizador
-showToast('Mensagem', 'success');  // tipos: success | warning | error | info
-```
-
-### CSS Custom Properties (não alterar os nomes)
-```css
---bg-dark, --bg-card, --bg-sidebar, --bg-hover
---accent, --accent2
---text, --text-muted, --text-dim
---border, --success, --warning, --info
---radius, --radius-sm
---sidebar-w, --sidebar-wc, --topbar-h
---transition
+// Moeda
+valor.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 ```
 
 ---
 
-## Regras de Edição do index.html
-- O ficheiro tem ~4100 linhas. Ao editar, **nunca reescrever blocos inteiros** sem necessidade.
-- Usar `str_replace` ou edições cirúrgicas sempre que possível.
-- Ao adicionar um novo gráfico: declarar a variável no topo do `<script>`, destruir no `destroyXxxCharts()` correspondente.
-- Ao adicionar uma nova secção: criar o botão na sidebar, o painel HTML, e a lógica em `showSection()`.
-- **Nunca** usar `document.write()`.
-- **Nunca** usar `eval()`.
-- **Nunca** adicionar `<script>` tags extra dentro de event handlers HTML inline; usar `addEventListener` ou funções globais referenciadas por `onclick`.
+## Regras de UI e Dados a Preservar
+- Toda a UI em portugues europeu
+- `COLABORADORES` continua a ser a fonte da lista ativa de trabalhadores
+- O AppSheet tem atualmente uma vista de apoio `Por Registar Hoje`
+- O dashboard nao deve depender de escrita local ou `localStorage` para dados de negocio
+- O frontend nao deve recalcular regras de negocio que ja foram decididas no GAS, exceto filtros de data de display
 
 ---
 
-## Idioma
-- Toda a UI em **Português europeu** (não brasileiro)
-- Comentários no código podem ser em inglês ou português
-- Labels, tooltips, mensagens de erro: sempre PT-PT
-- Exemplos: "Guardar" não "Salvar", "Eliminar" não "Deletar", "Seleccionar" ou "Selecionar"
+## O que Nao Fazer
+- Nao separar `index.html` em multiplos ficheiros
+- Nao mover logica de negocio para o frontend se ela ja existir no GAS
+- Nao sugerir trocar AppSheet por outra ferramenta sem pedido explicito
+- Nao reescrever funcoes existentes que estao estaveis; preferir extensao incremental
 
 ---
 
-## Sheets do Google Sheets (backend — não alterar nomes)
-| Constante GAS | Nome real da Sheet |
-|---|---|
-| SHEET_REGISTOS | `REGISTOS_POR_DIA` |
-| SHEET_OBRAS | `OBRAS` |
-| SHEET_COLAB | `COLABORADORES` |
-| SHEET_VIAGENS | `VIAGENS_DIARIAS` |
-| SHEET_DESLOCACOES | `REGISTO_DESLOCACOES` |
-
----
-
-## O que NÃO fazer (aprendido com sessões anteriores)
-- Não sugerir separar o index.html em múltiplos ficheiros (decisão tomada: manter num único ficheiro)
-- Não usar `localStorage` para guardar dados de negócio (apenas preferências de UI como tema)
-- Não fazer chamadas directas ao Google Sheets pelo frontend — tudo passa pelo `getDashboardData()`
-- Não adicionar dependências CDN novas sem confirmação explícita
-- Não reescrever funções existentes que funcionam — preferir estender
-
-## Testes mobile
-Testar sempre no Chrome mobile (Android/iOS).
-Brave browser distorce o layout — não usar como referência.
+## Testes Recomendados
+- Validar sempre desktop e mobile
+- Testar no Chrome mobile como referencia principal
+- Quando houver mudancas em `Dispensado`, testar:
+  - registo com `Falta = true`
+  - registo com `Falta = false`
+  - remocao da `COLABORADORES`
+  - reflexo no dashboard (`assiduidade`)

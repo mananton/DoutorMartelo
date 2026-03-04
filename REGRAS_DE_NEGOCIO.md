@@ -6,7 +6,7 @@
 > de forma suficientemente precisa para ser reimplementado em:
 > **PostgreSQL (Supabase) + FastAPI (Python) + React/Vite + React Native + Supabase Auth**
 >
-> **Versão:** 1.0 — Fevereiro 2026
+> **Versão:** 1.1 — Março 2026
 > **Estado actual do sistema:** Google Apps Script Web App + AppSheet + Google Sheets
 
 ---
@@ -113,23 +113,44 @@ Registo central do sistema. Um registo = um trabalhador + um dia + uma obra.
 
 | Campo | Tipo | Descrição | Regras |
 |---|---|---|---|
-| id_arquivo | string | ID interno do registo | UUID gerado automaticamente |
+| data_arquivo | datetime | Timestamp de criação do registo | Gerado automaticamente |
 | data_registo | date | Data do registo (YYYY-MM-DD) | Data efectiva de trabalho |
 | nome | string | Nome do colaborador | FK para colaboradores.nome |
 | funcao | string | Função no dia | Copiada do colaborador, mas pode diferir |
 | obra | string | Nome da obra | FK para obras.local_id |
 | fase | string | Fase de obra activa no dia | FK para fases_de_obra. Ex: "E - paredes exteriores" |
-| horas | decimal | Horas trabalhadas no dia | 0 se falta. Normalmente 8h |
+| horas | decimal | Horas trabalhadas no dia | Pode ser 0 ou positivo |
 | atraso_min | integer | Minutos de atraso | 0 se sem atraso |
 | falta | boolean | Se é um registo de falta | true/false |
 | motivo | string | Motivo da falta | Só preenchido se falta=true |
 | eur_h | decimal | Valor/hora aplicado | Snapshot do valor no momento do registo |
-| custo_dia | decimal | Custo calculado (horas × eur_h) | Calculado e gravado no momento |
+| custo_dia | decimal | Custo calculado | Calculado e gravado no momento |
 | observacao | string | Campo livre de notas | Opcional |
+| id_registo | string | ID funcional do registo | Gerado automaticamente |
+| dispensado | boolean | Se o colaborador foi dispensado nesse registo | true/false |
+| dispensa_processada_em | datetime | Timestamp técnico do GAS | Preenchido quando a dispensa é processada |
 
-**Regra de custo:** `custo_dia = horas × eur_h`
-Em dias de falta: `horas = 0`, logo `custo_dia = 0`.
-O custo não é imputado em dias de falta — é sempre zero.
+**Ordem real actual na Google Sheet `REGISTOS_POR_DIA`:**
+`DATA_ARQUIVO, DATA_REGISTO, Nome, Função, Obra, Fase de Obra, Horas, Atraso_Minutos, Falta, Motivo Falta, €/h, Custo Dia (€), Observação, ID_Registo, Dispensado, Dispensa_Processada_Em`
+
+**Regra de custo (fonte de verdade = GAS):**
+`custo_dia = falta ? 0 : (horas - atraso_min/60) × eur_h`
+
+Ou seja:
+- se `falta = true`, o custo é sempre `0`
+- se `falta = false`, o custo é recalculado no GAS pelas horas efectivas
+- `dispensado = true` não altera por si só a fórmula de custo
+
+**Regra de coexistência:** `dispensado = true` pode coexistir com:
+- `falta = true`
+- `motivo` preenchido
+- `horas > 0`
+
+**Regra operacional de dispensa:**
+- Quando `dispensado = true` e `dispensa_processada_em` está vazio, o trigger `onSheetChange(e)` no GAS:
+  - remove o colaborador da sheet `COLABORADORES`
+  - preenche `dispensa_processada_em`
+- Isto evita reprocessar a mesma dispensa e permite recontratação futura via reinserção manual em `COLABORADORES`
 
 **Regra de unicidade:** Não existe constraint explícita de unicidade (nome + data + obra)
 no sistema actual. Na migração, deve ser avaliado se deve existir ou se o mesmo trabalhador
@@ -283,17 +304,25 @@ Tabela de lookup para calcular custo de viagem.
    Se um trabalhador trabalhar em 2 fases da mesma obra no mesmo dia,
    são 2 registos distintos.
 
-2. **Custo calculado no momento:** `custo_dia = horas × eur_h`.
-   O `eur_h` é gravado no registo como snapshot — não recalcula se o eur_h mudar.
+2. **Custo calculado no momento (na prática, recalculado pelo GAS):**
+   `custo_dia = falta ? 0 : (horas - atraso_min/60) × eur_h`.
+   O `eur_h` é gravado no registo como snapshot, mas o GAS volta a validar o valor
+   com base em `COLABORADORES`.
 
-3. **Falta:** Quando `falta = true`, `horas = 0` e `custo_dia = 0`.
+3. **Falta:** Quando `falta = true`, `custo_dia = 0`.
    O registo de falta existe para contar ausências — não gera custo.
+   No estado actual, `horas` pode permanecer preenchido por motivos operacionais,
+   mas não gera custo se a linha estiver marcada como falta.
 
 4. **Atraso:** O atraso é em minutos e independente das horas.
    Um trabalhador pode ter atraso sem falta (chegou tarde mas trabalhou).
-   O atraso não afecta o cálculo de custo — é apenas informativo.
+   O atraso reduz as horas efectivas usadas no cálculo do custo pelo GAS.
 
-5. **Eliminação de registos:** Quando um registo é eliminado via AppSheet,
+5. **Dispensado:** `dispensado = true` pode coexistir com `falta = true`,
+   `motivo` preenchido e `horas > 0`. Quando isso acontece, a regra de custo continua
+   a ser dominada por `falta` (custo = 0).
+
+6. **Eliminação de registos:** Quando um registo é eliminado via AppSheet,
    a linha fica completamente vazia na sheet. O sistema tem um trigger automático
    (`onChange`) que detecta e elimina essas linhas vazias.
    Na migração, usar `DELETE` SQL standard — o problema não existe em base de dados real.
@@ -337,12 +366,22 @@ Onde `dias_presentes = dias com horas > 0` e `dias_falta = registos com falta = 
 ### Secção de Assiduidade no Dashboard
 
 A secção de Assiduidade mostra uma **lista de trabalhadores com faltas > 0**
-no período de filtro activo. Não mostra trabalhadores sem faltas.
+ou com pelo menos um registo `dispensado = true` no período de filtro activo.
 
-Colunas: Nome, Função, Nº de Faltas (clicável para ver detalhe)
+Colunas:
+- Nome
+- Função
+- Nº de Faltas (clicável para ver detalhe)
+
+Quando existirem registos `dispensado` no período, aparece um badge amarelo
+`Disp X` ao lado do nome, onde `X` é o número de dias/registos com dispensa
+no período filtrado.
 
 Ao clicar no número de faltas: popup com lista cronológica de cada falta,
 mostrando: `DD/MM → Motivo → Obra → Fase`
+
+Se um registo de falta desse popup também tiver `dispensado = true`,
+o item mostra adicionalmente o badge `Dispensado`.
 
 A fase mostrada no popup de falta é a fase presente no registo do dia da falta.
 Se houver múltiplas fases no mesmo dia, são mostradas separadas por vírgula.
@@ -588,11 +627,11 @@ O dashboard tem 7 secções principais acessíveis por sidebar (desktop) e botto
 | Obras | `obra-detail` | Detalhe de uma obra específica |
 | Deslocações | `deslocacoes` | Tabela e KPIs de deslocações |
 | Equipa | `equipa` | Lista de colaboradores com métricas |
-| Assiduidade | `assiduidade` | Lista de colaboradores com faltas > 0 |
+| Assiduidade | `assiduidade` | Lista de colaboradores com faltas > 0 ou registos dispensados |
 | Férias | `ferias` | Plafões e calendário de férias |
 | Comparativa | `comparativa` | Gráficos comparativos entre obras |
 
-**Atalhos de teclado:** Alt+1 a Alt+6 para as primeiras 6 secções.
+**Atalhos de teclado:** Alt+1 a Alt+6 para `overview`, `obra-detail`, `deslocacoes`, `equipa`, `assiduidade` e `comparativa`.
 
 **Estado por defeito:** Dashboard abre sempre na secção "Visão Geral" com filtro "Hoje".
 
@@ -639,14 +678,16 @@ O dashboard tem 7 secções principais acessíveis por sidebar (desktop) e botto
 
 ### Secção: Assiduidade
 
-- Lista apenas colaboradores com `faltas > 0` no período filtrado
+- Lista colaboradores com `faltas > 0` ou com pelo menos um registo `dispensado = true` no período filtrado
 - Colunas: Nome, Função, Faltas
+- **Ao lado do nome:** badge amarelo `Disp X` quando existirem registos com dispensa no período
 - **Coluna Faltas:** Clicável → popup com lista:
   `DD/MM → Motivo → Obra → Fase`
   Ordenado do mais recente para o mais antigo.
+- Se um item do popup tiver `dispensado = true`, mostra também o badge `Dispensado`
 - Pesquisa por nome
 - Ordenável (por defeito: mais faltas primeiro)
-- Se sem faltas no período: mensagem "Sem faltas no período seleccionado" com ícone verde
+- Se sem faltas nem dispensas no período: mensagem "Sem faltas ou dispensas no período seleccionado" com ícone verde
 
 ### Secção: Férias
 
@@ -678,17 +719,37 @@ A AppSheet liga directamente ao Google Sheets e escreve na sheet `REGISTOS_POR_D
 Quando elimina um registo, deixa a linha completamente vazia — o trigger `onChange`
 no GAS detecta e elimina automaticamente essas linhas.
 
+O Google Sheets mantém também uma sheet técnica `NAO_REGISTADOS_HIST`, preenchida
+automaticamente pelo GAS no fecho de cada dia útil, com snapshot dos colaboradores
+que ficaram por registar nesse dia.
+
+Estrutura actual de `NAO_REGISTADOS_HIST`:
+- `DATA_REF`
+- `Nome`
+- `Função`
+
+A navegação principal da app inclui actualmente:
+- `Obras Ativas` — ponto de entrada para seleccionar a obra e registar trabalhadores
+- `Equipa de Hoje` — lista de trabalhadores já registados hoje
+- `Por Registar Hoje` — lista de trabalhadores activos em `COLABORADORES` que ainda não aparecem em `REGISTOS_POR_DIA` com `DATA_REGISTO = TODAY()`
+
 ### O que o utilizador mobile faz
 
 1. Regista a presença diária de cada trabalhador:
-   - Selecciona a obra
+  - Selecciona a obra
    - Selecciona o trabalhador (da lista COLABORADORES)
    - Define a fase
    - Introduz horas trabalhadas
    - Marca se houve atraso (em minutos)
    - Marca se houve falta e qual o motivo
+   - Pode marcar `Dispensado` no mesmo registo
 
-2. Regista deslocações:
+2. Consulta a vista `Por Registar Hoje`:
+   - Vê a lista de trabalhadores ainda não registados no dia actual
+   - A lista actualiza à medida que os registos vão sendo gravados
+   - Um trabalhador sai desta lista quando passa a existir qualquer registo seu no dia (presença, falta ou registo com `Dispensado = true`)
+
+3. Regista deslocações:
    - Selecciona a obra de destino
    - Selecciona a origem
    - Define a quantidade de viagens
@@ -700,16 +761,18 @@ no GAS detecta e elimina automaticamente essas linhas.
 - obra (deve existir em OBRAS)
 - fase (deve existir em FASES_DE_OBRA)
 - falta (boolean)
+- dispensado (boolean opcional)
 - Se falta=false: horas obrigatório
 - Se falta=true: motivo obrigatório
 
 ### Campos automáticos (não introduzidos pelo utilizador)
 
-- id_arquivo (UUID gerado)
+- data_arquivo (timestamp automático)
 - funcao (lookup por nome em COLABORADORES)
 - eur_h (lookup por funcao em CONFIG)
-- custo_dia (calculado: horas × eur_h)
-- data_arquivo (timestamp do registo)
+- custo_dia (calculado no GAS)
+- id_registo (ID automático)
+- dispensa_processada_em (timestamp técnico do GAS; não editável na app)
 
 ---
 
@@ -746,6 +809,7 @@ no Supabase para que cada um só veja os dados da sua empresa
 | `COLABORADORES` | `colaboradores` |
 | `OBRAS` | `obras` |
 | `REGISTOS_POR_DIA` | `registos_diarios` |
+| `NAO_REGISTADOS_HIST` | `nao_registados_hist` *(snapshot operacional; opcional no novo stack)* |
 | `REGISTO_DESLOCACOES` | `deslocacoes` |
 | `FERIAS` | `ferias_plafao` |
 | `FASES_DE_OBRA` | `fases_obra` |
@@ -765,6 +829,8 @@ no Supabase para que cada um só veja os dados da sua empresa
 | `readDeslocacoes_()` | `GET /api/deslocacoes` |
 | `readFerias_()` | `GET /api/ferias` |
 | `limparLinhasVazias_()` | Não necessário — DELETE SQL é atómico |
+| `processarDispensados_()` | Lógica de serviço após criação/edição de registo |
+| `registarNaoRegistadosDoDia_()` | Job agendado que grava `DATA_REF + Nome + Função` |
 | `isoWeek_()` | `date_trunc('week', data)` em SQL |
 
 ### AppSheet → React Native
@@ -772,10 +838,12 @@ no Supabase para que cada um só veja os dados da sua empresa
 | Funcionalidade AppSheet | Implementação React Native |
 |---|---|
 | Formulário de presença | Screen `RegistarPresenca` |
+| Vista `Por Registar Hoje` | Screen `PorRegistarHoje` |
 | Lista de colaboradores | `GET /api/colaboradores` |
 | Lista de obras | `GET /api/obras?ativas=true` |
 | Lista de fases | `GET /api/fases` |
 | Submissão | `POST /api/registos` |
+| Marcar `Dispensado` | `POST /api/registos` com flag `dispensado=true` |
 | Formulário de deslocação | Screen `RegistarDeslocacao` |
 | Login | Supabase Auth (email/password ou magic link) |
 
@@ -820,6 +888,7 @@ CREATE TABLE fases_obra (
 -- Registos diários (tabela central)
 CREATE TABLE registos_diarios (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    data_arquivo   TIMESTAMPTZ DEFAULT now(),
     data_registo   DATE NOT NULL,
     colaborador_id UUID NOT NULL REFERENCES colaboradores(id),
     obra_id        UUID NOT NULL REFERENCES obras(id),
@@ -829,13 +898,19 @@ CREATE TABLE registos_diarios (
     falta          BOOLEAN NOT NULL DEFAULT false,
     motivo         TEXT,               -- "Justificada"|"Injustificada"|"Baixa"|"Férias"
     eur_h          DECIMAL(8,2) NOT NULL,   -- snapshot no momento
-    custo_dia      DECIMAL(10,2) GENERATED ALWAYS AS (horas * eur_h) STORED,
+    dispensado     BOOLEAN NOT NULL DEFAULT false,
+    dispensa_processada_em TIMESTAMPTZ,
+    custo_dia      DECIMAL(10,2) GENERATED ALWAYS AS (
+        CASE
+            WHEN falta = true THEN 0
+            ELSE (horas - (atraso_min / 60.0)) * eur_h
+        END
+    ) STORED,
     observacao     TEXT,
     created_by     UUID REFERENCES auth.users(id),
     created_at     TIMESTAMPTZ DEFAULT now(),
 
     -- Validações
-    CONSTRAINT falta_sem_horas CHECK (NOT (falta = true AND horas > 0)),
     CONSTRAINT falta_motivo    CHECK (NOT (falta = true AND motivo IS NULL))
 );
 
@@ -845,6 +920,7 @@ CREATE INDEX idx_registos_colaborador  ON registos_diarios(colaborador_id);
 CREATE INDEX idx_registos_obra         ON registos_diarios(obra_id);
 CREATE INDEX idx_registos_data_obra    ON registos_diarios(data_registo, obra_id);
 CREATE INDEX idx_registos_falta        ON registos_diarios(falta) WHERE falta = true;
+CREATE INDEX idx_registos_dispensado   ON registos_diarios(dispensado) WHERE dispensado = true;
 
 -- Matriz de rotas
 CREATE TABLE matriz_rotas (
@@ -964,6 +1040,7 @@ devolve em `getDashboardData()`, para facilitar a migração incremental do fron
     "custo_total": 0.00,
     "custo_mao_obra": 0.00,
     "custo_deslocacoes": 0.00,
+    "custo_materiais": 0.00,
     "horas_total": 0.0,
     "total_atrasos": 0,
     "obras_ativas": 0,
@@ -986,13 +1063,15 @@ devolve em `getDashboardData()`, para facilitar a migração incremental do fron
       "monthly": [],
       "workers": [],
       "assiduidade": [],
-      "fases": []
+      "fases": [],
+      "materiais_fases": []
     }
   },
   "obras_info": [],
   "colaboradores": [],
   "deslocacoes": [],
-  "ferias": []
+  "ferias": [],
+  "materiais_mov": []
 }
 ```
 
