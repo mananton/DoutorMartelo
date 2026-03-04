@@ -128,11 +128,17 @@ function buildData_(ss) {
 
     // assiduidade
     if (!o.assidMap[r.nome]) o.assidMap[r.nome] = { funcao: r.funcao, dias: {} };
-    if (!o.assidMap[r.nome].dias[r.data]) o.assidMap[r.nome].dias[r.data] = { horas: 0, falta: false, custo: 0, atraso_min: 0, motivo: "", fases: [] };
+    if (!o.assidMap[r.nome].dias[r.data]) {
+      o.assidMap[r.nome].dias[r.data] = {
+        horas: 0, falta: false, dispensado: false, custo: 0,
+        atraso_min: 0, motivo: "", fases: []
+      };
+    }
     o.assidMap[r.nome].dias[r.data].horas      += r.horas;
     o.assidMap[r.nome].dias[r.data].custo      += r.custo;
     o.assidMap[r.nome].dias[r.data].atraso_min += r.atraso_min;
     if (r.falta)  o.assidMap[r.nome].dias[r.data].falta  = true;
+    if (r.dispensado) o.assidMap[r.nome].dias[r.data].dispensado = true;
     if (r.motivo) o.assidMap[r.nome].dias[r.data].motivo = r.motivo;
     if (r.fase && !o.assidMap[r.nome].dias[r.data].fases.includes(r.fase))
       o.assidMap[r.nome].dias[r.data].fases.push(r.fase);
@@ -300,9 +306,12 @@ function readRegistos_(sheet, colabRateMap) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  // Colunas A-L (12). Mapa actual: A=ID_Arquivo B=Data C=Nome D=Funcao E=Obra
-  // F=Fase G=Horas H=Atraso_Minutos I=Falta J=Motivo_Falta K=Eur_h L=Custo_Dia
-  const data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+  // Colunas A-P (16). Mapa actual:
+  // A=DATA_ARQUIVO B=DATA_REGISTO C=Nome D=Funcao E=Obra F=Fase de Obra
+  // G=Horas H=Atraso_Minutos I=Falta J=Motivo Falta K=Eur_h L=Custo Dia
+  // M=Observacao N=ID_Registo O=Dispensado P=Dispensa_Processada_Em
+  const numCols = Math.max(sheet.getLastColumn(), 16);
+  const data = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   const results = [];
 
   data.forEach(row => {
@@ -319,6 +328,11 @@ function readRegistos_(sheet, colabRateMap) {
     const horas     = parseFloat(row[6]) || 0;
     const atrasoMin = parseFloat(row[7]) || 0;
     const falta     = row[8] === true || String(row[8]).toLowerCase() === "true";
+    const dispensado = row[14] === true || String(row[14]).toLowerCase() === "true";
+    const rawDispensaProcessada = row[15];
+    const dispensaProcessadaEm = rawDispensaProcessada instanceof Date
+      ? Utilities.formatDate(rawDispensaProcessada, TZ, "yyyy-MM-dd HH:mm:ss")
+      : String(rawDispensaProcessada || "").trim();
 
     // Recalcular €/h e custo a partir de COLABORADORES (AppSheet pode gravar valores errados)
     // Fórmula igual à AppSheet: Horas_Efetivas = Horas - (Atraso_Minutos/60)
@@ -339,6 +353,8 @@ function readRegistos_(sheet, colabRateMap) {
       atraso_min: atrasoMin,                     // H
       falta:      falta,                         // I
       motivo:     String(row[9] || "").trim(),   // J
+      dispensado: dispensado,                    // O
+      dispensa_processada_em: dispensaProcessadaEm, // P
       eur_h:      rateFromColab,
       custo:      custoCalc,
     });
@@ -549,9 +565,15 @@ function readMateriaisMov_(sheet) {
  * Para instalar: Executar installOnChangeTrigger() UMA VEZ manualmente.
  */
 function onSheetChange(e) {
-  if (e && e.changeType !== "REMOVE_ROW" && e.changeType !== "EDIT") return;
+  if (e &&
+      e.changeType !== "REMOVE_ROW" &&
+      e.changeType !== "EDIT" &&
+      e.changeType !== "INSERT_ROW") {
+    return;
+  }
   limparLinhasVazias_();
   corrigirCustosRegistos_();
+  processarDispensados_();
 }
 
 /**
@@ -674,9 +696,67 @@ function corrigirCustosRegistos_() {
 }
 
 /**
+ * Remove da lista activa os colaboradores marcados como dispensados.
+ * Marca a coluna P para nÃ£o reprocessar a mesma linha de REGISTOS_POR_DIA.
+ */
+function processarDispensados_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const regSheet = ss.getSheetByName(SHEET_REGISTOS);
+  const colabSheet = ss.getSheetByName(SHEET_COLAB);
+  if (!regSheet || !colabSheet) return;
+
+  const regLastRow = regSheet.getLastRow();
+  if (regLastRow < 2) return;
+
+  const regNumRows = regLastRow - 1;
+  const regValues = regSheet
+    .getRange(2, 1, regNumRows, Math.max(regSheet.getLastColumn(), 16))
+    .getValues();
+
+  const nomesParaRemover = new Set();
+  const linhasProcessadas = [];
+
+  regValues.forEach((row, idx) => {
+    const nome = String(row[2] || "").trim();
+    if (!nome || nome === "Nome") return;
+
+    const dispensado = row[14] === true || String(row[14]).toLowerCase() === "true";
+    if (!dispensado) return;
+
+    const jaProcessado = row[15] instanceof Date || String(row[15] || "").trim() !== "";
+    if (jaProcessado) return;
+
+    nomesParaRemover.add(nome);
+    linhasProcessadas.push(idx + 2);
+  });
+
+  if (!nomesParaRemover.size) return;
+
+  const colabLastRow = colabSheet.getLastRow();
+  if (colabLastRow >= 1) {
+    const colabValues = colabSheet.getRange(1, 1, colabLastRow, 1).getValues();
+    for (let i = colabValues.length - 1; i >= 0; i--) {
+      const nome = String(colabValues[i][0] || "").trim();
+      if (nome && nome !== "Nome" && nomesParaRemover.has(nome)) {
+        colabSheet.deleteRow(i + 1);
+      }
+    }
+  }
+
+  const processedAt = new Date();
+  linhasProcessadas.forEach(rowNum => {
+    regSheet.getRange(rowNum, 16).setValue(processedAt);
+  });
+}
+
+/**
  * DIAGNÓSTICO — Executar manualmente no editor do Apps Script.
  * Compara nomes e €/h entre COLABORADORES e REGISTOS_POR_DIA.
  * Resultado: ver em View > Logs (ou Executions).
+ */
+/**
+ * DIAGNOSTICO DE CUSTOS.
+ * Compara nomes e tarifas entre COLABORADORES e REGISTOS_POR_DIA.
  */
 function debugCustos() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();

@@ -3363,6 +3363,7 @@ function buildAssidTable() {
       }
       Object.entries(w.dias).forEach(([dateStr, d]) => {
         if (!dateInRange(dateStr)) return;
+        if (d.dispensado) agg[w.nome].dispensados = (agg[w.nome].dispensados || 0) + 1;
         if (!d.falta) return;
         agg[w.nome].faltas++;
         const parts = dateStr.split('-');
@@ -3370,6 +3371,7 @@ function buildAssidTable() {
           dataSort: dateStr,
           data:     parts[2] + '/' + parts[1],   // DD/MM
           motivo:   d.motivo  || '—',
+          dispensado: !!d.dispensado,
           obra:     obraNome,
           fase:     (d.fases && d.fases.length > 0)
                       ? d.fases.join(', ')
@@ -3381,11 +3383,12 @@ function buildAssidTable() {
 
   // Apenas workers com faltas > 0
   assidAllRows = Object.entries(agg)
-    .filter(([, a]) => a.faltas > 0)
+    .filter(([, a]) => a.faltas > 0 || (a.dispensados || 0) > 0)
     .map(([nome, a]) => ({
       nome,
       funcao:     a.funcao,
       faltas:     a.faltas,
+      dispensados: a.dispensados || 0,
       faltasList: a.faltasList.sort((x, y) => y.dataSort.localeCompare(x.dataSort))
     }));
 
@@ -3421,12 +3424,16 @@ function renderAssidTable() {
 
   tbody.innerHTML = rows.map(r => {
     const escNome = r.nome.replace(/'/g, "\\'");
-    const faltasCell =
-      '<span class="tag tag-red" style="cursor:pointer"' +
-      ' onclick="event.stopPropagation();assidShowFaltas(\'' + escNome + '\',event)"' +
-      ' title="Ver detalhe">' + r.faltas + '</span>';
+    const faltasCell = r.faltas > 0
+      ? '<span class="tag tag-red" style="cursor:pointer"' +
+        ' onclick="event.stopPropagation();assidShowFaltas(\'' + escNome + '\',event)"' +
+        ' title="Ver detalhe">' + r.faltas + '</span>'
+      : '0';
+    const dispBadge = r.dispensados > 0
+      ? ' <span class="tag tag-amber" title="Registos com dispensado">Disp ' + r.dispensados + '</span>'
+      : '';
     return '<tr>' +
-      '<td data-label="Nome"><strong>' + r.nome + '</strong></td>' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong>' + dispBadge + '</td>' +
       '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
       '<td data-label="Faltas" class="td-center">' + faltasCell + '</td>' +
       '</tr>';
@@ -3469,6 +3476,7 @@ function assidShowFaltas(nome, event) {
       '<span style="color:var(--accent);font-weight:700;min-width:42px">' + f.data + '</span>' +
       '<span style="color:var(--text-dim)">\u203a</span>' +
       '<span style="color:var(--text)">'  + f.motivo + '</span>' +
+      (f.dispensado ? '<span class="tag tag-amber">Dispensado</span>' : '') +
       '<span style="color:var(--text-dim)">\u203a</span>' +
       '<span style="color:var(--info)">'  + f.obra   + '</span>' +
       '<span style="color:var(--text-dim)">\u203a</span>' +
