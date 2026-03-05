@@ -457,6 +457,80 @@ td { padding: 11px 16px; vertical-align: middle; }
 .table-toolbar {
   display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
+.workers-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.workers-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workers-toolbar-stack {
+  margin-left: 0;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.workers-toolbar-stack .worker-tabs {
+  width: 100%;
+}
+.workers-toolbar-stack .worker-tab-btn {
+  flex: 1;
+  text-align: center;
+}
+.workers-toolbar-stack .table-search {
+  width: 100%;
+  min-width: 0;
+}
+.workers-actions {
+  display: flex;
+  gap: 8px;
+}
+.workers-actions .list-action-btn {
+  flex: 1;
+}
+.worker-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,.02);
+}
+.worker-tab-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.worker-tab-btn.active {
+  background: rgba(233,69,96,.15);
+  color: var(--accent);
+}
+.list-action-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.list-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .table-search {
   background: var(--bg-dark); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 6px 12px;
@@ -1273,6 +1347,9 @@ body.has-subbar .section { animation-delay: 0s; }
 }
 .subbar-clear:hover { background: rgba(233,69,96,.1); }
 
+
+/* ── Mobile Filter Sheet ─────────────────────────────────── */
+
 /* ── TOAST NOTIFICATIONS ───────────────────────────────── */
 #toast-container {
   position: fixed; top: 80px; right: 20px;
@@ -1439,6 +1516,12 @@ body.has-subbar .section { animation-delay: 0s; }
     flex-wrap: wrap; height: auto;
     padding: 8px 12px; gap: 6px;
     margin-top: var(--topbar-h);
+    justify-content: space-between;
+    align-items: center;
+  }
+  #topbar-subbar .subbar-label:not(.subbar-main-label),
+  #topbar-subbar .subbar-date-input {
+    display: none;
   }
   /* main-content only needs topbar clearance since subbar is now in-flow */
   body.has-subbar #main-content { margin-top: 0; }
@@ -1449,6 +1532,20 @@ body.has-subbar .section { animation-delay: 0s; }
   .subbar-label { font-size: 10px; }
   .subbar-date-input { padding: 4px 6px; max-width: 130px; }
   .quick-date-btn { font-size: 10px; padding: 4px 8px; }
+  #workers-toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .worker-tabs { width: 100%; }
+  .worker-tab-btn { flex: 1; text-align: center; }
+  #worker-search {
+    width: 100%;
+    min-width: 0;
+  }
+  #materiais-toolbar {
+    margin-left: 0;
+  }
   .obra-header-bar {
     align-items: flex-start;
     gap: 10px;
@@ -1901,7 +1998,7 @@ body.has-subbar .section { animation-delay: 0s; }
 
 <!-- ══════ TOPBAR SUB-BAR (Date Filter) ══════ -->
 <div id="topbar-subbar">
-  <span class="subbar-label"><i class="fa-solid fa-filter" style="margin-right:4px"></i> Filtro</span>
+  <span class="subbar-label subbar-main-label"><i class="fa-solid fa-filter" style="margin-right:4px"></i> Filtro</span>
   <span class="subbar-label">De</span>
   <input type="date" class="subbar-date-input" id="global-date-from" onchange="applyGlobalFilter()">
   <span class="subbar-label">Até</span>
@@ -1938,7 +2035,6 @@ body.has-subbar .section { animation-delay: 0s; }
       </div>
       <span class="obra-status" id="obra-status-badge"></span>
     </div>
-
     <!-- Mini KPIs -->
     <div class="obra-kpi-grid" id="obra-kpis"></div>
 
@@ -1954,11 +2050,21 @@ body.has-subbar .section { animation-delay: 0s; }
 
     <!-- Workers Table -->
     <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-users"></i> Trabalhadores
-        <div class="table-toolbar">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <i class="fa-solid fa-users"></i> Trabalhadores
+        </div>
+        <div class="table-toolbar workers-toolbar-stack" id="workers-toolbar">
+          <div class="worker-tabs">
+            <button class="worker-tab-btn active" id="worker-tab-presentes" onclick="setWorkerTab('presentes')">Presentes</button>
+            <button class="worker-tab-btn" id="worker-tab-ausentes" onclick="setWorkerTab('ausentes')">Faltas/Disp.</button>
+          </div>
           <input type="text" class="table-search" id="worker-search"
                  placeholder="Pesquisar nome..." oninput="filterWorkers()">
+          <div class="workers-actions">
+            <button class="list-action-btn" onclick="expandAllWorkers()">Expandir</button>
+            <button class="list-action-btn" onclick="collapseAllWorkers()">Recolher</button>
+          </div>
         </div>
       </div>
       <div class="card-body" style="padding:0">
@@ -1986,6 +2092,10 @@ body.has-subbar .section { animation-delay: 0s; }
     <div class="card" id="obra-materiais-card" style="display:none">
       <div class="card-header">
         <i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase
+        <div class="table-toolbar" id="materiais-toolbar">
+          <button class="list-action-btn" onclick="expandAllMateriaisFases()">Expandir</button>
+          <button class="list-action-btn" onclick="collapseAllMateriaisFases()">Recolher</button>
+        </div>
       </div>
       <div class="card-body" style="padding:10px 12px 12px">
         <div id="obra-materiais-list"></div>
@@ -2228,8 +2338,10 @@ let obraCharts = {};
 let currentObraName = null;
 let currentObraWorkers = [];
 let expandedWorkerNames = new Set();
+let workerActiveTab = 'presentes';
 let expandedMateriaisFases = new Set();
 let expandedMateriaisObra = null;
+let currentMateriaisFases = [];
 let workerSortCol = 'custo';
 let workerSortAsc = false;
 let dailyPeriod = 0;
@@ -2569,6 +2681,7 @@ function buildObraKpis(nome) {
       <div class="obra-kpi-label">${i.label}</div>
     </div>
   `).join('');
+
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2701,7 +2814,7 @@ function buildObraWorkersTable(nome) {
   renderWorkerRows();
 }
 
-function renderWorkerRows() {
+function getFilteredWorkerRows_() {
   const filter = (document.getElementById('worker-search').value || '').toLowerCase();
   let rows = currentObraWorkers.filter(w => w.nome.toLowerCase().includes(filter));
 
@@ -2710,24 +2823,46 @@ function renderWorkerRows() {
     if (typeof va === 'string') return workerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
     return workerSortAsc ? va - vb : vb - va;
   });
+  return rows;
+}
+
+function splitWorkerRows_(rows) {
+  return {
+    presentes: rows.filter(w => w.dias > 0 && w.faltas === 0 && w.dispensados === 0),
+    ausentes: rows.filter(w => w.faltas > 0 || w.dispensados > 0 || w.dias === 0)
+  };
+}
+
+function updateWorkerTabsUI_(presentesCount, ausentesCount) {
+  const p = document.getElementById('worker-tab-presentes');
+  const a = document.getElementById('worker-tab-ausentes');
+  if (!p || !a) return;
+
+  p.textContent = 'Presentes (' + presentesCount + ')';
+  a.textContent = 'Faltas/Disp. (' + ausentesCount + ')';
+
+  p.classList.toggle('active', workerActiveTab === 'presentes');
+  a.classList.toggle('active', workerActiveTab === 'ausentes');
+}
+
+function renderWorkerRows() {
+  const rows = getFilteredWorkerRows_();
+  const groups = splitWorkerRows_(rows);
+
+  if (workerActiveTab === 'presentes' && !groups.presentes.length && groups.ausentes.length) {
+    workerActiveTab = 'ausentes';
+  } else if (workerActiveTab === 'ausentes' && !groups.ausentes.length && groups.presentes.length) {
+    workerActiveTab = 'presentes';
+  }
+  updateWorkerTabsUI_(groups.presentes.length, groups.ausentes.length);
+
+  const rowsToShow = workerActiveTab === 'ausentes' ? groups.ausentes : groups.presentes;
 
   const tbody = document.getElementById('workers-tbody');
-  if (!rows.length) {
+  if (!rowsToShow.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="td-center" style="padding:14px;color:var(--text-dim)">Sem trabalhadores para o filtro atual</td></tr>';
   } else {
-    const presentes = rows.filter(w => w.dias > 0 && w.faltas === 0 && w.dispensados === 0);
-    const ausentesOuDisp = rows.filter(w => w.faltas > 0 || w.dispensados > 0 || w.dias === 0);
-
-    const groupHead = (title, count, cls) => (
-      '<tr class="worker-group-row"><td colspan="8">' +
-        '<div class="worker-group-head ' + cls + '">' +
-          '<span class="worker-group-title">' + title + '</span>' +
-          '<span class="worker-group-count">' + count + '</span>' +
-        '</div>' +
-      '</td></tr>'
-    );
-
-    const renderWorker = w => {
+    tbody.innerHTML = rowsToShow.map(w => {
       const expanded = expandedWorkerNames.has(w.nome);
       const safeName = w.nome.replace(/'/g, "\\'");
       return `
@@ -2758,18 +2893,7 @@ function renderWorkerRows() {
           </td>
         </tr>
       `;
-    };
-
-    let html = '';
-    if (presentes.length) {
-      html += groupHead('Presentes', presentes.length, 'presentes');
-      html += presentes.map(renderWorker).join('');
-    }
-    if (ausentesOuDisp.length) {
-      html += groupHead('Faltaram/Dispensados', ausentesOuDisp.length, 'ausentes');
-      html += ausentesOuDisp.map(renderWorker).join('');
-    }
-    tbody.innerHTML = html;
+    }).join('');
   }
 
   // Update sort indicators
@@ -2804,6 +2928,25 @@ function toggleWorkerDetails(nome) {
   renderWorkerRows();
 }
 
+function setWorkerTab(tab) {
+  workerActiveTab = tab === 'ausentes' ? 'ausentes' : 'presentes';
+  renderWorkerRows();
+}
+
+function expandAllWorkers() {
+  const groups = splitWorkerRows_(getFilteredWorkerRows_());
+  const rows = workerActiveTab === 'ausentes' ? groups.ausentes : groups.presentes;
+  rows.forEach(w => expandedWorkerNames.add(w.nome));
+  renderWorkerRows();
+}
+
+function collapseAllWorkers() {
+  const groups = splitWorkerRows_(getFilteredWorkerRows_());
+  const rows = workerActiveTab === 'ausentes' ? groups.ausentes : groups.presentes;
+  rows.forEach(w => expandedWorkerNames.delete(w.nome));
+  renderWorkerRows();
+}
+
 function filterWorkers() { renderWorkerRows(); }
 
 function exportWorkersCSV() { /* disabled */ }
@@ -2830,6 +2973,7 @@ function buildObraMateriais(nome) {
   if (!rows.length) {
     card.style.display = 'none';
     list.innerHTML = '';
+    currentMateriaisFases = [];
     return;
   }
 
@@ -2854,6 +2998,7 @@ function buildObraMateriais(nome) {
     const diff = (fasesMap[b].total || 0) - (fasesMap[a].total || 0);
     return diff !== 0 ? diff : a.localeCompare(b);
   });
+  currentMateriaisFases = fases.slice();
 
   const prevExpanded = new Set(expandedMateriaisFases);
   expandedMateriaisFases = new Set(fases.filter(f => prevExpanded.has(f)));
@@ -2906,6 +3051,16 @@ function toggleObraMateriaisFase(faseKey) {
   if (!fase) return;
   if (expandedMateriaisFases.has(fase)) expandedMateriaisFases.delete(fase);
   else expandedMateriaisFases.add(fase);
+  if (currentObraName) buildObraMateriais(currentObraName);
+}
+
+function expandAllMateriaisFases() {
+  currentMateriaisFases.forEach(f => expandedMateriaisFases.add(f));
+  if (currentObraName) buildObraMateriais(currentObraName);
+}
+
+function collapseAllMateriaisFases() {
+  expandedMateriaisFases = new Set();
   if (currentObraName) buildObraMateriais(currentObraName);
 }
 
@@ -4080,17 +4235,31 @@ function dateInRange(dateStr) {
   return true;
 }
 
+function syncFilterInputsUI_() {
+  const topFrom = document.getElementById('global-date-from');
+  const topTo = document.getElementById('global-date-to');
+  if (topFrom) topFrom.value = globalDateFrom;
+  if (topTo) topTo.value = globalDateTo;
+}
+
+function syncQuickFilterButtonsUI_() {
+  document.querySelectorAll('.quick-date-btn').forEach(b => b.classList.remove('active'));
+  if (activeQuickFilter) {
+    const btn = document.querySelector('.quick-date-btn[onclick*="' + activeQuickFilter + '"]');
+    if (btn) btn.classList.add('active');
+  }
+}
+
 function applyGlobalFilter() {
   globalDateFrom = document.getElementById('global-date-from').value || '';
   globalDateTo = document.getElementById('global-date-to').value || '';
 
-  // Update quick button active state
   activeQuickFilter = '';
-  document.querySelectorAll('.quick-date-btn').forEach(b => b.classList.remove('active'));
   if (!globalDateFrom && !globalDateTo) {
     activeQuickFilter = 'tudo';
-    document.querySelector('.quick-date-btn[onclick*="tudo"]').classList.add('active');
   }
+  syncFilterInputsUI_();
+  syncQuickFilterButtonsUI_();
 
   if (DATA) {
     buildAll();
@@ -4109,9 +4278,6 @@ function setQuickFilter(preset) {
   const todayStr = yyyy + '-' + mm + '-' + dd;
 
   activeQuickFilter = preset;
-  document.querySelectorAll('.quick-date-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector('.quick-date-btn[onclick*="' + preset + '"]');
-  if (btn) btn.classList.add('active');
 
   switch (preset) {
     case 'hoje':
@@ -4139,8 +4305,8 @@ function setQuickFilter(preset) {
       break;
   }
 
-  document.getElementById('global-date-from').value = globalDateFrom;
-  document.getElementById('global-date-to').value = globalDateTo;
+  syncFilterInputsUI_();
+  syncQuickFilterButtonsUI_();
 
   if (DATA) {
     buildAll();
@@ -4691,3 +4857,4 @@ window.onload = loadData;
 </script>
 </body>
 </html>
+
