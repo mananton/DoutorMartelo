@@ -491,8 +491,26 @@ function readMateriaisMov_(sheet) {
   const cMaterial  = findCol_(["material"]);
   const cUnidade   = findCol_(["unidade"]);
   const cQtd       = findCol_(["quantidade"]);
-  const cCustoTot  = findCol_(["custo_total", "custo total"]);
+  const cCustoTotComIva = findCol_([
+    "custo_total com iva",
+    "custo_total_com_iva",
+    "custo total com iva",
+    "custo com iva"
+  ]);
+  const cCustoTotSemIva = findCol_([
+    "custo_total sem iva",
+    "custo_total_sem_iva",
+    "custo total sem iva",
+    "custo sem iva"
+  ]);
+  const cCustoTotLegacy = findCol_(["custo_total", "custo total"]);
   const cCustoUnit = findCol_(["custo_unit", "custo unit"]);
+  const cDesc1     = findCol_(["desconto 1", "desconto_1", "desconto1"]);
+  const cDesc2     = findCol_(["desconto 2", "desconto_2", "desconto2"]);
+  const cIva       = findCol_(["iva"]);
+  const cFornecedor = findCol_(["fornecedor"]);
+  const cNif        = findCol_(["nif"]);
+  const cEntrega    = findCol_(["entrega?", "entrega ?", "entrega"]);
   const cDocFatura = findCol_(["nº doc/fatura", "n doc/fatura", "doc_fatura", "doc/fatura"]);
   const cLote      = findCol_(["lote"]);
   const cObs       = findCol_(["observação", "observacao", "obs"]);
@@ -526,7 +544,13 @@ function readMateriaisMov_(sheet) {
 
     const qtd = cQtd >= 0 ? num_(r[cQtd]) : 0;
     const custoUnit = cCustoUnit >= 0 ? num_(r[cCustoUnit]) : 0;
-    const custoTot = cCustoTot >= 0 ? num_(r[cCustoTot]) : (qtd * custoUnit);
+    const custoTotComIva = cCustoTotComIva >= 0 ? num_(r[cCustoTotComIva]) : 0;
+    const custoTotSemIva = cCustoTotSemIva >= 0 ? num_(r[cCustoTotSemIva]) : 0;
+    let custoTot = 0;
+    if (cCustoTotComIva >= 0) custoTot = custoTotComIva;
+    else if (cCustoTotLegacy >= 0) custoTot = num_(r[cCustoTotLegacy]);
+    else if (cCustoTotSemIva >= 0) custoTot = custoTotSemIva;
+    else custoTot = qtd * custoUnit;
 
     out.push({
       id_mov: id,
@@ -539,6 +563,14 @@ function readMateriaisMov_(sheet) {
       quantidade: qtd,
       custo_unit: custoUnit,
       custo_total: custoTot,
+      custo_total_com_iva: cCustoTotComIva >= 0 ? custoTotComIva : custoTot,
+      custo_total_sem_iva: cCustoTotSemIva >= 0 ? custoTotSemIva : 0,
+      iva: cIva >= 0 ? num_(r[cIva]) : 0,
+      desconto_1: cDesc1 >= 0 ? num_(r[cDesc1]) : 0,
+      desconto_2: cDesc2 >= 0 ? num_(r[cDesc2]) : 0,
+      fornecedor: cFornecedor >= 0 ? String(r[cFornecedor] || "").trim() : "",
+      nif: cNif >= 0 ? String(r[cNif] || "").trim() : "",
+      entrega: cEntrega >= 0 ? String(r[cEntrega] || "").trim() : "",
       doc_fatura: cDocFatura >= 0 ? String(r[cDocFatura] || "").trim() : "",
       lote:       cLote >= 0 ? String(r[cLote] || "").trim() : "",
       observacao: cObs >= 0 ? String(r[cObs] || "").trim() : "",

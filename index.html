@@ -353,6 +353,40 @@ td { padding: 11px 16px; vertical-align: middle; }
   display: flex; align-items: center; gap: 16px;
   margin-bottom: 20px; flex-wrap: wrap;
 }
+.obra-header-main {
+  flex: 1;
+  min-width: 0;
+}
+.obra-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.obra-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.obra-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.obra-btn.active {
+  background: rgba(233,69,96,.12);
+  border-color: rgba(233,69,96,.35);
+  color: var(--accent);
+}
+.obra-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+}
 .obra-select-wrap { position: relative; }
 .obra-select {
   appearance: none;
@@ -428,6 +462,219 @@ td { padding: 11px 16px; vertical-align: middle; }
   border-radius: var(--radius-sm); padding: 6px 12px;
   color: var(--text); font-family: 'Inter', sans-serif;
   font-size: 12px; width: 180px;
+}
+
+/* ── Obra Workers: expandable list ───────────────────────── */
+.worker-item-row { border-bottom: none !important; }
+.worker-item-row td { padding: 0; border: none; }
+.worker-group-row td { padding: 0; border: none; }
+.worker-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.02);
+}
+.worker-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.worker-group-head.presentes .worker-group-title { color: var(--success); }
+.worker-group-head.ausentes .worker-group-title { color: var(--accent); }
+.worker-group-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.worker-item {
+  border-bottom: 1px solid var(--border);
+}
+.worker-summary-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.worker-summary-btn:hover {
+  background: rgba(255,255,255,.03);
+}
+.worker-summary-main {
+  min-width: 0;
+  flex: 1;
+}
+.worker-summary-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.worker-summary-role {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.worker-summary-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.worker-summary-chevron {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.worker-detail {
+  display: none;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border);
+  background: rgba(255,255,255,.02);
+}
+.worker-item.expanded .worker-detail {
+  display: block;
+}
+.worker-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.worker-detail-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.worker-detail-line:last-child { border-bottom: none; }
+.worker-detail-label {
+  display: inline;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-dim);
+}
+.worker-detail-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ── Obra Materiais: accordion por fase ─────────────────── */
+.mat-fase {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.mat-fase-btn {
+  width: 100%;
+  border: 0;
+  background: rgba(255,255,255,.02);
+  color: inherit;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.mat-fase-btn:hover { background: rgba(255,255,255,.04); }
+.mat-fase-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 0;
+  flex: 1;
+}
+.mat-fase-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mat-fase-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.mat-fase-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warning);
+  font-variant-numeric: tabular-nums;
+}
+.mat-fase-chevron {
+  color: var(--text-dim);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.mat-fase-body {
+  display: none;
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+}
+.mat-fase.expanded .mat-fase-body { display: block; }
+.mat-item {
+  border-bottom: 1px dashed var(--border);
+  padding: 8px 0;
+}
+.mat-item:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+.mat-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.mat-item-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mat-item-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+.mat-item-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--text-dim);
+}
+.mat-item-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
 }
 .table-search:focus { outline: none; border-color: var(--accent); }
 .table-search::placeholder { color: var(--text-dim); }
@@ -949,7 +1196,8 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 [data-theme="light"] tbody tr:hover { background: rgba(0,0,0,.02); }
 [data-theme="light"] .table-search,
 [data-theme="light"] .desl-date-input,
-[data-theme="light"] .obra-select { background: #f0f2f5; }
+[data-theme="light"] .obra-select,
+[data-theme="light"] .obra-btn { background: #f0f2f5; }
 [data-theme="light"] .kpi-card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 [data-theme="light"] .card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 [data-theme="light"] #loading-overlay { background: #f0f2f5; }
@@ -1201,6 +1449,23 @@ body.has-subbar .section { animation-delay: 0s; }
   .subbar-label { font-size: 10px; }
   .subbar-date-input { padding: 4px 6px; max-width: 130px; }
   .quick-date-btn { font-size: 10px; padding: 4px 8px; }
+  .obra-header-bar {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .obra-header-main {
+    width: 100%;
+  }
+  .obra-buttons {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .obra-btn {
+    flex: 0 0 auto;
+    min-height: 40px;
+  }
 
   /* ── Chart containers: fixed height on mobile ──────────── */
   .chart-card canvas,
@@ -1254,6 +1519,79 @@ body.has-subbar .section { animation-delay: 0s; }
   }
   .card-table tbody td[colspan]::before {
     display: none;
+  }
+
+  #workers-tbody .worker-item-row {
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  #workers-tbody .worker-group-row {
+    margin: 8px 0 6px;
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+  #workers-tbody .worker-group-row:first-child {
+    margin-top: 0;
+  }
+  #workers-tbody .worker-group-row td {
+    display: block;
+    padding: 0;
+  }
+  #workers-tbody .worker-group-row td::before {
+    display: none !important;
+    content: none !important;
+  }
+  #workers-tbody .worker-group-head {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  #workers-tbody .worker-item-row td {
+    display: block;
+    padding: 0;
+  }
+  #workers-tbody .worker-item-row td::before {
+    display: none !important;
+    content: none !important;
+  }
+  #workers-tbody .worker-item {
+    border-bottom: none;
+  }
+  .worker-summary-btn {
+    padding: 12px;
+    gap: 8px;
+  }
+  .worker-summary-title {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .worker-summary-role {
+    font-size: 10px;
+  }
+  .worker-detail-line {
+    padding: 7px 0;
+  }
+  .worker-detail-value {
+    max-width: 58%;
+  }
+  .mat-fase-btn {
+    padding: 10px;
+    gap: 8px;
+  }
+  .mat-fase-meta {
+    gap: 6px;
+  }
+  .mat-fase-count {
+    font-size: 9px;
+  }
+  .mat-item-line {
+    padding: 4px 0;
+  }
+  .mat-item-value {
+    max-width: 60%;
   }
 
   /* ── Comparativa: hide evolucao tab, show desktop hint ── */
@@ -1595,11 +1933,8 @@ body.has-subbar .section { animation-delay: 0s; }
   <div class="section" id="section-obra-detail">
     <!-- Header with selector -->
     <div class="obra-header-bar">
-      <div class="obra-select-wrap">
-        <select class="obra-select" id="obra-select" onchange="if(this.value)openObra(this.value)">
-          <option value="">Selecione uma obra...</option>
-        </select>
-        <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
+      <div class="obra-header-main">
+        <div class="obra-buttons" id="obra-buttons"></div>
       </div>
       <span class="obra-status" id="obra-status-badge"></span>
     </div>
@@ -1652,21 +1987,8 @@ body.has-subbar .section { animation-delay: 0s; }
       <div class="card-header">
         <i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase
       </div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-          <table class="card-table">
-            <thead>
-              <tr>
-                <th>Fase</th>
-                <th>Material</th>
-                <th>Unidade</th>
-                <th class="td-right">Quantidade</th>
-                <th class="td-right">Custo (&euro;)</th>
-              </tr>
-            </thead>
-            <tbody id="obra-materiais-tbody"></tbody>
-          </table>
-        </div>
+      <div class="card-body" style="padding:10px 12px 12px">
+        <div id="obra-materiais-list"></div>
       </div>
     </div>
   </div>
@@ -1905,6 +2227,9 @@ let obrasMenuOpen = false;
 let obraCharts = {};
 let currentObraName = null;
 let currentObraWorkers = [];
+let expandedWorkerNames = new Set();
+let expandedMateriaisFases = new Set();
+let expandedMateriaisObra = null;
 let workerSortCol = 'custo';
 let workerSortAsc = false;
 let dailyPeriod = 0;
@@ -1968,7 +2293,7 @@ const KPI_TOOLTIPS = {
   'Custo Total':       'Soma de todos os custos de mão de obra, deslocações e materiais em todas as obras.',
   'Mão de Obra':       'Custo total dos trabalhadores (horas × valor/hora) em todas as obras.',
   'Deslocações':       'Custo total de viagens e deslocações para as obras.',
-  'Materiais':         'Custo total de materiais consumidos (tipo CONSUMO) em todas as obras.',
+  'Materiais':         'Custo total de materiais consumidos (tipo CONSUMO), usando Custo_Total Com IVA.',
   'Horas Trabalhadas': 'Total de horas registadas por todos os trabalhadores em todas as obras.',
   'Obras Ativas':      'Número de obras atualmente em andamento (marcadas como ativas).',
   'Colaboradores':     'Número total de trabalhadores únicos registados no sistema.',
@@ -2089,7 +2414,7 @@ function toggleSidebar() {
    ══════════════════════════════════════════════════════════ */
 function buildAll() {
   buildObrasSidebar();
-  populateObraSelect();
+  buildObraButtons();
   buildOverview();
   buildDeslocacoes();
   buildEquipa();
@@ -2124,9 +2449,9 @@ function openObra(nome) {
   document.querySelectorAll('#obras-submenu .nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.textContent.trim() === nome);
   });
-
-  // Update dropdown
-  document.getElementById('obra-select').value = nome;
+  document.querySelectorAll('#obra-buttons .obra-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === nome);
+  });
 
   // Update status badge
   const infoMap = {};
@@ -2149,12 +2474,29 @@ function openObra(nome) {
   updateBreadcrumb();
 }
 
-function populateObraSelect() {
-  if (!DATA || !DATA.obras) return;
-  const sel = document.getElementById('obra-select');
-  const names = Object.keys(DATA.obras).sort();
-  sel.innerHTML = '<option value="">Selecione uma obra...</option>' +
-    names.map(n => `<option value="${n}">${n}</option>`).join('');
+function isObraAtiva_(nome) {
+  const info = (DATA && DATA.obras_info || []).find(o => o.Obra_ID === nome);
+  if (!info || !info.Ativa) return true;
+  const v = String(info.Ativa || '').trim().toLowerCase();
+  return v === 'sim' || v === 'true' || v === '1';
+}
+
+function buildObraButtons() {
+  const container = document.getElementById('obra-buttons');
+  if (!container || !DATA || !DATA.obras) return;
+
+  const allNames = Object.keys(DATA.obras).sort();
+  let names = allNames.filter(isObraAtiva_);
+  if (!names.length) names = allNames;
+
+  if (!names.length) {
+    container.innerHTML = '<span class="obra-empty">Sem obras para mostrar.</span>';
+    return;
+  }
+
+  container.innerHTML = names.map(nome =>
+    `<button type="button" class="obra-btn${currentObraName === nome ? ' active' : ''}" onclick="openObra('${nome.replace(/'/g, "\\'")}')">${nome}</button>`
+  ).join('');
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2331,11 +2673,12 @@ function buildObraWorkersTable(nome) {
         nome: wName,
         funcao: (wInfo && wInfo['Função (auto)']) || w.funcao || '\u2014',
         fase: (wInfo && wInfo.Fase) || '\u2014',
-        horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0
+        horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0, dispensados: 0
       };
     }
     Object.entries(w.dias).forEach(([dateStr, d]) => {
       if (!dateInRange(dateStr)) return;
+      if (d.dispensado) agg[wName].dispensados++;
       if (d.falta) {
         agg[wName].faltas++;
       } else if (d.horas > 0) {
@@ -2347,7 +2690,11 @@ function buildObraWorkersTable(nome) {
     });
   });
 
-  currentObraWorkers = Object.values(agg).filter(w => w.dias > 0 || w.faltas > 0);
+  const prevExpanded = new Set(expandedWorkerNames);
+  currentObraWorkers = Object.values(agg).filter(w => w.dias > 0 || w.faltas > 0 || w.dispensados > 0);
+  expandedWorkerNames = new Set(
+    currentObraWorkers.map(w => w.nome).filter(n => prevExpanded.has(n))
+  );
   workerSortCol = 'custo';
   workerSortAsc = false;
   document.getElementById('worker-search').value = '';
@@ -2365,18 +2712,65 @@ function renderWorkerRows() {
   });
 
   const tbody = document.getElementById('workers-tbody');
-  tbody.innerHTML = rows.map(w => `
-    <tr>
-      <td data-label="Nome"><strong>${w.nome}</strong></td>
-      <td data-label="Função">${w.funcao}</td>
-      <td data-label="Fase">${w.fase}</td>
-      <td data-label="Horas" class="td-right td-hours td-mono">${fmtN(w.horas)}h</td>
-      <td data-label="Custo" class="td-right td-euro td-mono">${fmt(w.custo)}</td>
-      <td data-label="Atrasos" class="td-right td-mono">${w.atraso > 0 ? w.atraso + ' min' : '\u2014'}</td>
-      <td data-label="Dias" class="td-center td-mono">${w.dias}</td>
-      <td data-label="Faltas" class="td-center">${w.faltas > 0 ? '<span class="tag tag-red">' + w.faltas + '</span>' : '0'}</td>
-    </tr>
-  `).join('');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="td-center" style="padding:14px;color:var(--text-dim)">Sem trabalhadores para o filtro atual</td></tr>';
+  } else {
+    const presentes = rows.filter(w => w.dias > 0 && w.faltas === 0 && w.dispensados === 0);
+    const ausentesOuDisp = rows.filter(w => w.faltas > 0 || w.dispensados > 0 || w.dias === 0);
+
+    const groupHead = (title, count, cls) => (
+      '<tr class="worker-group-row"><td colspan="8">' +
+        '<div class="worker-group-head ' + cls + '">' +
+          '<span class="worker-group-title">' + title + '</span>' +
+          '<span class="worker-group-count">' + count + '</span>' +
+        '</div>' +
+      '</td></tr>'
+    );
+
+    const renderWorker = w => {
+      const expanded = expandedWorkerNames.has(w.nome);
+      const safeName = w.nome.replace(/'/g, "\\'");
+      return `
+        <tr class="worker-item-row">
+          <td colspan="8">
+            <div class="worker-item ${expanded ? 'expanded' : ''}">
+              <button type="button" class="worker-summary-btn" onclick="toggleWorkerDetails('${safeName}')" aria-expanded="${expanded ? 'true' : 'false'}">
+                <span class="worker-summary-main">
+                  <span class="worker-summary-title">
+                    <span class="worker-summary-role">${w.funcao}</span>
+                    <span class="worker-summary-name">${w.nome}</span>
+                  </span>
+                </span>
+                <i class="fa-solid ${expanded ? 'fa-chevron-up' : 'fa-chevron-down'} worker-summary-chevron"></i>
+              </button>
+              <div class="worker-detail">
+                <ul class="worker-detail-list">
+                  <li class="worker-detail-line"><span class="worker-detail-label">Função</span><span class="worker-detail-value"><span class="tag tag-blue">${w.funcao}</span></span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Fase</span><span class="worker-detail-value" style="color:var(--text-muted);font-weight:600">${w.fase}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Horas</span><span class="worker-detail-value td-mono">${w.horas > 0 ? fmtN(w.horas) + 'h' : '—'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Custo</span><span class="worker-detail-value td-mono td-euro">${w.custo > 0 ? fmt(w.custo) : '—'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Atrasos</span><span class="worker-detail-value td-mono">${w.atraso > 0 ? fmtMin(w.atraso) : '—'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Dias</span><span class="worker-detail-value td-mono">${w.dias}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Faltas</span><span class="worker-detail-value">${w.faltas > 0 ? '<span class="tag tag-red">' + w.faltas + '</span>' : '0'}</span></li>
+                </ul>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    };
+
+    let html = '';
+    if (presentes.length) {
+      html += groupHead('Presentes', presentes.length, 'presentes');
+      html += presentes.map(renderWorker).join('');
+    }
+    if (ausentesOuDisp.length) {
+      html += groupHead('Faltaram/Dispensados', ausentesOuDisp.length, 'ausentes');
+      html += ausentesOuDisp.map(renderWorker).join('');
+    }
+    tbody.innerHTML = html;
+  }
 
   // Update sort indicators
   const colMap = { nome: 0, funcao: 1, fase: 2, horas: 3, custo: 4, atraso: 5, dias: 6, faltas: 7 };
@@ -2404,6 +2798,12 @@ function sortWorkers(col) {
   renderWorkerRows();
 }
 
+function toggleWorkerDetails(nome) {
+  if (expandedWorkerNames.has(nome)) expandedWorkerNames.delete(nome);
+  else expandedWorkerNames.add(nome);
+  renderWorkerRows();
+}
+
 function filterWorkers() { renderWorkerRows(); }
 
 function exportWorkersCSV() { /* disabled */ }
@@ -2413,8 +2813,12 @@ function exportWorkersCSV() { /* disabled */ }
    ══════════════════════════════════════════════════════════ */
 function buildObraMateriais(nome) {
   const card  = document.getElementById('obra-materiais-card');
-  const tbody = document.getElementById('obra-materiais-tbody');
-  if (!card || !tbody) return;
+  const list = document.getElementById('obra-materiais-list');
+  if (!card || !list) return;
+  if (expandedMateriaisObra !== nome) {
+    expandedMateriaisFases = new Set();
+    expandedMateriaisObra = nome;
+  }
 
   // Filtrar CONSUMO da obra, respeitando filtro de datas global
   const rows = matMovAll.filter(m =>
@@ -2425,33 +2829,84 @@ function buildObraMateriais(nome) {
 
   if (!rows.length) {
     card.style.display = 'none';
-    tbody.innerHTML = '';
+    list.innerHTML = '';
     return;
   }
 
-  // Agrupar por fase + material + unidade
-  const map = {};
+  // Agrupar por fase (detalhe por registo de consumo)
+  const fasesMap = {};
   rows.forEach(m => {
     const fase = m.fase || '\u2014';
-    const key  = fase + '||' + m.material + '||' + (m.unidade || '');
-    if (!map[key]) map[key] = { fase: fase, material: m.material, unidade: m.unidade || '', qtd: 0, custo: 0 };
-    map[key].qtd   += parseFloat(m.quantidade) || 0;
-    map[key].custo += parseFloat(m.custo_total) || 0;
+    if (!fasesMap[fase]) fasesMap[fase] = { total: 0, items: [] };
+    const qtd = parseFloat(m.quantidade) || 0;
+    const custo = matCost(m);
+    fasesMap[fase].total += custo;
+    fasesMap[fase].items.push({
+      data: m.data || '',
+      material: m.material || '\u2014',
+      unidade: m.unidade || '\u2014',
+      quantidade: qtd,
+      custo: custo
+    });
   });
 
-  const grouped = Object.values(map).sort((a, b) => b.custo - a.custo);
+  const fases = Object.keys(fasesMap).sort((a, b) => {
+    const diff = (fasesMap[b].total || 0) - (fasesMap[a].total || 0);
+    return diff !== 0 ? diff : a.localeCompare(b);
+  });
 
-  tbody.innerHTML = grouped.map(g =>
-    '<tr>' +
-    '<td>' + g.fase + '</td>' +
-    '<td>' + g.material + '</td>' +
-    '<td>' + g.unidade + '</td>' +
-    '<td class="td-right">' + fmtN(g.qtd) + '</td>' +
-    '<td class="td-right">' + fmt(g.custo) + '</td>' +
-    '</tr>'
-  ).join('');
+  const prevExpanded = new Set(expandedMateriaisFases);
+  expandedMateriaisFases = new Set(fases.filter(f => prevExpanded.has(f)));
+
+  const fmtDate = s => {
+    const raw = String(s || '');
+    if (raw.length < 10) return '\u2014';
+    const p = raw.slice(0, 10).split('-');
+    return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : raw;
+  };
+
+  list.innerHTML = fases.map(fase => {
+    const faseKey = encodeURIComponent(fase);
+    const data = fasesMap[fase];
+    const expanded = expandedMateriaisFases.has(fase);
+    const items = (data.items || []).slice().sort((a, b) => {
+      const d = String(b.data || '').localeCompare(String(a.data || ''));
+      return d !== 0 ? d : String(a.material || '').localeCompare(String(b.material || ''));
+    });
+    const itemsHtml = items.map(it =>
+      '<div class="mat-item">' +
+        '<div class="mat-item-title">' + (it.material || '\u2014') + '</div>' +
+        '<ul class="mat-item-lines">' +
+          '<li class="mat-item-line"><span class="mat-item-label">Data</span><span class="mat-item-value td-mono">' + fmtDate(it.data) + '</span></li>' +
+          '<li class="mat-item-line"><span class="mat-item-label">Unidade</span><span class="mat-item-value">' + (it.unidade || '\u2014') + '</span></li>' +
+          '<li class="mat-item-line"><span class="mat-item-label">Quantidade</span><span class="mat-item-value td-mono">' + (it.quantidade > 0 ? fmtN(it.quantidade) : '\u2014') + '</span></li>' +
+          '<li class="mat-item-line"><span class="mat-item-label">Custo</span><span class="mat-item-value td-mono td-euro">' + (it.custo > 0 ? fmt(it.custo) : '\u2014') + '</span></li>' +
+        '</ul>' +
+      '</div>'
+    ).join('');
+
+    return '<div class="mat-fase ' + (expanded ? 'expanded' : '') + '">' +
+      '<button type="button" class="mat-fase-btn" onclick="toggleObraMateriaisFase(\'' + faseKey + '\')">' +
+        '<span class="mat-fase-title">' + fase + '</span>' +
+        '<span class="mat-fase-meta">' +
+          '<span class="mat-fase-count">' + items.length + ' reg.</span>' +
+          '<span class="mat-fase-total">' + fmt(data.total || 0) + '</span>' +
+        '</span>' +
+        '<i class="fa-solid ' + (expanded ? 'fa-chevron-up' : 'fa-chevron-down') + ' mat-fase-chevron"></i>' +
+      '</button>' +
+      '<div class="mat-fase-body">' + itemsHtml + '</div>' +
+    '</div>';
+  }).join('');
 
   card.style.display = '';
+}
+
+function toggleObraMateriaisFase(faseKey) {
+  const fase = decodeURIComponent(String(faseKey || ''));
+  if (!fase) return;
+  if (expandedMateriaisFases.has(fase)) expandedMateriaisFases.delete(fase);
+  else expandedMateriaisFases.add(fase);
+  if (currentObraName) buildObraMateriais(currentObraName);
 }
 
 /* ── SECTION BUILDERS (placeholders) ────────────────────── */
@@ -3706,13 +4161,20 @@ function filterMateriaisByDate() {
     m.tipo && m.tipo.toUpperCase() === 'CONSUMO' && dateInRange(m.data)
   );
 }
+function matCost(m) {
+  const raw = (m && m.custo_total_com_iva != null && m.custo_total_com_iva !== '')
+    ? m.custo_total_com_iva
+    : (m ? m.custo_total : 0);
+  const n = parseFloat(raw);
+  return isNaN(n) ? 0 : n;
+}
 function sumMateriaisGlobal() {
-  return filterMateriaisByDate().reduce((s, m) => s + (parseFloat(m.custo_total) || 0), 0);
+  return filterMateriaisByDate().reduce((s, m) => s + matCost(m), 0);
 }
 function sumMateriaisByObra(nome) {
   return filterMateriaisByDate()
     .filter(m => m.obra === nome)
-    .reduce((s, m) => s + (parseFloat(m.custo_total) || 0), 0);
+    .reduce((s, m) => s + matCost(m), 0);
 }
 
 function computeFilteredGlobal() {
@@ -3813,21 +4275,6 @@ function checkAlerts() {
     }
   }
 
-  // Check collaborators with >= 3 faltas
-  const colabFaltas = {};
-  Object.keys(DATA.obras || {}).forEach(nome => {
-    (DATA.obras[nome].workers || []).forEach(w => {
-      const n = w['Nome (auto)'];
-      colabFaltas[n] = (colabFaltas[n] || 0) + (w.Faltas || 0);
-    });
-  });
-  const alertColabs = Object.entries(colabFaltas)
-    .filter(([, f]) => f >= 3)
-    .sort((a, b) => b[1] - a[1]);
-  if (alertColabs.length > 0) {
-    const top3 = alertColabs.slice(0, 3).map(([n, f]) => n.split(' ').slice(0, 2).join(' ') + ' (' + f + ')').join(', ');
-    showToast('Colaboradores com 3+ faltas: ' + top3, 'danger', 10000);
-  }
 }
 
 /* ══════════════════════════════════════════════════════════
