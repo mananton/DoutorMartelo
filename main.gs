@@ -134,7 +134,7 @@ function buildData_(ss) {
     if (!o.assidMap[r.nome].dias[r.data]) {
       o.assidMap[r.nome].dias[r.data] = {
         horas: 0, falta: false, dispensado: false, custo: 0,
-        atraso_min: 0, motivo: "", fases: []
+        atraso_min: 0, motivo: "", observacao: "", fases: []
       };
     }
     o.assidMap[r.nome].dias[r.data].horas      += r.horas;
@@ -143,6 +143,7 @@ function buildData_(ss) {
     if (r.falta)  o.assidMap[r.nome].dias[r.data].falta  = true;
     if (r.dispensado) o.assidMap[r.nome].dias[r.data].dispensado = true;
     if (r.motivo) o.assidMap[r.nome].dias[r.data].motivo = r.motivo;
+    if (r.observacao) o.assidMap[r.nome].dias[r.data].observacao = r.observacao;
     if (r.fase && !o.assidMap[r.nome].dias[r.data].fases.includes(r.fase))
       o.assidMap[r.nome].dias[r.data].fases.push(r.fase);
 
@@ -356,6 +357,7 @@ function readRegistos_(sheet, colabRateMap) {
       atraso_min: atrasoMin,                     // H
       falta:      falta,                         // I
       motivo:     String(row[9] || "").trim(),   // J
+      observacao: String(row[12] || "").trim(),  // M
       dispensado: dispensado,                    // O
       dispensa_processada_em: dispensaProcessadaEm, // P
       eur_h:      rateFromColab,

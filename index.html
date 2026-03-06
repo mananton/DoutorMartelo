@@ -486,6 +486,25 @@ td { padding: 11px 16px; vertical-align: middle; }
   width: 100%;
   min-width: 0;
 }
+.equipa-toolbar-stack {
+  margin-left: 0;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.equipa-toolbar-stack .obra-select-wrap {
+  width: 100%;
+  max-width: 320px;
+}
+.equipa-toolbar-stack .obra-select {
+  width: 100%;
+  min-width: 0;
+}
+.equipa-toolbar-stack .table-search {
+  width: 100%;
+  min-width: 0;
+}
 .workers-actions {
   display: flex;
   gap: 8px;
@@ -2101,6 +2120,7 @@ body.has-subbar .section { animation-delay: 0s; }
         <div id="obra-materiais-list"></div>
       </div>
     </div>
+    <div id="obra-worker-popup-container"></div>
   </div>
 
   <!-- Deslocações -->
@@ -2156,11 +2176,13 @@ body.has-subbar .section { animation-delay: 0s; }
   <div class="section" id="section-equipa">
     <!-- Main Table -->
     <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-users"></i> Colaboradores
-        <div class="equipa-table-toolbar">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <i class="fa-solid fa-users"></i> Colaboradores
+        </div>
+        <div class="table-toolbar workers-toolbar-stack equipa-toolbar-stack" id="equipa-toolbar">
           <div class="obra-select-wrap">
-            <select class="obra-select" id="equipa-filter-funcao" onchange="filterEquipa()" style="min-width:150px;font-size:12px;padding:6px 30px 6px 10px">
+            <select class="obra-select" id="equipa-filter-funcao" onchange="filterEquipa()" style="font-size:12px;padding:6px 30px 6px 10px">
               <option value="">Todas as funções</option>
             </select>
             <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
@@ -2786,7 +2808,7 @@ function buildObraWorkersTable(nome) {
         nome: wName,
         funcao: (wInfo && wInfo['Função (auto)']) || w.funcao || '\u2014',
         fase: (wInfo && wInfo.Fase) || '\u2014',
-        horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0, dispensados: 0
+        horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0, dispensados: 0, faltasList: []
       };
     }
     Object.entries(w.dias).forEach(([dateStr, d]) => {
@@ -2794,6 +2816,15 @@ function buildObraWorkersTable(nome) {
       if (d.dispensado) agg[wName].dispensados++;
       if (d.falta) {
         agg[wName].faltas++;
+        agg[wName].faltasList.push({
+          dataSort: dateStr,
+          data: dateStr.slice(8, 10) + '/' + dateStr.slice(5, 7),
+          motivo: d.motivo || '\u2014',
+          dispensado: !!d.dispensado,
+          obra: nome,
+          fase: (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '\u2014',
+          observacao: d.observacao || '\u2014'
+        });
       } else if (d.horas > 0) {
         agg[wName].horas += d.horas;
         agg[wName].custo += d.custo || 0;
@@ -2886,7 +2917,7 @@ function renderWorkerRows() {
                   <li class="worker-detail-line"><span class="worker-detail-label">Custo</span><span class="worker-detail-value td-mono td-euro">${w.custo > 0 ? fmt(w.custo) : '—'}</span></li>
                   <li class="worker-detail-line"><span class="worker-detail-label">Atrasos</span><span class="worker-detail-value td-mono">${w.atraso > 0 ? fmtMin(w.atraso) : '—'}</span></li>
                   <li class="worker-detail-line"><span class="worker-detail-label">Dias</span><span class="worker-detail-value td-mono">${w.dias}</span></li>
-                  <li class="worker-detail-line"><span class="worker-detail-label">Faltas</span><span class="worker-detail-value">${w.faltas > 0 ? '<span class="tag tag-red">' + w.faltas + '</span>' : '0'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Faltas</span><span class="worker-detail-value">${w.faltas > 0 ? '<span class="tag tag-red" style="cursor:pointer" onclick="event.stopPropagation();obraShowWorkerFaltas(\'' + safeName + '\',event)" title="Ver detalhe">' + w.faltas + '</span>' : '0'}</span></li>
                 </ul>
               </div>
             </div>
@@ -2950,6 +2981,63 @@ function collapseAllWorkers() {
 function filterWorkers() { renderWorkerRows(); }
 
 function exportWorkersCSV() { /* disabled */ }
+
+function obraShowWorkerFaltas(nome, event) {
+  const row = currentObraWorkers.find(r => r.nome === nome);
+  if (!row || !row.faltasList || !row.faltasList.length) return;
+
+  const clickRect = event && event.currentTarget
+    ? event.currentTarget.getBoundingClientRect() : null;
+
+  const sorted = row.faltasList.slice().sort((a, b) => b.dataSort.localeCompare(a.dataSort));
+  const bodyHtml = sorted.map(f =>
+    '<div class="assid-popup-item">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">' +
+        '<span style="color:var(--accent);font-weight:700;min-width:42px">' + f.data + '</span>' +
+        (f.dispensado ? '<span class="tag tag-amber">Dispensado</span>' : '') +
+      '</div>' +
+      '<div style="color:var(--text);font-size:12px;line-height:1.45">' +
+        '<div><span style="color:var(--text-dim)">Motivo:</span> ' + (f.motivo || '\u2014') + '</div>' +
+        '<div><span style="color:var(--text-dim)">Obra:</span> ' + (f.obra || '\u2014') + '</div>' +
+        '<div><span style="color:var(--text-dim)">Fase:</span> ' + (f.fase || '\u2014') + '</div>' +
+        '<div><span style="color:var(--text-dim)">Observa\u00E7\u00F5es:</span> ' + (f.observacao || '\u2014') + '</div>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+
+  const container = document.getElementById('obra-worker-popup-container');
+  if (!container) return;
+  container.innerHTML =
+    '<div class="assid-popup-overlay" onclick="obraWorkerPopupClose()"></div>' +
+    '<div class="assid-popup" id="obra-worker-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="assid-popup-header">' +
+        '<span><i class="fa-solid fa-calendar-xmark" style="margin-right:8px;color:var(--accent)"></i>Faltas de ' +
+        nome.split(' ').slice(0, 2).join(' ') + ' (' + row.faltas + ')</span>' +
+        '<button class="assid-popup-close" onclick="obraWorkerPopupClose()"><i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="assid-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('obra-worker-popup-inner');
+    if (!popup || !clickRect) return;
+    const pw = popup.offsetWidth || 300;
+    const ph = popup.offsetHeight || 220;
+    let top = clickRect.bottom + 8;
+    let left = clickRect.left;
+    if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+    if (left < 12) left = 12;
+    if (top + ph > window.innerHeight - 12) top = clickRect.top - ph - 8;
+    if (top < 12) top = 12;
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function obraWorkerPopupClose() {
+  const container = document.getElementById('obra-worker-popup-container');
+  if (container) container.innerHTML = '';
+}
 
 /* ══════════════════════════════════════════════════════════
    OBRA — MATERIAIS (consumo) por fase
@@ -3981,6 +4069,7 @@ function buildAssidTable() {
           dataSort: dateStr,
           data:     parts[2] + '/' + parts[1],   // DD/MM
           motivo:   d.motivo  || '—',
+          observacao: d.observacao || '\u2014',
           dispensado: !!d.dispensado,
           obra:     obraNome,
           fase:     (d.fases && d.fases.length > 0)
@@ -4091,6 +4180,8 @@ function assidShowFaltas(nome, event) {
       '<span style="color:var(--info)">'  + f.obra   + '</span>' +
       '<span style="color:var(--text-dim)">\u203a</span>' +
       '<span style="color:var(--text-muted);font-size:11px">' + f.fase + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--text-muted);font-size:11px">Obs: ' + (f.observacao || '\u2014') + '</span>' +
     '</div>'
   ).join('');
 
@@ -4857,4 +4948,3 @@ window.onload = loadData;
 </script>
 </body>
 </html>
-
