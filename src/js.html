@@ -1,2352 +1,4 @@
-<!DOCTYPE html>
-<html lang="pt">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Doutor Martelo - Gestão de Obra</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<style>
-/* ── VARIABLES ──────────────────────────────────────────── */
-:root {
-  --bg-dark:    #1a1a2e;
-  --bg-card:    #16213e;
-  --bg-sidebar: #0f3460;
-  --bg-hover:   rgba(255,255,255,0.06);
-  --accent:     #e94560;
-  --accent2:    #ff6b6b;
-  --text:       #ffffff;
-  --text-muted: #a0aec0;
-  --text-dim:   #6b7a99;
-  --border:     rgba(255,255,255,0.08);
-  --success:    #48bb78;
-  --warning:    #f6ad55;
-  --info:       #63b3ed;
-  --radius:     12px;
-  --radius-sm:  8px;
-  --sidebar-w:  260px;
-  --sidebar-wc: 70px;
-  --topbar-h:   60px;
-  --transition: .25s cubic-bezier(.4,0,.2,1);
-}
-
-/* ── RESET ──────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: var(--bg-dark);
-  color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 3px; }
-
-/* ── LOADING OVERLAY ────────────────────────────────────── */
-#loading-overlay {
-  position: fixed; inset: 0; z-index: 9999;
-  background: var(--bg-dark);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 20px;
-  transition: opacity .4s ease;
-}
-#loading-overlay.hidden { opacity: 0; pointer-events: none; }
-.loader-icon {
-  width: 64px; height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; color: #fff;
-  animation: loader-pulse 1.8s ease infinite;
-}
-@keyframes loader-pulse {
-  0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,69,96,.4); }
-  50%     { transform: scale(1.08); box-shadow: 0 0 0 20px rgba(233,69,96,0); }
-}
-.loader-bar { width: 220px; height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
-.loader-bar-fill {
-  height: 100%; width: 0;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  border-radius: 2px;
-  animation: loader-fill 2.5s ease forwards;
-}
-@keyframes loader-fill { to { width: 100%; } }
-.loader-text { font-size: 13px; color: var(--text-dim); letter-spacing: .3px; }
-
-/* ── SIDEBAR ────────────────────────────────────────────── */
-#sidebar {
-  position: fixed; left: 0; top: 0; bottom: 0;
-  width: var(--sidebar-w);
-  background: var(--bg-sidebar);
-  display: flex; flex-direction: column;
-  z-index: 100;
-  transition: width var(--transition);
-  overflow: hidden;
-  border-right: 1px solid var(--border);
-}
-#sidebar.collapsed { width: var(--sidebar-wc); }
-
-.sidebar-header {
-  padding: 20px 18px;
-  display: flex; align-items: center; gap: 12px;
-  border-bottom: 1px solid var(--border);
-  min-height: 70px;
-  flex-shrink: 0;
-}
-.sidebar-logo {
-  width: 36px; height: 36px; border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; color: #fff; flex-shrink: 0;
-}
-.sidebar-brand { font-size: 15px; font-weight: 700; white-space: nowrap; letter-spacing: -.3px; }
-#sidebar.collapsed .sidebar-brand { display: none; }
-
-.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; overflow-x: hidden; }
-.nav-section-label {
-  font-size: 10px; font-weight: 700; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: 1.2px;
-  padding: 12px 12px 6px; white-space: nowrap;
-}
-#sidebar.collapsed .nav-section-label { text-align: center; font-size: 0; }
-#sidebar.collapsed .nav-section-label::after { content: '···'; font-size: 10px; }
-
-.nav-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border-radius: var(--radius-sm);
-  color: var(--text-muted); cursor: pointer;
-  font-size: 13px; font-weight: 500;
-  transition: all .15s; white-space: nowrap;
-  text-decoration: none; border: none; background: none; width: 100%;
-  text-align: left;
-}
-.nav-item:hover { background: var(--bg-hover); color: var(--text); }
-.nav-item.active { background: rgba(233,69,96,.15); color: var(--accent); }
-.nav-item i { width: 20px; text-align: center; font-size: 15px; flex-shrink: 0; }
-.nav-item span { overflow: hidden; text-overflow: ellipsis; }
-#sidebar.collapsed .nav-item span { display: none; }
-#sidebar.collapsed .nav-item { justify-content: center; padding: 10px; }
-
-.obras-submenu { padding-left: 8px; max-height: 0; overflow: hidden; transition: max-height .3s ease; }
-.obras-submenu.open { max-height: 600px; }
-.obras-submenu .nav-item { font-size: 12px; padding: 7px 14px 7px 22px; }
-.obras-submenu .nav-item i { font-size: 8px; width: 14px; }
-#sidebar.collapsed .obras-submenu { display: none; }
-
-.sidebar-footer {
-  padding: 12px; border-top: 1px solid var(--border); flex-shrink: 0;
-}
-.sidebar-toggle {
-  display: flex; align-items: center; justify-content: center;
-  width: 100%; padding: 8px; border-radius: var(--radius-sm);
-  background: var(--bg-hover); border: 1px solid var(--border);
-  color: var(--text-muted); cursor: pointer; font-size: 14px;
-  transition: all .15s;
-}
-.sidebar-toggle:hover { color: var(--text); border-color: var(--accent); }
-
-/* ── TOPBAR ─────────────────────────────────────────────── */
-#topbar {
-  position: fixed; top: 0; right: 0;
-  left: var(--sidebar-w);
-  height: var(--topbar-h);
-  background: rgba(26,26,46,.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px;
-  z-index: 90;
-  transition: left var(--transition);
-}
-body.sidebar-collapsed #topbar { left: var(--sidebar-wc); }
-
-.topbar-left { display: flex; align-items: center; gap: 12px; }
-.topbar-title { font-size: 16px; font-weight: 600; letter-spacing: -.3px; }
-
-.topbar-right { display: flex; align-items: center; gap: 14px; }
-.topbar-clock {
-  font-size: 13px; font-weight: 500; color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-.topbar-badge {
-  font-size: 11px; color: var(--text-dim);
-  background: rgba(255,255,255,.06); padding: 4px 12px;
-  border-radius: 20px; border: 1px solid var(--border);
-  white-space: nowrap;
-}
-.refresh-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: var(--radius-sm);
-  background: rgba(233,69,96,.1); border: 1px solid rgba(233,69,96,.3);
-  color: var(--accent); cursor: pointer; font-size: 12px;
-  font-family: 'Inter', sans-serif; font-weight: 600;
-  transition: all .15s;
-}
-.refresh-btn:hover { background: rgba(233,69,96,.2); border-color: var(--accent); }
-
-/* ── MAIN CONTENT ───────────────────────────────────────── */
-#main-content {
-  margin-left: var(--sidebar-w);
-  margin-top: var(--topbar-h);
-  padding: 28px;
-  min-height: calc(100vh - var(--topbar-h));
-  transition: margin-left var(--transition);
-}
-body.sidebar-collapsed #main-content { margin-left: var(--sidebar-wc); }
-
-.section { display: none; animation: section-in .3s ease; }
-.section.active { display: block; }
-@keyframes section-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-/* ── PLACEHOLDER CARD ───────────────────────────────────── */
-.placeholder-card {
-  background: var(--bg-card);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 48px 32px;
-  text-align: center;
-  color: var(--text-dim);
-}
-.placeholder-card i { font-size: 40px; margin-bottom: 16px; display: block; color: var(--text-dim); }
-.placeholder-card h3 { font-size: 16px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
-.placeholder-card p { font-size: 13px; }
-
-/* ── UTILITY CLASSES ────────────────────────────────────── */
-/* ── KPI CARDS ─────────────────────────────────────────── */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
-}
-.kpi-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  position: relative;
-  overflow: hidden;
-  transition: transform .2s ease, border-color .2s, box-shadow .2s;
-  --kc: 233,69,96;
-}
-.kpi-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(var(--kc), .3);
-  box-shadow: 0 8px 25px rgba(0,0,0,.25), 0 0 0 1px rgba(var(--kc), .1);
-}
-.kpi-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 4px; height: 100%;
-  background: rgb(var(--kc));
-  border-radius: 4px 0 0 4px;
-}
-.kpi-card[data-theme="warning"] { --kc: 246,173,85; }
-.kpi-card[data-theme="info"]    { --kc: 99,179,237; }
-.kpi-card[data-theme="accent"]  { --kc: 233,69,96; }
-.kpi-card[data-theme="success"] { --kc: 72,187,120; }
-
-.kpi-icon {
-  width: 44px; height: 44px;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px;
-  background: rgba(var(--kc), .12);
-  color: rgb(var(--kc));
-  margin-bottom: 14px;
-}
-.kpi-label {
-  font-size: 11px; font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: .6px;
-  margin-bottom: 6px;
-}
-.kpi-value {
-  font-size: 26px; font-weight: 700;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-  margin-bottom: 8px;
-}
-.kpi-sub {
-  font-size: 11px;
-  color: var(--text-dim);
-  display: flex; align-items: center; gap: 4px;
-}
-.kpi-badge {
-  position: absolute;
-  top: 14px; right: 14px;
-  padding: 3px 9px;
-  border-radius: 10px;
-  font-size: 10px; font-weight: 700;
-  background: rgba(233,69,96,.15);
-  color: var(--accent);
-}
-
-@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 600px)  { .kpi-grid { grid-template-columns: 1fr; } }
-
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  transition: border-color .2s, transform .2s;
-}
-.card:hover { border-color: rgba(255,255,255,.12); }
-.card-header {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px; font-weight: 600; color: var(--text-muted);
-  display: flex; align-items: center; gap: 8px;
-}
-.card-body { padding: 18px; }
-
-.section-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 18px; padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.section-title {
-  font-size: 15px; font-weight: 600;
-  display: flex; align-items: center; gap: 10px;
-}
-.section-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-
-/* ── TABLE STYLES ───────────────────────────────────────── */
-.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-thead tr { background: rgba(255,255,255,.03); }
-thead th {
-  padding: 12px 16px; text-align: left;
-  font-size: 10px; font-weight: 700; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .8px;
-  border-bottom: 1px solid var(--border); white-space: nowrap;
-}
-tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: rgba(255,255,255,.03); }
-td { padding: 11px 16px; vertical-align: middle; }
-.td-right { text-align: right; }
-.td-center { text-align: center; }
-.td-mono { font-variant-numeric: tabular-nums; }
-.td-euro { font-weight: 600; color: var(--warning); }
-.td-hours { color: var(--info); }
-
-.tag {
-  display: inline-block; padding: 2px 8px; border-radius: 20px;
-  font-size: 11px; font-weight: 600;
-}
-.tag-green  { background: rgba(72,187,120,.12); color: var(--success); }
-.tag-red    { background: rgba(233,69,96,.12);  color: var(--accent); }
-.tag-blue   { background: rgba(99,179,237,.12); color: var(--info); }
-.tag-amber  { background: rgba(246,173,85,.12); color: var(--warning); }
-
-/* ── OBRA DETAIL ───────────────────────────────────────── */
-.obra-header-bar {
-  display: flex; align-items: center; gap: 16px;
-  margin-bottom: 20px; flex-wrap: wrap;
-}
-.obra-header-main {
-  flex: 1;
-  min-width: 0;
-}
-.obra-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.obra-btn {
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all .15s ease;
-}
-.obra-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.obra-btn.active {
-  background: rgba(233,69,96,.12);
-  border-color: rgba(233,69,96,.35);
-  color: var(--accent);
-}
-.obra-empty {
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.obra-select-wrap { position: relative; }
-.obra-select {
-  appearance: none;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 36px 10px 14px;
-  color: var(--text); font-family: 'Inter', sans-serif;
-  font-size: 14px; font-weight: 600;
-  cursor: pointer; min-width: 220px;
-}
-.obra-select:focus { outline: none; border-color: var(--accent); }
-.obra-select option { background: var(--bg-card); color: var(--text); }
-.obra-select-arrow {
-  position: absolute; right: 12px; top: 50%;
-  transform: translateY(-50%); color: var(--text-dim);
-  pointer-events: none; font-size: 12px;
-}
-.obra-status {
-  padding: 4px 12px; border-radius: 20px;
-  font-size: 11px; font-weight: 600;
-}
-.obra-status.ativa  { background: rgba(72,187,120,.12); color: var(--success); }
-.obra-status.inativa { background: rgba(233,69,96,.12); color: var(--accent); }
-
-.obra-kpi-grid {
-  display: grid; grid-template-columns: repeat(6, 1fr);
-  gap: 12px; margin-bottom: 24px;
-}
-.obra-kpi {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 14px 16px; text-align: center;
-}
-.obra-kpi-val {
-  font-size: 20px; font-weight: 700; color: var(--text);
-  font-variant-numeric: tabular-nums; margin-bottom: 4px;
-}
-.obra-kpi-label {
-  font-size: 10px; font-weight: 600; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .5px;
-}
-
-.charts-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: 16px; margin-bottom: 24px;
-}
-.chart-card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
-}
-.chart-card-header {
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 12px; font-weight: 600; color: var(--text-muted);
-}
-.chart-card-body { padding: 16px; position: relative; height: 280px; }
-
-.period-btns { display: flex; gap: 4px; }
-.period-btn {
-  padding: 3px 10px; border-radius: 4px;
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-dim); font-family: 'Inter', sans-serif;
-  font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: all .15s;
-}
-.period-btn:hover { border-color: var(--text-muted); color: var(--text-muted); }
-.period-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-.table-toolbar {
-  display: flex; align-items: center; gap: 10px; margin-left: auto;
-}
-.workers-card-header {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-}
-.workers-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.workers-toolbar-stack {
-  margin-left: 0;
-  width: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-}
-.workers-toolbar-stack .worker-tabs {
-  width: 100%;
-}
-.workers-toolbar-stack .worker-tab-btn {
-  flex: 1;
-  text-align: center;
-}
-.workers-toolbar-stack .table-search {
-  width: 100%;
-  min-width: 0;
-}
-.equipa-toolbar-stack {
-  margin-left: 0;
-  width: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-}
-.equipa-toolbar-stack .obra-select-wrap {
-  width: 100%;
-  max-width: 320px;
-}
-.equipa-toolbar-stack .obra-select {
-  width: 100%;
-  min-width: 0;
-}
-.equipa-toolbar-stack .table-search {
-  width: 100%;
-  min-width: 0;
-}
-.workers-actions {
-  display: flex;
-  gap: 8px;
-}
-.workers-actions .list-action-btn {
-  flex: 1;
-}
-.worker-tabs {
-  display: inline-flex;
-  gap: 4px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgba(255,255,255,.02);
-}
-.worker-tab-btn {
-  border: 0;
-  background: transparent;
-  color: var(--text-dim);
-  border-radius: 6px;
-  padding: 6px 9px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.worker-tab-btn.active {
-  background: rgba(233,69,96,.15);
-  color: var(--accent);
-}
-.list-action-btn {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.list-action-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.table-search {
-  background: var(--bg-dark); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 6px 12px;
-  color: var(--text); font-family: 'Inter', sans-serif;
-  font-size: 12px; width: 180px;
-}
-
-/* ── Obra Workers: expandable list ───────────────────────── */
-.worker-item-row { border-bottom: none !important; }
-.worker-item-row td { padding: 0; border: none; }
-.worker-group-row td { padding: 0; border: none; }
-.worker-group-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,.02);
-}
-.worker-group-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .3px;
-  text-transform: uppercase;
-}
-.worker-group-head.presentes .worker-group-title { color: var(--success); }
-.worker-group-head.ausentes .worker-group-title { color: var(--accent); }
-.worker-group-count {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.worker-item {
-  border-bottom: 1px solid var(--border);
-}
-.worker-summary-btn {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-.worker-summary-btn:hover {
-  background: rgba(255,255,255,.03);
-}
-.worker-summary-main {
-  min-width: 0;
-  flex: 1;
-}
-.worker-summary-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.worker-summary-role {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: .3px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.worker-summary-name {
-  display: block;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.worker-summary-chevron {
-  font-size: 12px;
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-.worker-detail {
-  display: none;
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--border);
-  background: rgba(255,255,255,.02);
-}
-.worker-item.expanded .worker-detail {
-  display: block;
-}
-.worker-detail-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.worker-detail-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--border);
-}
-.worker-detail-line:last-child { border-bottom: none; }
-.worker-detail-label {
-  display: inline;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  color: var(--text-dim);
-}
-.worker-detail-value {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-/* ── Obra Materiais: accordion por fase ─────────────────── */
-.mat-fase {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  margin-bottom: 10px;
-  overflow: hidden;
-  background: var(--bg-card);
-}
-.mat-fase-btn {
-  width: 100%;
-  border: 0;
-  background: rgba(255,255,255,.02);
-  color: inherit;
-  padding: 11px 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  text-align: left;
-}
-.mat-fase-btn:hover { background: rgba(255,255,255,.04); }
-.mat-fase-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  min-width: 0;
-  flex: 1;
-}
-.mat-fase-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.mat-fase-count {
-  font-size: 10px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: .3px;
-}
-.mat-fase-total {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--warning);
-  font-variant-numeric: tabular-nums;
-}
-.mat-fase-chevron {
-  color: var(--text-dim);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.mat-fase-body {
-  display: none;
-  border-top: 1px solid var(--border);
-  padding: 10px 12px;
-}
-.mat-fase.expanded .mat-fase-body { display: block; }
-.mat-item {
-  border-bottom: 1px dashed var(--border);
-  padding: 8px 0;
-}
-.mat-item:last-child {
-  border-bottom: none;
-  padding-bottom: 2px;
-}
-.mat-item-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 5px;
-}
-.mat-item-lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.mat-item-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 3px 0;
-}
-.mat-item-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .3px;
-  color: var(--text-dim);
-}
-.mat-item-value {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  text-align: right;
-}
-.table-search:focus { outline: none; border-color: var(--accent); }
-.table-search::placeholder { color: var(--text-dim); }
-.export-btn {
-  display: flex; align-items: center; gap: 5px;
-  padding: 6px 12px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-muted); font-family: 'Inter', sans-serif;
-  font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: all .15s;
-}
-.export-btn:hover { border-color: var(--success); color: var(--success); }
-
-th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--text-muted); }
-th .sort-icon { font-size: 9px; margin-left: 4px; opacity: .4; }
-th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
-
-.no-chart-data {
-  display: flex; align-items: center; justify-content: center;
-  height: 100%; color: var(--text-dim); font-size: 13px;
-}
-
-/* ── ASSIDUIDADE HEATMAP ───────────────────────────────── */
-.assid-toolbar {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 20px; flex-wrap: wrap;
-}
-.assid-layout {
-  display: grid; grid-template-columns: 1fr 240px;
-  gap: 24px; align-items: start;
-}
-.assid-heatmap-wrap {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px;
-}
-.heatmap-nav {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
-}
-.heatmap-nav-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-muted); cursor: pointer; font-size: 12px;
-  transition: all .15s;
-}
-.heatmap-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
-.heatmap-month-label {
-  font-size: 14px; font-weight: 600; min-width: 160px; text-align: center;
-}
-.heatmap-weekdays {
-  display: grid; grid-template-columns: repeat(7, 1fr);
-  gap: 4px; margin-bottom: 4px; max-width: 340px;
-}
-.heatmap-weekday {
-  text-align: center; font-size: 10px; font-weight: 600;
-  color: var(--text-dim); padding: 2px 0;
-}
-.heatmap-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr);
-  gap: 4px; max-width: 340px;
-}
-.hm-cell {
-  aspect-ratio: 1; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 500;
-  color: rgba(255,255,255,.45); cursor: default;
-  transition: outline .1s;
-}
-.hm-cell:hover { outline: 2px solid rgba(255,255,255,.3); outline-offset: 1px; }
-.hm-empty   { background: rgba(255,255,255,.04); }
-.hm-1to3    { background: #2a623d; }
-.hm-4to7    { background: #38a169; }
-.hm-8plus   { background: #48bb78; color: rgba(255,255,255,.7); }
-.hm-falta   { background: rgba(233,69,96,.7); color: rgba(255,255,255,.7); }
-.hm-atraso  { background: rgba(246,173,85,.7); color: rgba(255,255,255,.7); }
-.hm-outside { visibility: hidden; }
-
-.heatmap-legend {
-  display: flex; align-items: center; gap: 6px;
-  margin-top: 16px; font-size: 10px; color: var(--text-dim); flex-wrap: wrap;
-}
-.heatmap-legend-cell {
-  width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
-}
-.heatmap-legend-sep {
-  width: 1px; height: 14px; background: var(--border); margin: 0 4px;
-}
-
-.assid-stats-panel { display: flex; flex-direction: column; gap: 10px; }
-.assid-stat {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 14px 16px;
-}
-.assid-stat-val {
-  font-size: 20px; font-weight: 700; color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.assid-stat-label {
-  font-size: 10px; font-weight: 600; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .5px; margin-top: 3px;
-}
-
-#assid-tooltip {
-  position: fixed; z-index: 200;
-  background: var(--bg-sidebar); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 10px 14px;
-  font-size: 12px; line-height: 1.6;
-  pointer-events: none; opacity: 0; transition: opacity .12s;
-  max-width: 260px; box-shadow: 0 6px 20px rgba(0,0,0,.4);
-}
-#assid-tooltip.visible { opacity: 1; }
-
-.assid-empty-msg {
-  text-align: center; padding: 48px 20px; color: var(--text-dim);
-  font-size: 13px;
-}
-.assid-empty-msg i { font-size: 32px; display: block; margin-bottom: 12px; }
-
-@media (max-width: 900px) {
-  .assid-layout { grid-template-columns: 1fr; }
-}
-@media (max-width: 400px) {
-  .heatmap-grid, .heatmap-weekdays { max-width: 100%; }
-}
-
-@media (max-width: 1100px) {
-  .obra-kpi-grid { grid-template-columns: repeat(3, 1fr); }
-  .charts-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 600px) {
-  .obra-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .table-toolbar { flex-wrap: wrap; }
-  .table-search { width: 140px; }
-}
-
-/* ── DESLOCAÇÕES ───────────────────────────────────────── */
-.desl-kpi-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 16px; margin-bottom: 24px;
-}
-.desl-kpi {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px 20px;
-  position: relative; overflow: hidden;
-}
-.desl-kpi::before {
-  content: ''; position: absolute; top: 0; left: 0;
-  width: 4px; height: 100%; background: var(--accent);
-  border-radius: 4px 0 0 4px;
-}
-.desl-kpi-icon {
-  width: 38px; height: 38px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; margin-bottom: 12px;
-}
-.desl-kpi-val {
-  font-size: 22px; font-weight: 700; color: var(--text);
-  font-variant-numeric: tabular-nums; margin-bottom: 4px;
-}
-.desl-kpi-label {
-  font-size: 10px; font-weight: 600; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .5px;
-}
-.desl-charts-row {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 16px; margin-bottom: 24px;
-}
-.desl-chart-card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
-}
-.desl-chart-header {
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  font-size: 12px; font-weight: 600; color: var(--text-muted);
-  display: flex; align-items: center; gap: 8px;
-}
-.desl-chart-body { padding: 16px; position: relative; height: 300px; }
-.desl-origens-card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden; margin-bottom: 24px;
-}
-.desl-origens-header {
-  padding: 14px 18px; border-bottom: 1px solid var(--border);
-  font-size: 13px; font-weight: 600; color: var(--text-muted);
-  display: flex; align-items: center; gap: 8px;
-}
-.desl-origens-body { padding: 0; }
-.desl-obra-group {
-  border-bottom: 1px solid var(--border);
-}
-.desl-obra-group:last-child { border-bottom: none; }
-.desl-obra-group-header {
-  padding: 12px 18px; display: flex; align-items: center;
-  justify-content: space-between; cursor: pointer;
-  transition: background .15s;
-}
-.desl-obra-group-header:hover { background: var(--bg-hover); }
-.desl-obra-group-name {
-  font-size: 13px; font-weight: 600; color: var(--text);
-  display: flex; align-items: center; gap: 8px;
-}
-.desl-obra-group-total {
-  font-size: 13px; font-weight: 600; color: var(--warning);
-  font-variant-numeric: tabular-nums;
-}
-.desl-obra-group-rows { padding: 0 18px 12px; }
-.desl-origem-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 0 6px 28px; font-size: 12px;
-  border-bottom: 1px solid rgba(255,255,255,.03);
-}
-.desl-origem-row:last-child { border-bottom: none; }
-.desl-origem-name { color: var(--text-muted); }
-.desl-origem-stats {
-  display: flex; gap: 16px;
-  font-variant-numeric: tabular-nums;
-}
-.desl-origem-qtd { color: var(--info); }
-.desl-origem-custo { color: var(--warning); font-weight: 600; }
-.desl-table-toolbar {
-  display: flex; align-items: center; gap: 10px;
-  margin-left: auto; flex-wrap: wrap;
-}
-.desl-date-input {
-  background: var(--bg-dark); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 6px 10px;
-  color: var(--text); font-family: 'Inter', sans-serif;
-  font-size: 12px;
-}
-.desl-date-input:focus { outline: none; border-color: var(--accent); }
-.desl-date-label {
-  font-size: 11px; color: var(--text-dim); font-weight: 600;
-}
-
-@media (max-width: 1100px) {
-  .desl-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .desl-charts-row { grid-template-columns: 1fr; }
-}
-@media (max-width: 600px) {
-  .desl-kpi-grid { grid-template-columns: 1fr; }
-  .desl-table-toolbar { width: 100%; }
-}
-
-/* ── EQUIPA / COLABORADORES ────────────────────────────── */
-.equipa-stats-grid {
-  display: grid; grid-template-columns: repeat(5, 1fr);
-  gap: 12px; margin-bottom: 24px;
-}
-.equipa-stat {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 14px 16px; text-align: center;
-}
-.equipa-stat-val {
-  font-size: 16px; font-weight: 700; color: var(--text);
-  font-variant-numeric: tabular-nums; margin-bottom: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.equipa-stat-label {
-  font-size: 9px; font-weight: 600; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .5px;
-}
-.equipa-charts-row {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 16px; margin-bottom: 24px;
-}
-.equipa-chart-card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
-}
-.equipa-chart-header {
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  font-size: 12px; font-weight: 600; color: var(--text-muted);
-  display: flex; align-items: center; gap: 8px;
-}
-.equipa-chart-body { padding: 16px; position: relative; height: 300px; }
-.equipa-table-toolbar {
-  display: flex; align-items: center; gap: 10px;
-  margin-left: auto; flex-wrap: wrap;
-}
-.equipa-detail-panel {
-  background: rgba(15,52,96,.3); border-top: 1px solid var(--border);
-  padding: 16px 20px; animation: section-in .25s ease;
-}
-.equipa-detail-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.equipa-detail-section h4 {
-  font-size: 11px; font-weight: 700; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .6px;
-  margin-bottom: 10px;
-}
-.equipa-obra-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 5px 0; font-size: 12px;
-  border-bottom: 1px solid rgba(255,255,255,.03);
-}
-.equipa-obra-item:last-child { border-bottom: none; }
-.equipa-obra-name { color: var(--text-muted); }
-.equipa-obra-stats {
-  display: flex; gap: 12px; font-variant-numeric: tabular-nums;
-}
-.equipa-falta-item {
-  font-size: 12px; color: var(--text-muted);
-  padding: 3px 0;
-}
-.equipa-detail-chart { height: 180px; position: relative; }
-.equipa-row-clickable { cursor: pointer; }
-.equipa-row-clickable:hover { background: rgba(233,69,96,.04) !important; }
-.equipa-row-expanded { background: rgba(233,69,96,.06) !important; }
-
-/* ── Equipa Popup ─────────────────────────────────────── */
-.equipa-popup-overlay {
-  position: fixed; inset: 0; z-index: 500;
-  background: rgba(0,0,0,.45);
-  display: flex; align-items: center; justify-content: center;
-  animation: section-in .2s ease;
-}
-.equipa-popup {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); width: 90%; max-width: 520px;
-  max-height: 80vh; overflow-y: auto;
-  box-shadow: 0 12px 40px rgba(0,0,0,.4);
-}
-.equipa-popup-header {
-  padding: 14px 18px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 14px; font-weight: 600;
-  position: sticky; top: 0; background: var(--bg-card); z-index: 1;
-}
-.equipa-popup-close {
-  background: none; border: none; color: var(--text-dim);
-  font-size: 16px; cursor: pointer; padding: 4px 8px;
-  border-radius: var(--radius-sm); transition: all .15s;
-}
-.equipa-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
-.equipa-popup-body { padding: 16px 18px; }
-.equipa-popup-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
-}
-.equipa-popup-item:last-child { border-bottom: none; }
-
-.assid-popup-overlay {
-  position: fixed; inset: 0; z-index: 8999;
-}
-.assid-popup {
-  position: fixed; z-index: 9000;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  min-width: 260px; max-width: 380px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.45);
-  overflow: hidden;
-}
-.assid-popup-header {
-  display: flex; align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 700; font-size: 13px;
-}
-.assid-popup-close {
-  background: none; border: none;
-  color: var(--text-dim); cursor: pointer;
-  font-size: 15px; padding: 2px 6px;
-  border-radius: 4px;
-}
-.assid-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
-.assid-popup-body { padding: 10px 16px 14px; }
-.assid-popup-item {
-  display: flex; gap: 6px; align-items: baseline;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px; flex-wrap: wrap;
-}
-.assid-popup-item:last-child { border-bottom: none; }
-
-@media (max-width: 1100px) {
-  .equipa-stats-grid { grid-template-columns: repeat(3, 1fr); }
-  .equipa-charts-row { grid-template-columns: 1fr; }
-  .equipa-detail-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 600px) {
-  .equipa-stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .equipa-table-toolbar { width: 100%; }
-}
-
-/* ── ANÁLISE COMPARATIVA ──────────────────────────────── */
-.comp-tabs {
-  display: flex; gap: 4px; margin-bottom: 24px;
-  border-bottom: 2px solid var(--border); padding-bottom: 0;
-}
-.comp-tab {
-  padding: 10px 20px; border: none; background: transparent;
-  color: var(--text-dim); font-family: 'Inter', sans-serif;
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  border-bottom: 2px solid transparent; margin-bottom: -2px;
-  transition: all .15s;
-}
-.comp-tab:hover { color: var(--text-muted); }
-.comp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.comp-panel { display: none; animation: section-in .3s ease; }
-.comp-panel.active { display: block; }
-
-.comp-charts-row {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 16px; margin-bottom: 24px;
-}
-.comp-chart-card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
-}
-.comp-chart-header {
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  font-size: 12px; font-weight: 600; color: var(--text-muted);
-  display: flex; align-items: center; gap: 8px;
-}
-.comp-chart-body { padding: 16px; position: relative; height: 350px; }
-.comp-chart-body.tall { height: 450px; }
-
-.comp-table-wrap {
-  overflow-x: auto; border-radius: var(--radius);
-  border: 1px solid var(--border); margin-bottom: 24px;
-}
-.comp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.comp-table thead tr { background: rgba(255,255,255,.03); }
-.comp-table thead th {
-  padding: 10px 14px; text-align: left;
-  font-size: 10px; font-weight: 700; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .8px;
-  border-bottom: 1px solid var(--border); white-space: nowrap;
-}
-.comp-table tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-.comp-table tbody tr:last-child { border-bottom: none; }
-.comp-table tbody tr:hover { background: rgba(255,255,255,.03); }
-.comp-table td { padding: 9px 14px; vertical-align: middle; }
-.comp-heatcell {
-  border-radius: 4px; padding: 6px 10px;
-  font-weight: 600; font-variant-numeric: tabular-nums;
-  text-align: right; display: inline-block; min-width: 70px;
-}
-
-.comp-fase-toolbar {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 20px; flex-wrap: wrap;
-}
-.comp-fase-highlight {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 12px; border-radius: 20px;
-  font-size: 11px; font-weight: 600;
-}
-.comp-fase-highlight.cara { background: rgba(233,69,96,.12); color: var(--accent); }
-.comp-fase-highlight.eficiente { background: rgba(72,187,120,.12); color: var(--success); }
-
-.comp-evo-controls {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 16px; flex-wrap: wrap;
-}
-.comp-evo-metric-btns { display: flex; gap: 4px; }
-.comp-evo-metric-btn {
-  padding: 5px 14px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-dim); font-family: 'Inter', sans-serif;
-  font-size: 12px; font-weight: 600; cursor: pointer;
-  transition: all .15s;
-}
-.comp-evo-metric-btn:hover { border-color: var(--text-muted); color: var(--text-muted); }
-.comp-evo-metric-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-.comp-evo-legend {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  margin-top: 12px;
-}
-.comp-evo-legend-item {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px; border-radius: 20px;
-  background: rgba(255,255,255,.04); border: 1px solid var(--border);
-  font-size: 11px; font-weight: 500; color: var(--text-muted);
-  cursor: pointer; transition: all .15s; user-select: none;
-}
-.comp-evo-legend-item:hover { border-color: var(--text-muted); }
-.comp-evo-legend-item.hidden { opacity: .35; text-decoration: line-through; }
-.comp-evo-legend-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-}
-
-@media (max-width: 1100px) {
-  .comp-charts-row { grid-template-columns: 1fr; }
-}
-@media (max-width: 600px) {
-  .comp-tabs { overflow-x: auto; }
-  .comp-tab { white-space: nowrap; padding: 8px 14px; font-size: 12px; }
-}
-
-/* ── ERROR ──────────────────────────────────────────────── */
-.error-msg {
-  background: rgba(233,69,96,.08); border: 1px solid rgba(233,69,96,.25);
-  color: var(--accent); padding: 18px 24px; border-radius: var(--radius);
-  font-size: 13px; display: flex; align-items: center; gap: 10px;
-}
-.error-msg i { font-size: 18px; }
-
-/* ── LIGHT THEME ───────────────────────────────────────── */
-[data-theme="light"] {
-  --bg-dark:    #f0f2f5;
-  --bg-card:    #ffffff;
-  --bg-sidebar: #1e3a5f;
-  --bg-hover:   rgba(0,0,0,0.04);
-  --text:       #1a202c;
-  --text-muted: #4a5568;
-  --text-dim:   #718096;
-  --border:     rgba(0,0,0,0.1);
-}
-[data-theme="light"] #topbar { background: rgba(240,242,245,.92); }
-[data-theme="light"] #topbar-subbar { background: rgba(240,242,245,.95); }
-[data-theme="light"] thead tr { background: rgba(0,0,0,.03); }
-[data-theme="light"] tbody tr:hover { background: rgba(0,0,0,.02); }
-[data-theme="light"] .table-search,
-[data-theme="light"] .desl-date-input,
-[data-theme="light"] .obra-select,
-[data-theme="light"] .obra-btn { background: #f0f2f5; }
-[data-theme="light"] .kpi-card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-[data-theme="light"] .card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-[data-theme="light"] #loading-overlay { background: #f0f2f5; }
-[data-theme="light"] .hm-empty { background: rgba(0,0,0,.06); }
-
-/* ── THEME TOGGLE ──────────────────────────────────────── */
-.theme-toggle {
-  display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 50%;
-  border: 1px solid var(--border); background: var(--bg-hover);
-  color: var(--text-muted); cursor: pointer; font-size: 14px;
-  transition: all .2s;
-}
-.theme-toggle:hover { color: var(--warning); border-color: var(--warning); }
-
-/* ── PRINT BUTTON ──────────────────────────────────────── */
-.print-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: var(--radius-sm);
-  background: rgba(99,179,237,.1); border: 1px solid rgba(99,179,237,.3);
-  color: var(--info); cursor: pointer; font-size: 12px;
-  font-family: 'Inter', sans-serif; font-weight: 600;
-  transition: all .15s;
-}
-.print-btn:hover { background: rgba(99,179,237,.2); border-color: var(--info); }
-
-/* ── TOPBAR SUB-BAR (Date Filter) ──────────────────────── */
-#topbar-subbar {
-  position: fixed; top: var(--topbar-h); right: 0;
-  left: var(--sidebar-w);
-  height: 44px;
-  background: rgba(26,26,46,.9);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 24px;
-  z-index: 89;
-  transition: left var(--transition);
-}
-body.sidebar-collapsed #topbar-subbar { left: var(--sidebar-wc); }
-body.has-subbar #main-content { margin-top: calc(var(--topbar-h) + 44px); }
-body.has-subbar .section { animation-delay: 0s; }
-
-.subbar-label {
-  font-size: 11px; font-weight: 600; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: .5px;
-  white-space: nowrap;
-}
-.subbar-date-input {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 5px 10px;
-  color: var(--text); font-family: 'Inter', sans-serif;
-  font-size: 12px;
-}
-.subbar-date-input:focus { outline: none; border-color: var(--accent); }
-.quick-date-btns { display: flex; gap: 4px; margin-left: 8px; }
-.quick-date-btn {
-  padding: 4px 10px; border-radius: 4px;
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-dim); font-family: 'Inter', sans-serif;
-  font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: all .15s; white-space: nowrap;
-}
-.quick-date-btn:hover { border-color: var(--text-muted); color: var(--text-muted); }
-.quick-date-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.subbar-clear {
-  padding: 4px 10px; border-radius: 4px;
-  border: 1px solid rgba(233,69,96,.3); background: transparent;
-  color: var(--accent); font-family: 'Inter', sans-serif;
-  font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: all .15s; margin-left: auto;
-}
-.subbar-clear:hover { background: rgba(233,69,96,.1); }
-
-
-/* ── Mobile Filter Sheet ─────────────────────────────────── */
-
-/* ── TOAST NOTIFICATIONS ───────────────────────────────── */
-#toast-container {
-  position: fixed; top: 80px; right: 20px;
-  z-index: 300; display: flex; flex-direction: column;
-  gap: 8px; pointer-events: none;
-}
-.toast {
-  pointer-events: auto;
-  min-width: 280px; max-width: 380px;
-  padding: 14px 18px; border-radius: var(--radius-sm);
-  font-size: 12px; font-weight: 500; line-height: 1.5;
-  display: flex; align-items: flex-start; gap: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.3);
-  animation: toast-in .35s ease;
-  transition: opacity .3s, transform .3s;
-}
-.toast.removing { opacity: 0; transform: translateX(100%); }
-.toast i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-.toast-close {
-  margin-left: auto; background: none; border: none;
-  color: inherit; opacity: .6; cursor: pointer;
-  font-size: 12px; padding: 0 2px;
-}
-.toast-close:hover { opacity: 1; }
-.toast-warning {
-  background: rgba(246,173,85,.15); border: 1px solid rgba(246,173,85,.3);
-  color: var(--warning);
-}
-.toast-danger {
-  background: rgba(233,69,96,.15); border: 1px solid rgba(233,69,96,.3);
-  color: var(--accent);
-}
-.toast-info {
-  background: rgba(99,179,237,.15); border: 1px solid rgba(99,179,237,.3);
-  color: var(--info);
-}
-.toast-success {
-  background: rgba(72,187,120,.15); border: 1px solid rgba(72,187,120,.3);
-  color: var(--success);
-}
-@keyframes toast-in {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0); opacity: 1; }
-}
-
-/* ── SKELETON LOADING ──────────────────────────────────── */
-.skeleton {
-  background: linear-gradient(90deg,
-    rgba(255,255,255,.04) 25%,
-    rgba(255,255,255,.08) 50%,
-    rgba(255,255,255,.04) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: var(--radius-sm);
-}
-[data-theme="light"] .skeleton {
-  background: linear-gradient(90deg,
-    rgba(0,0,0,.04) 25%,
-    rgba(0,0,0,.08) 50%,
-    rgba(0,0,0,.04) 75%);
-  background-size: 200% 100%;
-}
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.skeleton-kpi { height: 120px; border-radius: var(--radius); }
-.skeleton-chart { height: 280px; border-radius: var(--radius); }
-.refresh-btn .fa-spin { animation: fa-spin 1s linear infinite; }
-
-/* ── KPI INFO TOOLTIP ──────────────────────────────────── */
-.kpi-info-wrap { position: relative; display: inline-flex; }
-.kpi-info-btn {
-  position: absolute; top: 14px; right: 14px;
-  width: 20px; height: 20px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700;
-  background: rgba(255,255,255,.08); color: var(--text-dim);
-  cursor: help; border: 1px solid var(--border);
-  transition: all .15s; z-index: 2;
-}
-.kpi-info-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-.kpi-info-tooltip {
-  position: absolute; top: 40px; right: 0;
-  width: 220px; padding: 10px 14px;
-  background: var(--bg-sidebar); border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 11px; line-height: 1.5; color: var(--text-muted);
-  box-shadow: 0 6px 20px rgba(0,0,0,.4);
-  opacity: 0; visibility: hidden;
-  transition: opacity .15s, visibility .15s;
-  z-index: 10; pointer-events: none;
-}
-.kpi-info-btn:hover + .kpi-info-tooltip,
-.kpi-info-tooltip:hover { opacity: 1; visibility: visible; pointer-events: auto; }
-
-/* ── BREADCRUMB ────────────────────────────────────────── */
-.breadcrumb {
-  display: flex; align-items: center; gap: 0;
-  font-size: 11px; color: var(--text-dim);
-  margin-top: 2px;
-}
-.breadcrumb-item { white-space: nowrap; }
-.breadcrumb-item.active { color: var(--text-muted); font-weight: 600; }
-.breadcrumb-sep { margin: 0 6px; font-size: 9px; color: var(--text-dim); opacity: .5; }
-
-/* ── MOBILE BOTTOM NAV ─────────────────────────────────── */
-#mobile-bottom-nav {
-  display: none;
-  position: fixed; bottom: 0; left: 0; right: 0;
-  height: 56px;
-  background: var(--bg-sidebar);
-  border-top: 1px solid var(--border);
-  z-index: 200;
-  justify-content: space-around; align-items: center;
-}
-.mobile-nav-btn {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 3px; padding: 6px 0;
-  background: none; border: none;
-  color: var(--text-dim); cursor: pointer;
-  font-size: 16px; transition: color .15s;
-  font-family: 'Inter', sans-serif;
-}
-.mobile-nav-btn span { font-size: 9px; font-weight: 600; }
-.mobile-nav-btn.active { color: var(--accent); }
-
-/* ── PRINT STYLES ──────────────────────────────────────── */
-@media print {
-  #sidebar, #topbar, #topbar-subbar, #mobile-bottom-nav,
-  .refresh-btn, .print-btn, .export-btn, .table-toolbar,
-  .theme-toggle, .sidebar-toggle, #toast-container,
-  .desl-table-toolbar, .equipa-table-toolbar,
-  .assid-toolbar, .comp-tabs, .period-btns,
-  .kpi-info-btn, .kpi-info-tooltip { display: none !important; }
-  #main-content { margin: 0 !important; padding: 10px !important; }
-  .section.active { display: block !important; }
-  body { background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .kpi-card, .card, .obra-kpi, .desl-kpi, .equipa-stat,
-  .chart-card, .desl-chart-card, .equipa-chart-card,
-  .comp-chart-card { border-color: #ddd !important; box-shadow: none !important; }
-  .kpi-card::before { background: #999 !important; }
-}
-
-/* ── MOBILE UTILITY CLASSES ──────────────────────────────── */
-.mobile-only { display: none; }
-
-/* ── RESPONSIVE ─────────────────────────────────────────── */
-@media (max-width: 900px) {
-  #sidebar { width: var(--sidebar-wc); }
-  #sidebar .sidebar-brand,
-  #sidebar .nav-item span,
-  #sidebar .nav-section-label,
-  #sidebar .obras-submenu { display: none; }
-  #sidebar .nav-item { justify-content: center; padding: 10px; }
-  #topbar { left: var(--sidebar-wc); }
-  #topbar-subbar { left: var(--sidebar-wc); }
-  #main-content { margin-left: var(--sidebar-wc); padding: 16px; }
-}
-@media (max-width: 768px) {
-  #sidebar { display: none; }
-  #topbar { left: 0; }
-  /* Subbar: remove fixed positioning — flows naturally below topbar */
-  #topbar-subbar {
-    position: static;
-    left: 0; right: auto;
-    flex-wrap: wrap; height: auto;
-    padding: 8px 12px; gap: 6px;
-    margin-top: var(--topbar-h);
-    justify-content: space-between;
-    align-items: center;
-  }
-  #topbar-subbar .subbar-label:not(.subbar-main-label),
-  #topbar-subbar .subbar-date-input {
-    display: none;
-  }
-  /* main-content only needs topbar clearance since subbar is now in-flow */
-  body.has-subbar #main-content { margin-top: 0; }
-  #main-content { margin-left: 0; margin-top: var(--topbar-h); padding: 12px; padding-bottom: 70px; }
-  #mobile-bottom-nav { display: flex; }
-  .quick-date-btns { margin-left: 0; }
-  .subbar-clear { margin-left: 0; }
-  .subbar-label { font-size: 10px; }
-  .subbar-date-input { padding: 4px 6px; max-width: 130px; }
-  .quick-date-btn { font-size: 10px; padding: 4px 8px; }
-  #workers-toolbar {
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .worker-tabs { width: 100%; }
-  .worker-tab-btn { flex: 1; text-align: center; }
-  #worker-search {
-    width: 100%;
-    min-width: 0;
-  }
-  #materiais-toolbar {
-    margin-left: 0;
-  }
-  .obra-header-bar {
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .obra-header-main {
-    width: 100%;
-  }
-  .obra-buttons {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    -webkit-overflow-scrolling: touch;
-  }
-  .obra-btn {
-    flex: 0 0 auto;
-    min-height: 40px;
-  }
-
-  /* ── Chart containers: fixed height on mobile ──────────── */
-  .chart-card canvas,
-  .desl-chart-card canvas,
-  .equipa-chart-card canvas,
-  .comp-chart-card canvas { max-height: 220px; }
-
-  /* ── Radar mobile fallback table ───────────────────────── */
-  .mobile-only { display: block !important; }
-  .mobile-hide { display: none !important; }
-
-  /* ── Card-Table Pattern ────────────────────────────────── */
-  .card-table thead { display: none; }
-  .card-table tbody tr {
-    display: block;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    margin-bottom: 10px;
-    padding: 12px 14px;
-  }
-  .card-table tbody tr:hover { background: var(--bg-hover); }
-  .card-table tbody td {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 0;
-    border: none;
-    font-size: 13px;
-  }
-  .card-table tbody td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: var(--text-muted);
-    font-size: 11px;
-    flex-shrink: 0;
-    margin-right: 12px;
-  }
-  .card-table tbody td:first-child {
-    padding-bottom: 6px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-    font-size: 14px;
-  }
-  /* Equipa expanded detail row — keep full-width */
-  .card-table tbody tr:has(> td[colspan]) {
-    padding: 0;
-  }
-  .card-table tbody td[colspan] {
-    display: block;
-  }
-  .card-table tbody td[colspan]::before {
-    display: none;
-  }
-
-  #workers-tbody .worker-item-row {
-    margin-bottom: 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-  #workers-tbody .worker-group-row {
-    margin: 8px 0 6px;
-    border: none;
-    background: transparent;
-    padding: 0;
-  }
-  #workers-tbody .worker-group-row:first-child {
-    margin-top: 0;
-  }
-  #workers-tbody .worker-group-row td {
-    display: block;
-    padding: 0;
-  }
-  #workers-tbody .worker-group-row td::before {
-    display: none !important;
-    content: none !important;
-  }
-  #workers-tbody .worker-group-head {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 10px;
-  }
-  #workers-tbody .worker-item-row td {
-    display: block;
-    padding: 0;
-  }
-  #workers-tbody .worker-item-row td::before {
-    display: none !important;
-    content: none !important;
-  }
-  #workers-tbody .worker-item {
-    border-bottom: none;
-  }
-  .worker-summary-btn {
-    padding: 12px;
-    gap: 8px;
-  }
-  .worker-summary-title {
-    flex-wrap: wrap;
-    gap: 4px 8px;
-  }
-  .worker-summary-role {
-    font-size: 10px;
-  }
-  .worker-detail-line {
-    padding: 7px 0;
-  }
-  .worker-detail-value {
-    max-width: 58%;
-  }
-  .mat-fase-btn {
-    padding: 10px;
-    gap: 8px;
-  }
-  .mat-fase-meta {
-    gap: 6px;
-  }
-  .mat-fase-count {
-    font-size: 9px;
-  }
-  .mat-item-line {
-    padding: 4px 0;
-  }
-  .mat-item-value {
-    max-width: 60%;
-  }
-
-  /* ── Comparativa: hide evolucao tab, show desktop hint ── */
-  .comp-tab[data-comptab="evolucao"] { display: none; }
-  .comp-desktop-hint {
-    text-align: center; padding: 12px 16px;
-    font-size: 11px; color: var(--text-dim);
-    background: rgba(255,255,255,.03);
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-sm);
-    margin-top: 16px;
-  }
-  .comp-desktop-hint i { margin-right: 4px; }
-
-  /* ── Assiduidade: mobile day list ────────────────────── */
-  .assid-daylist {
-    display: flex; flex-direction: column; gap: 0;
-  }
-  .assid-daylist-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-  }
-  .assid-daylist-row:last-child { border-bottom: none; }
-  .assid-daylist-date {
-    font-weight: 600; color: var(--text);
-    min-width: 44px; font-variant-numeric: tabular-nums;
-  }
-  .assid-daylist-weekday {
-    font-size: 11px; color: var(--text-dim);
-    min-width: 28px; text-transform: uppercase;
-  }
-  .assid-daylist-hours {
-    font-weight: 600; font-variant-numeric: tabular-nums;
-    min-width: 42px; text-align: right;
-  }
-  .assid-daylist-icon {
-    width: 24px; height: 24px; border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; flex-shrink: 0;
-  }
-  .assid-daylist-icon.ok { background: rgba(72,187,120,.15); color: var(--success); }
-  .assid-daylist-icon.falta { background: rgba(233,69,96,.15); color: var(--accent); }
-  .assid-daylist-icon.atraso { background: rgba(246,173,85,.15); color: var(--warning); }
-  .assid-daylist-icon.empty { background: rgba(255,255,255,.05); color: var(--text-dim); }
-  .assid-daylist-detail {
-    font-size: 11px; color: var(--text-dim);
-    margin-left: auto;
-  }
-  .assid-mobile-stats {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 8px; margin-bottom: 16px;
-  }
-  .assid-mobile-stat {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 10px 12px; text-align: center;
-  }
-  .assid-mobile-stat-val {
-    font-size: 16px; font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-  .assid-mobile-stat-label {
-    font-size: 9px; font-weight: 600; color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: .4px; margin-top: 2px;
-  }
-
-  /* ── FIX: iOS zoom prevention — font-size >= 16px on inputs ── */
-  .obra-select,
-  .table-search,
-  .desl-date-input,
-  .subbar-date-input,
-  .comp-fase-select,
-  select,
-  input[type="text"],
-  input[type="date"] {
-    font-size: 16px !important;
-  }
-
-  /* ── FIX: Touch targets — min 44px height on action buttons ── */
-  .quick-date-btn,
-  .period-btn,
-  .heatmap-nav-btn,
-  .comp-tab,
-  .comp-evo-metric-btn,
-  .refresh-btn,
-  .print-btn,
-  .export-btn,
-  .subbar-clear,
-  .theme-toggle {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .mobile-nav-btn {
-    min-height: 44px;
-  }
-
-  /* ── FIX: Prevent horizontal scroll ── */
-  html, body {
-    overflow-x: hidden;
-    max-width: 100vw;
-  }
-  #main-content {
-    overflow-x: hidden;
-    max-width: 100%;
-  }
-  .comp-table-wrap,
-  .table-wrap {
-    max-width: calc(100vw - 24px);
-  }
-}
-
-/* ── POPUP DESLOCAÇÃO ───────────────────────────────── */
-.desl-popup-overlay {
-  position: fixed; inset: 0; z-index: 8999;
-}
-.desl-popup {
-  position: fixed; z-index: 9000;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); min-width: 260px; max-width: 360px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.45); overflow: hidden;
-}
-.desl-popup-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  font-weight: 700; font-size: 13px;
-}
-.desl-popup-close {
-  background: none; border: none; color: var(--text-dim);
-  cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 4px;
-}
-.desl-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
-.desl-popup-body { padding: 12px 16px 16px; }
-.desl-popup-row {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 6px 0; border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-.desl-popup-row:last-child { border-bottom: none; }
-.desl-popup-label {
-  color: var(--text-muted); min-width: 72px;
-  flex-shrink: 0; font-size: 11px; padding-top: 1px;
-}
-.desl-popup-val { color: var(--text); font-weight: 500; }
-.desl-row-clickable { cursor: pointer; }
-.desl-row-clickable:hover { background: var(--bg-hover); }
-
-/* ── FÉRIAS ─────────────────────────────────────────── */
-.ferias-saldo-ok    { color: var(--success); font-weight: 700; }
-.ferias-saldo-warn  { color: var(--warning); font-weight: 700; }
-.ferias-saldo-neg   { color: var(--accent);  font-weight: 700; }
-.ferias-saldo-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 700;
-}
-.ferias-saldo-badge.neg {
-  background: rgba(233,69,96,.15); color: var(--accent);
-  animation: pulse-badge 1.8s ease infinite;
-}
-.ferias-saldo-badge.warn {
-  background: rgba(246,173,85,.15); color: var(--warning);
-}
-.ferias-saldo-badge.ok {
-  background: rgba(72,187,120,.15); color: var(--success);
-}
-@keyframes pulse-badge {
-  0%,100% { box-shadow: 0 0 0 0 rgba(233,69,96,.3); }
-  50%     { box-shadow: 0 0 0 6px rgba(233,69,96,0); }
-}
-.ferias-cal-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  padding: 16px;
-}
-@media (max-width: 900px) { .ferias-cal-grid { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 600px) { .ferias-cal-grid { grid-template-columns: 1fr; } }
-.ferias-month-block { }
-.ferias-month-title {
-  font-size: 12px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: .5px;
-  margin-bottom: 8px; padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-.ferias-month-days {
-  display: grid; grid-template-columns: repeat(7,1fr); gap: 3px;
-}
-.ferias-day-label {
-  font-size: 9px; font-weight: 700; color: var(--text-dim);
-  text-align: center; padding: 2px 0;
-  text-transform: uppercase;
-}
-.ferias-day {
-  aspect-ratio: 1; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-}
-.ferias-day.has-ferias {
-  background: rgba(99,179,237,.25); color: var(--info);
-  font-weight: 700; cursor: pointer; border-radius: 6px;
-}
-.ferias-day.has-ferias:hover {
-  background: rgba(99,179,237,.45);
-  transform: scale(1.15);
-  transition: all .15s ease;
-}
-.ferias-day.empty { visibility: hidden; }
-.ferias-popup-overlay { position: fixed; inset: 0; z-index: 8999; }
-.ferias-popup {
-  position: fixed; z-index: 9000;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); min-width: 240px; max-width: 340px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.45); overflow: hidden;
-}
-.ferias-popup-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  font-weight: 700; font-size: 13px;
-}
-.ferias-popup-close {
-  background: none; border: none; color: var(--text-dim);
-  cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 4px;
-}
-.ferias-popup-close:hover { color: var(--accent); background: var(--bg-hover); }
-.ferias-popup-body { padding: 12px 16px 16px; font-size: 13px; }
-.ferias-popup-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 5px 0; border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-.ferias-popup-row:last-child { border-bottom: none; }
-</style>
-</head>
-<body class="has-subbar">
-
-<!-- ══════ LOADING OVERLAY ══════ -->
-<div id="loading-overlay">
-  <div class="loader-icon"><i class="fa-solid fa-helmet-safety"></i></div>
-  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
-  <div class="loader-text">A carregar dados do Google Sheets...</div>
-</div>
-
-<!-- ══════ SIDEBAR ══════ -->
-<div id="sidebar">
-  <div class="sidebar-header">
-    <div class="sidebar-logo"><i class="fa-solid fa-hammer"></i></div>
-    <div class="sidebar-brand">Doutor Martelo</div>
-  </div>
-
-  <nav class="sidebar-nav">
-    <div class="nav-section-label">Principal</div>
-    <button class="nav-item active" onclick="showSection('overview')" data-section="overview">
-      <i class="fa-solid fa-chart-pie"></i><span>Visão Geral</span>
-    </button>
-    <button class="nav-item" onclick="toggleObrasMenu()" data-section="obras-toggle">
-      <i class="fa-solid fa-building"></i><span>Obras <i class="fa-solid fa-chevron-down" style="font-size:10px;margin-left:auto"></i></span>
-    </button>
-    <div class="obras-submenu" id="obras-submenu"></div>
-
-    <div class="nav-section-label">Gestão</div>
-    <button class="nav-item" onclick="showSection('deslocacoes')" data-section="deslocacoes">
-      <i class="fa-solid fa-route"></i><span>Deslocações</span>
-    </button>
-    <button class="nav-item" onclick="showSection('equipa')" data-section="equipa">
-      <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
-    </button>
-    <button class="nav-item" onclick="showSection('assiduidade')" data-section="assiduidade">
-      <i class="fa-solid fa-calendar-check"></i><span>Assiduidade</span>
-    </button>
-    <button class="nav-item" onclick="showSection('ferias')" data-section="ferias">
-      <i class="fa-solid fa-umbrella-beach"></i><span>Férias</span>
-    </button>
-    <button class="nav-item" onclick="showSection('comparativa')" data-section="comparativa">
-      <i class="fa-solid fa-chart-column"></i><span>Comparativa</span>
-    </button>
-  </nav>
-
-  <div class="sidebar-footer">
-    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Recolher menu">
-      <i class="fa-solid fa-angles-left" id="sidebar-toggle-icon"></i>
-    </button>
-  </div>
-</div>
-
-<!-- ══════ TOPBAR ══════ -->
-<div id="topbar">
-  <div class="topbar-left">
-    <div>
-      <div class="topbar-title" id="topbar-title">Visão Geral</div>
-      <div class="breadcrumb" id="breadcrumb">
-        <span class="breadcrumb-item active">Dashboard</span>
-      </div>
-    </div>
-  </div>
-  <div class="topbar-right">
-    <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema" id="theme-toggle-btn">
-      <i class="fa-solid fa-moon" id="theme-toggle-icon"></i>
-    </button>
-    <button class="refresh-btn" onclick="loadData()" id="refresh-btn">
-      <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i> Atualizar
-    </button>
-  </div>
-</div>
-
-<!-- ══════ TOPBAR SUB-BAR (Date Filter) ══════ -->
-<div id="topbar-subbar">
-  <span class="subbar-label subbar-main-label"><i class="fa-solid fa-filter" style="margin-right:4px"></i> Filtro</span>
-  <span class="subbar-label">De</span>
-  <input type="date" class="subbar-date-input" id="global-date-from" onchange="applyGlobalFilter()">
-  <span class="subbar-label">Até</span>
-  <input type="date" class="subbar-date-input" id="global-date-to" onchange="applyGlobalFilter()">
-  <div class="quick-date-btns">
-    <button class="quick-date-btn active" onclick="setQuickFilter('hoje')">Hoje</button>
-    <button class="quick-date-btn" onclick="setQuickFilter('semana')">Semana</button>
-    <button class="quick-date-btn" onclick="setQuickFilter('mes')">Mês</button>
-    <button class="quick-date-btn" onclick="setQuickFilter('tudo')">Tudo</button>
-  </div>
-  <button class="subbar-clear" onclick="clearGlobalFilter()">
-    <i class="fa-solid fa-xmark" style="margin-right:3px"></i> Limpar
-  </button>
-</div>
-
-<!-- ══════ MAIN CONTENT ══════ -->
-<div id="main-content">
-
-  <!-- Visão Geral -->
-  <div class="section active" id="section-overview">
-    <div class="placeholder-card">
-      <i class="fa-solid fa-chart-pie"></i>
-      <h3>Visão Geral</h3>
-      <p>KPIs globais, resumo de obras e gráficos de custos — a construir no próximo passo.</p>
-    </div>
-  </div>
-
-  <!-- Detalhe Obra -->
-  <div class="section" id="section-obra-detail">
-    <!-- Header with selector -->
-    <div class="obra-header-bar">
-      <div class="obra-header-main">
-        <div class="obra-buttons" id="obra-buttons"></div>
-      </div>
-      <span class="obra-status" id="obra-status-badge"></span>
-    </div>
-    <!-- Mini KPIs -->
-    <div class="obra-kpi-grid" id="obra-kpis"></div>
-
-    <!-- Charts -->
-    <div class="charts-grid" id="obra-charts-grid">
-      <div class="chart-card">
-        <div class="chart-card-header">
-          <span><i class="fa-solid fa-chart-pie"></i> Custo por Fase</span>
-        </div>
-        <div class="chart-card-body" id="chart-fases-wrap"><canvas id="chart-fases"></canvas></div>
-      </div>
-    </div>
-
-    <!-- Workers Table -->
-    <div class="card">
-      <div class="card-header workers-card-header">
-        <div class="workers-title-row">
-          <i class="fa-solid fa-users"></i> Trabalhadores
-        </div>
-        <div class="table-toolbar workers-toolbar-stack" id="workers-toolbar">
-          <div class="worker-tabs">
-            <button class="worker-tab-btn active" id="worker-tab-presentes" onclick="setWorkerTab('presentes')">Presentes</button>
-            <button class="worker-tab-btn" id="worker-tab-ausentes" onclick="setWorkerTab('ausentes')">Faltas/Disp.</button>
-          </div>
-          <input type="text" class="table-search" id="worker-search"
-                 placeholder="Pesquisar nome..." oninput="filterWorkers()">
-          <div class="workers-actions">
-            <button class="list-action-btn" onclick="expandAllWorkers()">Expandir</button>
-            <button class="list-action-btn" onclick="collapseAllWorkers()">Recolher</button>
-          </div>
-        </div>
-      </div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-          <table class="card-table">
-            <thead>
-              <tr id="workers-thead">
-                <th class="sortable" onclick="sortWorkers('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortWorkers('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortWorkers('fase')">Fase <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortWorkers('horas')">Horas <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortWorkers('custo')">Custo <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortWorkers('atraso')">Atrasos <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortWorkers('dias')">Dias <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortWorkers('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
-              </tr>
-            </thead>
-            <tbody id="workers-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Materiais (consumo) por fase -->
-    <div class="card" id="obra-materiais-card" style="display:none">
-      <div class="card-header">
-        <i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase
-        <div class="table-toolbar" id="materiais-toolbar">
-          <button class="list-action-btn" onclick="expandAllMateriaisFases()">Expandir</button>
-          <button class="list-action-btn" onclick="collapseAllMateriaisFases()">Recolher</button>
-        </div>
-      </div>
-      <div class="card-body" style="padding:10px 12px 12px">
-        <div id="obra-materiais-list"></div>
-      </div>
-    </div>
-    <div id="obra-worker-popup-container"></div>
-  </div>
-
-  <!-- Deslocações -->
-  <div class="section" id="section-deslocacoes">
-    <!-- KPI Cards -->
-    <div class="desl-kpi-grid" id="desl-kpis"></div>
-
-    <!-- Mapa de Origens -->
-    <div class="desl-origens-card">
-      <div class="desl-origens-header">
-        <i class="fa-solid fa-map-location-dot"></i> Mapa de Origens por Obra
-      </div>
-      <div class="desl-origens-body" id="desl-origens"></div>
-    </div>
-
-    <!-- Full Table -->
-    <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-table-list"></i> Registo Completo
-        <div class="desl-table-toolbar">
-          <div class="obra-select-wrap">
-            <select class="obra-select" id="desl-filter-obra" onchange="filterDeslTable()" style="min-width:160px;font-size:12px;padding:6px 30px 6px 10px">
-              <option value="">Todas as obras</option>
-            </select>
-            <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
-          </div>
-          <span class="desl-date-label">De</span>
-          <input type="date" class="desl-date-input" id="desl-date-from" onchange="filterDeslTable()">
-          <span class="desl-date-label">Até</span>
-          <input type="date" class="desl-date-input" id="desl-date-to" onchange="filterDeslTable()">
-        </div>
-      </div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-          <table class="card-table">
-            <thead>
-              <tr id="desl-thead">
-                <th class="sortable" onclick="sortDesl('data')">Data <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortDesl('obra')">Obra Destino <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortDesl('origem')">Origem <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortDesl('qtd')">Nº Viagens <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortDesl('custo')">Custo <i class="fa-solid fa-sort sort-icon"></i></th>
-              </tr>
-            </thead>
-            <tbody id="desl-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Equipa -->
-  <div class="section" id="section-equipa">
-    <!-- Main Table -->
-    <div class="card">
-      <div class="card-header workers-card-header">
-        <div class="workers-title-row">
-          <i class="fa-solid fa-users"></i> Colaboradores
-        </div>
-        <div class="table-toolbar workers-toolbar-stack equipa-toolbar-stack" id="equipa-toolbar">
-          <div class="obra-select-wrap">
-            <select class="obra-select" id="equipa-filter-funcao" onchange="filterEquipa()" style="font-size:12px;padding:6px 30px 6px 10px">
-              <option value="">Todas as funções</option>
-            </select>
-            <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
-          </div>
-          <input type="text" class="table-search" id="equipa-search"
-                 placeholder="Pesquisar nome..." oninput="filterEquipa()">
-        </div>
-      </div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-          <table class="card-table">
-            <thead>
-              <tr id="equipa-thead">
-                <th class="sortable" onclick="sortEquipa('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortEquipa('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortEquipa('obras')">Obras <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortEquipa('fase')">Fase <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortEquipa('horas')">Total Horas <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortEquipa('custo')">Total Custo <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortEquipa('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortEquipa('atrasos')">Atrasos <i class="fa-solid fa-sort sort-icon"></i></th>
-              </tr>
-            </thead>
-            <tbody id="equipa-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-    <!-- Popup container -->
-    <div id="equipa-popup-container"></div>
-  </div>
-
-  <!-- Férias -->
-  <div class="section" id="section-ferias">
-
-    <!-- Tabela principal -->
-    <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-umbrella-beach"></i> Férias por Colaborador
-        <div class="equipa-table-toolbar">
-          <input type="text" class="table-search" id="ferias-search"
-                 placeholder="Pesquisar nome..." oninput="renderFeriasTable()">
-        </div>
-      </div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-          <table class="card-table">
-            <thead>
-              <tr id="ferias-thead">
-                <th class="sortable" onclick="sortFerias('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortFerias('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th>Período Activo</th>
-                <th class="sortable td-center" onclick="sortFerias('dias_total')">Total <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortFerias('dias_usados')">Usados <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortFerias('dias_disponiveis')">Disponíveis <i class="fa-solid fa-sort sort-icon"></i></th>
-              </tr>
-            </thead>
-            <tbody id="ferias-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Calendário de férias do trabalhador seleccionado -->
-    <div class="card" id="ferias-cal-card" style="display:none;margin-top:16px">
-      <div class="card-header" id="ferias-cal-header">
-        <i class="fa-solid fa-calendar-days"></i> <span id="ferias-cal-title"></span>
-      </div>
-      <div class="card-body" id="ferias-cal-body"></div>
-    </div>
-
-    <!-- Popup -->
-    <div id="ferias-popup-container"></div>
-  </div>
-
-  <!-- Assiduidade -->
-  <div class="section" id="section-assiduidade">
-    <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-calendar-xmark"></i> Faltas por Colaborador
-        <div class="equipa-table-toolbar">
-          <input type="text" class="table-search" id="assid-search"
-                 placeholder="Pesquisar nome..." oninput="renderAssidTable()">
-        </div>
-      </div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-          <table class="card-table">
-            <thead>
-              <tr id="assid-thead">
-                <th class="sortable" onclick="sortAssid('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable" onclick="sortAssid('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-center" onclick="sortAssid('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
-              </tr>
-            </thead>
-            <tbody id="assid-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Popup de faltas -->
-    <div id="assid-popup-container"></div>
-  </div>
-
-  <!-- Análise Comparativa -->
-  <div class="section" id="section-comparativa">
-    <div class="comp-charts-row">
-      <div class="comp-chart-card">
-        <div class="comp-chart-header">
-          <i class="fa-solid fa-chart-bar"></i> Custo: Mão de Obra vs Deslocações
-        </div>
-        <div class="comp-chart-body tall" id="comp-chart-custos-wrap"><canvas id="comp-chart-custos"></canvas></div>
-      </div>
-      <div class="comp-chart-card">
-        <div class="comp-chart-header">
-          <i class="fa-solid fa-layer-group"></i> Custo: Fases de Obra
-        </div>
-        <div class="comp-chart-body tall" id="comp-chart-fasesobra-wrap"><canvas id="comp-chart-fasesobra"></canvas></div>
-      </div>
-      <div class="comp-chart-card">
-        <div class="comp-chart-header">
-          <i class="fa-solid fa-calendar-days"></i> Dias: Fases de Obra
-        </div>
-        <div class="comp-chart-body tall" id="comp-chart-diasfase-wrap"><canvas id="comp-chart-diasfase"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- Assiduidade Tooltip -->
-<div id="assid-tooltip"></div>
-
-<!-- POPUP DESLOCAÇÃO -->
-<div id="desl-popup-container"></div>
-
-<!-- ══════ TOAST CONTAINER ══════ -->
-<div id="toast-container"></div>
-
-<!-- ══════ MOBILE BOTTOM NAV ══════ -->
-<nav id="mobile-bottom-nav">
-  <button class="mobile-nav-btn active" onclick="showSection('overview')" data-mobilesec="overview">
-    <i class="fa-solid fa-chart-pie"></i><span>Geral</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="showSection('obra-detail')" data-mobilesec="obra-detail">
-    <i class="fa-solid fa-building"></i><span>Obras</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="showSection('deslocacoes')" data-mobilesec="deslocacoes">
-    <i class="fa-solid fa-route"></i><span>Desl.</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="showSection('equipa')" data-mobilesec="equipa">
-    <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="showSection('assiduidade')" data-mobilesec="assiduidade">
-    <i class="fa-solid fa-calendar-check"></i><span>Assid.</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="showSection('ferias')" data-mobilesec="ferias">
-    <i class="fa-solid fa-umbrella-beach"></i><span>Férias</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="showSection('comparativa')" data-mobilesec="comparativa">
-    <i class="fa-solid fa-chart-column"></i><span>Comp.</span>
-  </button>
-</nav>
 
 <script>
 /* ══════════════════════════════════════════════════════════
@@ -2402,6 +54,7 @@ let feriasSelected  = null;
 
 /* ── MATERIAIS GLOBALS ─────────────────────────────────── */
 let matMovAll = [];
+let legacyFallbackAttempted = false;
 
 /* ── FORMATTERS ─────────────────────────────────────────── */
 const fmt  = v => (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -2463,12 +116,13 @@ function loadData() {
   google.script.run
     .withSuccessHandler(onDataLoaded)
     .withFailureHandler(onDataError)
-    .getDashboardData();
+    .getDashboardData({ mode: 'raw_v2' });
 }
 
 function onDataLoaded(jsonStr) {
   try {
-    DATA = JSON.parse(jsonStr);
+    const payload = JSON.parse(jsonStr);
+    DATA = normalizeDashboardPayload_(payload);
     if (DATA.error) { onDataError(DATA.error); return; }
     matMovAll = DATA.materiais_mov || [];
     buildAll();
@@ -2477,8 +131,248 @@ function onDataLoaded(jsonStr) {
     stopRefreshSpinner();
     checkAlerts();
   } catch (e) {
+    if (!legacyFallbackAttempted) {
+      legacyFallbackAttempted = true;
+      google.script.run
+        .withSuccessHandler(onDataLoaded)
+        .withFailureHandler(onDataError)
+        .getDashboardData({ mode: 'legacy' });
+      return;
+    }
     onDataError('Erro ao processar dados: ' + e.message);
   }
+}
+
+function normalizeDashboardPayload_(payload) {
+  if (!payload || payload.error) return payload;
+  if (payload.payload_mode === 'raw_v2' && Array.isArray(payload.registos)) {
+    return buildDashboardFromRaw_(payload);
+  }
+  return payload;
+}
+
+function isoWeekClient_(dateStr) {
+  const d = new Date(String(dateStr) + 'T12:00:00');
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((d - startOfYear) / 86400000);
+  const weekNum = Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7);
+  return d.getFullYear() + '-S' + String(weekNum).padStart(2, '0');
+}
+
+function buildDashboardFromRaw_(raw) {
+  const registos = Array.isArray(raw.registos) ? raw.registos : [];
+  const deslocacoes = Array.isArray(raw.deslocacoes) ? raw.deslocacoes : [];
+  const viagens = Array.isArray(raw.viagens) ? raw.viagens : [];
+  const materiaisMov = Array.isArray(raw.materiais_mov) ? raw.materiais_mov : [];
+  const obraMap = {};
+
+  for (let i = 0; i < registos.length; i++) {
+    const r = registos[i] || {};
+    const obra = String(r.obra || '').trim();
+    if (!obra) continue;
+    const dataStr = String(r.data || '').slice(0, 10);
+    if (!obraMap[obra]) {
+      obraMap[obra] = {
+        custo_total: 0, horas_total: 0, atraso_total: 0,
+        trabalhadores: new Set(), faltas: 0, datas: new Set(),
+        daily: {}, weekly: {}, monthly: {},
+        workerMap: {}, assidMap: {}, faseMap: {}
+      };
+    }
+    const o = obraMap[obra];
+    const nome = String(r.nome || '').trim();
+    const fase = String(r.fase || '').trim();
+    const custo = Number(r.custo) || 0;
+    const horas = Number(r.horas) || 0;
+    const atrasoMin = Number(r.atraso_min) || 0;
+    const falta = !!r.falta;
+    const dispensado = !!r.dispensado;
+
+    o.custo_total += custo;
+    o.horas_total += horas;
+    o.atraso_total += atrasoMin;
+    if (nome) o.trabalhadores.add(nome);
+    if (falta) o.faltas++;
+    if (dataStr) o.datas.add(dataStr);
+
+    if (dataStr) {
+      if (!o.daily[dataStr]) o.daily[dataStr] = { Custo: 0, Horas: 0, Atraso: 0, Trabalhadores: new Set(), Faltas: 0 };
+      o.daily[dataStr].Custo += custo;
+      o.daily[dataStr].Horas += horas;
+      o.daily[dataStr].Atraso += atrasoMin;
+      if (nome) o.daily[dataStr].Trabalhadores.add(nome);
+      if (falta) o.daily[dataStr].Faltas++;
+    }
+
+    if (dataStr) {
+      const wk = isoWeekClient_(dataStr);
+      if (!o.weekly[wk]) o.weekly[wk] = { Custo: 0, Horas: 0 };
+      o.weekly[wk].Custo += custo;
+      o.weekly[wk].Horas += horas;
+
+      const mo = dataStr.slice(0, 7);
+      if (!o.monthly[mo]) o.monthly[mo] = { Custo: 0, Horas: 0 };
+      o.monthly[mo].Custo += custo;
+      o.monthly[mo].Horas += horas;
+    }
+
+    if (!o.workerMap[nome]) {
+      o.workerMap[nome] = { funcao: r.funcao, fase: fase, Custo: 0, Horas: 0, Atraso: 0, Dias: new Set(), Faltas: 0 };
+    }
+    o.workerMap[nome].Custo += custo;
+    o.workerMap[nome].Horas += horas;
+    o.workerMap[nome].Atraso += atrasoMin;
+    if (dataStr) o.workerMap[nome].Dias.add(dataStr);
+    if (falta) o.workerMap[nome].Faltas++;
+
+    if (!o.assidMap[nome]) o.assidMap[nome] = { funcao: r.funcao, dias: {} };
+    if (dataStr && !o.assidMap[nome].dias[dataStr]) {
+      o.assidMap[nome].dias[dataStr] = {
+        horas: 0, falta: false, dispensado: false, custo: 0,
+        atraso_min: 0, motivo: '', observacao: '', fases: []
+      };
+    }
+    if (dataStr) {
+      const day = o.assidMap[nome].dias[dataStr];
+      day.horas += horas;
+      day.custo += custo;
+      day.atraso_min += atrasoMin;
+      if (falta) day.falta = true;
+      if (dispensado) day.dispensado = true;
+      if (r.motivo) day.motivo = r.motivo;
+      if (r.observacao) day.observacao = r.observacao;
+      if (fase && !day.fases.includes(fase)) day.fases.push(fase);
+    }
+
+    if (fase) {
+      if (!o.faseMap[fase]) o.faseMap[fase] = { Custo: 0, Horas: 0, Workers: new Set(), Dias: new Set(), Faltas: 0 };
+      o.faseMap[fase].Custo += custo;
+      o.faseMap[fase].Horas += horas;
+      if (nome) o.faseMap[fase].Workers.add(nome);
+      if (dataStr) o.faseMap[fase].Dias.add(dataStr);
+      if (falta) o.faseMap[fase].Faltas++;
+    }
+  }
+
+  const deslocMap = {};
+  for (let i = 0; i < deslocacoes.length; i++) {
+    const d = deslocacoes[i] || {};
+    const obra = String(d.obra || '').trim();
+    if (!obra) continue;
+    if (!deslocMap[obra]) deslocMap[obra] = { custo: 0, qtd: 0 };
+    deslocMap[obra].custo += Number(d.custo) || 0;
+    deslocMap[obra].qtd += Number(d.qtd) || 0;
+  }
+
+  const matPorObra = {};
+  const matPorObraFase = {};
+  let custoMateriais = 0;
+  for (let i = 0; i < materiaisMov.length; i++) {
+    const m = materiaisMov[i] || {};
+    if (String(m.tipo || '').trim().toUpperCase() !== 'CONSUMO') continue;
+    const obra = String(m.obra || '').trim();
+    if (!obra) continue;
+    const fase = String(m.fase || '-').trim() || '-';
+    const custo = Number(m.custo) || 0;
+    const qtd = Number(m.qtd) || 0;
+    custoMateriais += custo;
+    if (!matPorObra[obra]) matPorObra[obra] = { custo: 0, qtd: 0 };
+    matPorObra[obra].custo += custo;
+    matPorObra[obra].qtd += qtd;
+    if (!matPorObraFase[obra]) matPorObraFase[obra] = {};
+    if (!matPorObraFase[obra][fase]) matPorObraFase[obra][fase] = { custo: 0, qtd: 0 };
+    matPorObraFase[obra][fase].custo += custo;
+    matPorObraFase[obra][fase].qtd += qtd;
+  }
+
+  const obras = {};
+  Object.keys(obraMap).sort().forEach(nome => {
+    const o = obraMap[nome];
+    const allDates = Array.from(o.datas).sort();
+    obras[nome] = {
+      custo_mao_obra: o.custo_total,
+      custo_deslocacoes: (deslocMap[nome] || {}).custo || 0,
+      qtd_deslocacoes: (deslocMap[nome] || {}).qtd || 0,
+      custo_materiais: (matPorObra[nome] || {}).custo || 0,
+      custo_total: o.custo_total + ((deslocMap[nome] || {}).custo || 0) + ((matPorObra[nome] || {}).custo || 0),
+      horas_total: o.horas_total,
+      atraso_total: o.atraso_total,
+      trabalhadores: o.trabalhadores.size,
+      faltas: o.faltas,
+      dias: o.datas.size,
+      all_dates: allDates,
+      daily: Object.keys(o.daily).sort().map(d => ({
+        DATA_str: d,
+        Custo: o.daily[d].Custo,
+        Horas: o.daily[d].Horas,
+        Atraso: o.daily[d].Atraso,
+        Trabalhadores: o.daily[d].Trabalhadores.size,
+        Faltas: o.daily[d].Faltas
+      })),
+      weekly: Object.keys(o.weekly).sort().map(w => ({ Semana: w, Custo: o.weekly[w].Custo, Horas: o.weekly[w].Horas })),
+      monthly: Object.keys(o.monthly).sort().map(m => ({ Mes: m, Custo: o.monthly[m].Custo, Horas: o.monthly[m].Horas })),
+      workers: Object.keys(o.workerMap).map(n => ({
+        'Nome (auto)': n,
+        'Função (auto)': o.workerMap[n].funcao,
+        'Fase': o.workerMap[n].fase,
+        Custo: o.workerMap[n].Custo,
+        Horas: o.workerMap[n].Horas,
+        Atraso: o.workerMap[n].Atraso,
+        Dias: o.workerMap[n].Dias.size,
+        Faltas: o.workerMap[n].Faltas
+      })).sort((a, b) => b.Custo - a.Custo),
+      assiduidade: Object.keys(o.assidMap).map(n => ({ nome: n, funcao: o.assidMap[n].funcao, dias: o.assidMap[n].dias })),
+      fases: Object.keys(o.faseMap).map(f => ({
+        Fase: f,
+        Custo: o.faseMap[f].Custo,
+        Horas: o.faseMap[f].Horas,
+        Workers: o.faseMap[f].Workers.size,
+        Dias: o.faseMap[f].Dias.size,
+        Faltas: o.faseMap[f].Faltas
+      })).sort((a, b) => b.Custo - a.Custo),
+      materiais_fases: (matPorObraFase[nome])
+        ? Object.keys(matPorObraFase[nome]).map(f => ({
+            Fase: f,
+            Custo: matPorObraFase[nome][f].custo,
+            Qtd: matPorObraFase[nome][f].qtd
+          })).sort((a, b) => b.Custo - a.Custo)
+        : []
+    };
+  });
+
+  const custoMaoObra = registos.reduce((s, r) => s + (Number(r.custo) || 0), 0);
+  const custoDeslocacoes = deslocacoes.reduce((s, d) => s + (Number(d.custo) || 0), 0);
+  const custoTotal = custoMaoObra + custoDeslocacoes + custoMateriais;
+  const horasTotal = registos.reduce((s, r) => s + (Number(r.horas) || 0), 0);
+  const totalAtrasos = registos.reduce((s, r) => s + (Number(r.atraso_min) || 0), 0);
+  const totalFaltas = registos.filter(r => !!r.falta).length;
+  const trabUnicos = new Set(registos.map(r => r.nome)).size;
+  const custoViagens = viagens.reduce((s, v) => s + (Number(v.custo_dia) || 0), 0);
+  const totalViagens = viagens.reduce((s, v) => s + (Number(v.v_efetivas) || 0), 0);
+
+  return {
+    global: {
+      custo_total: custoTotal,
+      custo_mao_obra: custoMaoObra,
+      custo_deslocacoes: custoDeslocacoes,
+      custo_materiais: custoMateriais,
+      horas_total: horasTotal,
+      total_atrasos: totalAtrasos,
+      obras_ativas: Object.keys(obras).length,
+      colaboradores: trabUnicos,
+      faltas: totalFaltas,
+      custo_viagens: custoViagens,
+      total_viagens: totalViagens,
+      last_update: raw.generated_at || ''
+    },
+    obras: obras,
+    obras_info: raw.obras_info || [],
+    colaboradores: raw.colaboradores || [],
+    viagens: viagens,
+    deslocacoes: deslocacoes,
+    ferias: raw.ferias || [],
+    materiais_mov: materiaisMov
+  };
 }
 
 function onDataError(err) {
@@ -4946,5 +2840,3 @@ initKeyboardNav();
 initResizeObservers();
 window.onload = loadData;
 </script>
-</body>
-</html>

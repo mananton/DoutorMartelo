@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doutor Martelo - Gestão de Obra</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+
+<?!= include('css'); ?>
+</head>
+<body class="has-subbar">
+
+<!-- ══════ LOADING OVERLAY ══════ -->
+<div id="loading-overlay">
+  <div class="loader-icon"><i class="fa-solid fa-helmet-safety"></i></div>
+  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+  <div class="loader-text">A carregar dados do Google Sheets...</div>
+</div>
+
+<!-- ══════ SIDEBAR ══════ -->
+<div id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo"><i class="fa-solid fa-hammer"></i></div>
+    <div class="sidebar-brand">Doutor Martelo</div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Principal</div>
+    <button class="nav-item active" onclick="showSection('overview')" data-section="overview">
+      <i class="fa-solid fa-chart-pie"></i><span>Visão Geral</span>
+    </button>
+    <button class="nav-item" onclick="toggleObrasMenu()" data-section="obras-toggle">
+      <i class="fa-solid fa-building"></i><span>Obras <i class="fa-solid fa-chevron-down" style="font-size:10px;margin-left:auto"></i></span>
+    </button>
+    <div class="obras-submenu" id="obras-submenu"></div>
+
+    <div class="nav-section-label">Gestão</div>
+    <button class="nav-item" onclick="showSection('deslocacoes')" data-section="deslocacoes">
+      <i class="fa-solid fa-route"></i><span>Deslocações</span>
+    </button>
+    <button class="nav-item" onclick="showSection('equipa')" data-section="equipa">
+      <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
+    </button>
+    <button class="nav-item" onclick="showSection('assiduidade')" data-section="assiduidade">
+      <i class="fa-solid fa-calendar-check"></i><span>Assiduidade</span>
+    </button>
+    <button class="nav-item" onclick="showSection('ferias')" data-section="ferias">
+      <i class="fa-solid fa-umbrella-beach"></i><span>Férias</span>
+    </button>
+    <button class="nav-item" onclick="showSection('comparativa')" data-section="comparativa">
+      <i class="fa-solid fa-chart-column"></i><span>Comparativa</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Recolher menu">
+      <i class="fa-solid fa-angles-left" id="sidebar-toggle-icon"></i>
+    </button>
+  </div>
+</div>
+
+<!-- ══════ TOPBAR ══════ -->
+<div id="topbar">
+  <div class="topbar-left">
+    <div>
+      <div class="topbar-title" id="topbar-title">Visão Geral</div>
+      <div class="breadcrumb" id="breadcrumb">
+        <span class="breadcrumb-item active">Dashboard</span>
+      </div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema" id="theme-toggle-btn">
+      <i class="fa-solid fa-moon" id="theme-toggle-icon"></i>
+    </button>
+    <button class="refresh-btn" onclick="loadData()" id="refresh-btn">
+      <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i> Atualizar
+    </button>
+  </div>
+</div>
+
+<!-- ══════ TOPBAR SUB-BAR (Date Filter) ══════ -->
+<div id="topbar-subbar">
+  <span class="subbar-label subbar-main-label"><i class="fa-solid fa-filter" style="margin-right:4px"></i> Filtro</span>
+  <span class="subbar-label">De</span>
+  <input type="date" class="subbar-date-input" id="global-date-from" onchange="applyGlobalFilter()">
+  <span class="subbar-label">Até</span>
+  <input type="date" class="subbar-date-input" id="global-date-to" onchange="applyGlobalFilter()">
+  <div class="quick-date-btns">
+    <button class="quick-date-btn active" onclick="setQuickFilter('hoje')">Hoje</button>
+    <button class="quick-date-btn" onclick="setQuickFilter('semana')">Semana</button>
+    <button class="quick-date-btn" onclick="setQuickFilter('mes')">Mês</button>
+    <button class="quick-date-btn" onclick="setQuickFilter('tudo')">Tudo</button>
+  </div>
+  <button class="subbar-clear" onclick="clearGlobalFilter()">
+    <i class="fa-solid fa-xmark" style="margin-right:3px"></i> Limpar
+  </button>
+</div>
+
+<!-- ══════ MAIN CONTENT ══════ -->
+<div id="main-content">
+
+  <!-- Visão Geral -->
+  <div class="section active" id="section-overview">
+    <div class="placeholder-card">
+      <i class="fa-solid fa-chart-pie"></i>
+      <h3>Visão Geral</h3>
+      <p>KPIs globais, resumo de obras e gráficos de custos — a construir no próximo passo.</p>
+    </div>
+  </div>
+
+  <!-- Detalhe Obra -->
+  <div class="section" id="section-obra-detail">
+    <!-- Header with selector -->
+    <div class="obra-header-bar">
+      <div class="obra-header-main">
+        <div class="obra-buttons" id="obra-buttons"></div>
+      </div>
+      <span class="obra-status" id="obra-status-badge"></span>
+    </div>
+    <!-- Mini KPIs -->
+    <div class="obra-kpi-grid" id="obra-kpis"></div>
+
+    <!-- Charts -->
+    <div class="charts-grid" id="obra-charts-grid">
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span><i class="fa-solid fa-chart-pie"></i> Custo por Fase</span>
+        </div>
+        <div class="chart-card-body" id="chart-fases-wrap"><canvas id="chart-fases"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Workers Table -->
+    <div class="card">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <i class="fa-solid fa-users"></i> Trabalhadores
+        </div>
+        <div class="table-toolbar workers-toolbar-stack" id="workers-toolbar">
+          <div class="worker-tabs">
+            <button class="worker-tab-btn active" id="worker-tab-presentes" onclick="setWorkerTab('presentes')">Presentes</button>
+            <button class="worker-tab-btn" id="worker-tab-ausentes" onclick="setWorkerTab('ausentes')">Faltas/Disp.</button>
+          </div>
+          <input type="text" class="table-search" id="worker-search"
+                 placeholder="Pesquisar nome..." oninput="filterWorkers()">
+          <div class="workers-actions">
+            <button class="list-action-btn" onclick="expandAllWorkers()">Expandir</button>
+            <button class="list-action-btn" onclick="collapseAllWorkers()">Recolher</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="workers-thead">
+                <th class="sortable" onclick="sortWorkers('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortWorkers('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortWorkers('fase')">Fase <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortWorkers('horas')">Horas <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortWorkers('custo')">Custo <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortWorkers('atraso')">Atrasos <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortWorkers('dias')">Dias <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortWorkers('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="workers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Materiais (consumo) por fase -->
+    <div class="card" id="obra-materiais-card" style="display:none">
+      <div class="card-header">
+        <i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase
+        <div class="table-toolbar" id="materiais-toolbar">
+          <button class="list-action-btn" onclick="expandAllMateriaisFases()">Expandir</button>
+          <button class="list-action-btn" onclick="collapseAllMateriaisFases()">Recolher</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:10px 12px 12px">
+        <div id="obra-materiais-list"></div>
+      </div>
+    </div>
+    <div id="obra-worker-popup-container"></div>
+  </div>
+
+  <!-- Deslocações -->
+  <div class="section" id="section-deslocacoes">
+    <!-- KPI Cards -->
+    <div class="desl-kpi-grid" id="desl-kpis"></div>
+
+    <!-- Mapa de Origens -->
+    <div class="desl-origens-card">
+      <div class="desl-origens-header">
+        <i class="fa-solid fa-map-location-dot"></i> Mapa de Origens por Obra
+      </div>
+      <div class="desl-origens-body" id="desl-origens"></div>
+    </div>
+
+    <!-- Full Table -->
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-table-list"></i> Registo Completo
+        <div class="desl-table-toolbar">
+          <div class="obra-select-wrap">
+            <select class="obra-select" id="desl-filter-obra" onchange="filterDeslTable()" style="min-width:160px;font-size:12px;padding:6px 30px 6px 10px">
+              <option value="">Todas as obras</option>
+            </select>
+            <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
+          </div>
+          <span class="desl-date-label">De</span>
+          <input type="date" class="desl-date-input" id="desl-date-from" onchange="filterDeslTable()">
+          <span class="desl-date-label">Até</span>
+          <input type="date" class="desl-date-input" id="desl-date-to" onchange="filterDeslTable()">
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="desl-thead">
+                <th class="sortable" onclick="sortDesl('data')">Data <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortDesl('obra')">Obra Destino <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortDesl('origem')">Origem <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortDesl('qtd')">Nº Viagens <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortDesl('custo')">Custo <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="desl-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipa -->
+  <div class="section" id="section-equipa">
+    <!-- Main Table -->
+    <div class="card">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <i class="fa-solid fa-users"></i> Colaboradores
+        </div>
+        <div class="table-toolbar workers-toolbar-stack equipa-toolbar-stack" id="equipa-toolbar">
+          <div class="obra-select-wrap">
+            <select class="obra-select" id="equipa-filter-funcao" onchange="filterEquipa()" style="font-size:12px;padding:6px 30px 6px 10px">
+              <option value="">Todas as funções</option>
+            </select>
+            <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
+          </div>
+          <input type="text" class="table-search" id="equipa-search"
+                 placeholder="Pesquisar nome..." oninput="filterEquipa()">
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="equipa-thead">
+                <th class="sortable" onclick="sortEquipa('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortEquipa('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortEquipa('obras')">Obras <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortEquipa('fase')">Fase <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortEquipa('horas')">Total Horas <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortEquipa('custo')">Total Custo <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortEquipa('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortEquipa('atrasos')">Atrasos <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="equipa-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- Popup container -->
+    <div id="equipa-popup-container"></div>
+  </div>
+
+  <!-- Férias -->
+  <div class="section" id="section-ferias">
+
+    <!-- Tabela principal -->
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-umbrella-beach"></i> Férias por Colaborador
+        <div class="equipa-table-toolbar">
+          <input type="text" class="table-search" id="ferias-search"
+                 placeholder="Pesquisar nome..." oninput="renderFeriasTable()">
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="ferias-thead">
+                <th class="sortable" onclick="sortFerias('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortFerias('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th>Período Activo</th>
+                <th class="sortable td-center" onclick="sortFerias('dias_total')">Total <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortFerias('dias_usados')">Usados <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortFerias('dias_disponiveis')">Disponíveis <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="ferias-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendário de férias do trabalhador seleccionado -->
+    <div class="card" id="ferias-cal-card" style="display:none;margin-top:16px">
+      <div class="card-header" id="ferias-cal-header">
+        <i class="fa-solid fa-calendar-days"></i> <span id="ferias-cal-title"></span>
+      </div>
+      <div class="card-body" id="ferias-cal-body"></div>
+    </div>
+
+    <!-- Popup -->
+    <div id="ferias-popup-container"></div>
+  </div>
+
+  <!-- Assiduidade -->
+  <div class="section" id="section-assiduidade">
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-calendar-xmark"></i> Faltas por Colaborador
+        <div class="equipa-table-toolbar">
+          <input type="text" class="table-search" id="assid-search"
+                 placeholder="Pesquisar nome..." oninput="renderAssidTable()">
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap">
+          <table class="card-table">
+            <thead>
+              <tr id="assid-thead">
+                <th class="sortable" onclick="sortAssid('nome')">Nome <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable" onclick="sortAssid('funcao')">Função <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-center" onclick="sortAssid('faltas')">Faltas <i class="fa-solid fa-sort sort-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="assid-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popup de faltas -->
+    <div id="assid-popup-container"></div>
+  </div>
+
+  <!-- Análise Comparativa -->
+  <div class="section" id="section-comparativa">
+    <div class="comp-charts-row">
+      <div class="comp-chart-card">
+        <div class="comp-chart-header">
+          <i class="fa-solid fa-chart-bar"></i> Custo: Mão de Obra vs Deslocações
+        </div>
+        <div class="comp-chart-body tall" id="comp-chart-custos-wrap"><canvas id="comp-chart-custos"></canvas></div>
+      </div>
+      <div class="comp-chart-card">
+        <div class="comp-chart-header">
+          <i class="fa-solid fa-layer-group"></i> Custo: Fases de Obra
+        </div>
+        <div class="comp-chart-body tall" id="comp-chart-fasesobra-wrap"><canvas id="comp-chart-fasesobra"></canvas></div>
+      </div>
+      <div class="comp-chart-card">
+        <div class="comp-chart-header">
+          <i class="fa-solid fa-calendar-days"></i> Dias: Fases de Obra
+        </div>
+        <div class="comp-chart-body tall" id="comp-chart-diasfase-wrap"><canvas id="comp-chart-diasfase"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Assiduidade Tooltip -->
+<div id="assid-tooltip"></div>
+
+<!-- POPUP DESLOCAÇÃO -->
+<div id="desl-popup-container"></div>
+
+<!-- ══════ TOAST CONTAINER ══════ -->
+<div id="toast-container"></div>
+
+<!-- ══════ MOBILE BOTTOM NAV ══════ -->
+<nav id="mobile-bottom-nav">
+  <button class="mobile-nav-btn active" onclick="showSection('overview')" data-mobilesec="overview">
+    <i class="fa-solid fa-chart-pie"></i><span>Geral</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('obra-detail')" data-mobilesec="obra-detail">
+    <i class="fa-solid fa-building"></i><span>Obras</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('deslocacoes')" data-mobilesec="deslocacoes">
+    <i class="fa-solid fa-route"></i><span>Desl.</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('equipa')" data-mobilesec="equipa">
+    <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('assiduidade')" data-mobilesec="assiduidade">
+    <i class="fa-solid fa-calendar-check"></i><span>Assid.</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('ferias')" data-mobilesec="ferias">
+    <i class="fa-solid fa-umbrella-beach"></i><span>Férias</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('comparativa')" data-mobilesec="comparativa">
+    <i class="fa-solid fa-chart-column"></i><span>Comp.</span>
+  </button>
+</nav>
+
+
+<?!= include('js'); ?>
+</body>
+</html>
