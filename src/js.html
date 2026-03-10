@@ -586,12 +586,13 @@ function buildObraKpis(nome) {
 
   const items = [
     { val: fmt(custoTotal),        label: 'Custo Total' },
-    { val: fmtN(horas) + 'h',     label: 'Horas' },
+    { val: fmt(custoMO),           label: 'Custo Mão de Obra' },
+    { val: fmt(custoMat),          label: 'Custo Materiais' },
+    { val: fmt(custoDesl),         label: 'Deslocações' },
     { val: nWorkers,               label: 'Trabalhadores' },
+    { val: fmtN(horas) + 'h',      label: 'Horas' },
     { val: faltas,                 label: 'Faltas' },
     { val: nDias,                  label: 'Dias Trabalhados' },
-    { val: fmt(custoDesl),         label: 'Deslocações' },
-    { val: fmt(custoMat),          label: 'Materiais' },
   ];
   container.innerHTML = items.map(i => `
     <div class="obra-kpi">
@@ -658,6 +659,23 @@ function setObraFaseChartType(type) {
   }
 }
 
+function normalizeFaseKey_(raw) {
+  const label = String(raw || '').trim() || 'Sem Fase';
+  return label
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function addFaseCost_(agg, faseLabel, custo, horas) {
+  const label = String(faseLabel || '').trim() || 'Sem Fase';
+  const key = normalizeFaseKey_(label);
+  if (!agg[key]) agg[key] = { Fase: label, Custo: 0, Horas: 0 };
+  agg[key].Custo += Number(custo) || 0;
+  agg[key].Horas += Number(horas) || 0;
+}
+
 function buildObraCharts(nome) {
   const obra = DATA.obras[nome];
   if (!obra) return;
@@ -669,16 +687,14 @@ function buildObraCharts(nome) {
   const assid = obra.assiduidade || [];
   const workers = obra.workers || [];
   const workerFaseMap = {};
-  workers.forEach(w => { workerFaseMap[w['Nome (auto)']] = w.Fase || '\u2014'; });
+  workers.forEach(w => { workerFaseMap[w['Nome (auto)']] = w.Fase || 'Sem Fase'; });
 
   assid.forEach(w => {
-    const fase = workerFaseMap[w.nome] || '\u2014';
+    const fase = workerFaseMap[w.nome] || 'Sem Fase';
     Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
       if (!dateInRange(dateStr)) return;
       if (d.falta) return;
-      if (!faseAgg[fase]) faseAgg[fase] = { Fase: fase, Custo: 0, Horas: 0 };
-      faseAgg[fase].Custo += Number(d.custo) || 0;
-      faseAgg[fase].Horas += Number(d.horas) || 0;
+      addFaseCost_(faseAgg, fase, d.custo, d.horas);
     });
   });
 
@@ -687,8 +703,7 @@ function buildObraCharts(nome) {
   filterMateriaisByDate().forEach(m => {
     if (m.obra !== nome) return;
     const fase = String(m.fase || '').trim() || 'Sem Fase';
-    if (!matFaseAgg[fase]) matFaseAgg[fase] = { Fase: fase, Custo: 0, Horas: 0 };
-    matFaseAgg[fase].Custo += matCost(m);
+    addFaseCost_(matFaseAgg, fase, matCost(m), 0);
   });
 
   let filteredFases = [];
@@ -697,13 +712,10 @@ function buildObraCharts(nome) {
   } else if (obraFaseMetric === 'total') {
     const totalMap = {};
     Object.values(faseAgg).forEach(f => {
-      if (!totalMap[f.Fase]) totalMap[f.Fase] = { Fase: f.Fase, Custo: 0, Horas: 0 };
-      totalMap[f.Fase].Custo += f.Custo || 0;
-      totalMap[f.Fase].Horas += f.Horas || 0;
+      addFaseCost_(totalMap, f.Fase, f.Custo, f.Horas);
     });
     Object.values(matFaseAgg).forEach(f => {
-      if (!totalMap[f.Fase]) totalMap[f.Fase] = { Fase: f.Fase, Custo: 0, Horas: 0 };
-      totalMap[f.Fase].Custo += f.Custo || 0;
+      addFaseCost_(totalMap, f.Fase, f.Custo, 0);
     });
     filteredFases = Object.values(totalMap).filter(f => f.Custo > 0 || f.Horas > 0);
   } else {
