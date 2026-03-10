@@ -21,6 +21,8 @@ let workerSortAsc = false;
 let dailyPeriod = 0;
 let obraFaseMetric = 'mao_obra';
 let obraFaseChartType = 'bar';
+let obraWorkersCollapsed = true;
+let obraMateriaisCollapsed = true;
 
 /* ── ASSIDUIDADE GLOBALS ───────────────────────────────── */
 let assidCurrentObra = null;
@@ -501,7 +503,38 @@ function openObra(nome) {
   buildObraCharts(nome);
   buildObraWorkersTable(nome);
   buildObraMateriais(nome);
+  applyObraSectionCollapseState_();
   updateBreadcrumb();
+}
+
+function applyObraSectionCollapseState_() {
+  const workersCard = document.getElementById('obra-workers-card');
+  const workersBtn = document.getElementById('obra-workers-toggle-btn');
+  if (workersCard) workersCard.classList.toggle('section-collapsed', !!obraWorkersCollapsed);
+  if (workersBtn) {
+    workersBtn.setAttribute('aria-expanded', obraWorkersCollapsed ? 'false' : 'true');
+    workersBtn.innerHTML = '<i class="fa-solid ' + (obraWorkersCollapsed ? 'fa-chevron-down' : 'fa-chevron-up') + '"></i> ' +
+      (obraWorkersCollapsed ? 'Expandir' : 'Recolher');
+  }
+
+  const materiaisCard = document.getElementById('obra-materiais-card');
+  const materiaisBtn = document.getElementById('obra-materiais-toggle-btn');
+  if (materiaisCard) materiaisCard.classList.toggle('section-collapsed', !!obraMateriaisCollapsed);
+  if (materiaisBtn) {
+    materiaisBtn.setAttribute('aria-expanded', obraMateriaisCollapsed ? 'false' : 'true');
+    materiaisBtn.innerHTML = '<i class="fa-solid ' + (obraMateriaisCollapsed ? 'fa-chevron-down' : 'fa-chevron-up') + '"></i> ' +
+      (obraMateriaisCollapsed ? 'Expandir' : 'Recolher');
+  }
+}
+
+function toggleObraWorkersSection() {
+  obraWorkersCollapsed = !obraWorkersCollapsed;
+  applyObraSectionCollapseState_();
+}
+
+function toggleObraMateriaisSection() {
+  obraMateriaisCollapsed = !obraMateriaisCollapsed;
+  applyObraSectionCollapseState_();
 }
 
 function isObraAtiva_(nome) {
@@ -854,6 +887,7 @@ function buildObraWorkersTable(nome) {
   workerSortAsc = false;
   document.getElementById('worker-search').value = '';
   renderWorkerRows();
+  applyObraSectionCollapseState_();
 }
 
 function getFilteredWorkerRows_() {
@@ -1073,6 +1107,7 @@ function buildObraMateriais(nome) {
     card.style.display = 'none';
     list.innerHTML = '';
     currentMateriaisFases = [];
+    applyObraSectionCollapseState_();
     return;
   }
 
@@ -1143,6 +1178,7 @@ function buildObraMateriais(nome) {
   }).join('');
 
   card.style.display = '';
+  applyObraSectionCollapseState_();
 }
 
 function toggleObraMateriaisFase(faseKey) {

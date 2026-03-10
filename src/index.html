@@ -145,10 +145,13 @@
     </div>
 
     <!-- Workers Table -->
-    <div class="card">
+    <div class="card section-collapsible section-collapsed" id="obra-workers-card">
       <div class="card-header workers-card-header">
         <div class="workers-title-row">
-          <i class="fa-solid fa-users"></i> Trabalhadores
+          <span><i class="fa-solid fa-users"></i> Trabalhadores</span>
+          <button type="button" class="section-toggle-btn" id="obra-workers-toggle-btn" onclick="toggleObraWorkersSection()" aria-expanded="false">
+            <i class="fa-solid fa-chevron-down"></i> Expandir
+          </button>
         </div>
         <div class="table-toolbar workers-toolbar-stack" id="workers-toolbar">
           <div class="worker-tabs">
@@ -163,7 +166,7 @@
           </div>
         </div>
       </div>
-      <div class="card-body" style="padding:0">
+      <div class="card-body" id="obra-workers-body" style="padding:0">
         <div class="table-wrap">
           <table class="card-table">
             <thead>
@@ -185,15 +188,20 @@
     </div>
 
     <!-- Materiais (consumo) por fase -->
-    <div class="card" id="obra-materiais-card" style="display:none">
-      <div class="card-header">
-        <i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase
+    <div class="card section-collapsible section-collapsed" id="obra-materiais-card" style="display:none">
+      <div class="card-header materiais-card-header">
+        <div class="materiais-title-row">
+          <span><i class="fa-solid fa-boxes-stacked"></i> Materiais (consumo) por fase</span>
+          <button type="button" class="section-toggle-btn" id="obra-materiais-toggle-btn" onclick="toggleObraMateriaisSection()" aria-expanded="false">
+            <i class="fa-solid fa-chevron-down"></i> Expandir
+          </button>
+        </div>
         <div class="table-toolbar" id="materiais-toolbar">
           <button class="list-action-btn" onclick="expandAllMateriaisFases()">Expandir</button>
           <button class="list-action-btn" onclick="collapseAllMateriaisFases()">Recolher</button>
         </div>
       </div>
-      <div class="card-body" style="padding:10px 12px 12px">
+      <div class="card-body" id="obra-materiais-body" style="padding:10px 12px 12px">
         <div id="obra-materiais-list"></div>
       </div>
     </div>
