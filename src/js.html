@@ -19,6 +19,8 @@ let currentMateriaisFases = [];
 let workerSortCol = 'custo';
 let workerSortAsc = false;
 let dailyPeriod = 0;
+let obraFaseMetric = 'mao_obra';
+let obraFaseChartType = 'bar';
 
 /* ── ASSIDUIDADE GLOBALS ───────────────────────────────── */
 let assidCurrentObra = null;
@@ -615,27 +617,100 @@ function destroyObraCharts() {
   });
 }
 
+function syncObraFaseChartControls_() {
+  const metricBtns = [
+    ['mao_obra', 'obra-fase-metric-mao_obra'],
+    ['materiais', 'obra-fase-metric-materiais'],
+    ['total', 'obra-fase-metric-total']
+  ];
+  metricBtns.forEach(([metric, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', obraFaseMetric === metric);
+  });
+
+  const typeBtns = [
+    ['bar', 'obra-fase-type-bar'],
+    ['doughnut', 'obra-fase-type-doughnut']
+  ];
+  typeBtns.forEach(([type, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', obraFaseChartType === type);
+  });
+}
+
+function setObraFaseMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, total: true };
+  if (!allowed[metric]) return;
+  obraFaseMetric = metric;
+  syncObraFaseChartControls_();
+  if (currentObraName && DATA && DATA.obras && DATA.obras[currentObraName]) {
+    buildObraCharts(currentObraName);
+  }
+}
+
+function setObraFaseChartType(type) {
+  const allowed = { bar: true, doughnut: true };
+  if (!allowed[type]) return;
+  obraFaseChartType = type;
+  syncObraFaseChartControls_();
+  if (currentObraName && DATA && DATA.obras && DATA.obras[currentObraName]) {
+    buildObraCharts(currentObraName);
+  }
+}
+
 function buildObraCharts(nome) {
   const obra = DATA.obras[nome];
+  if (!obra) return;
   destroyObraCharts();
+  syncObraFaseChartControls_();
 
-  // Aggregate fases from assiduidade (date-filtered)
+  // Aggregate mao de obra por fase from assiduidade (date-filtered)
   const faseAgg = {};
   const assid = obra.assiduidade || [];
   const workers = obra.workers || [];
+  const workerFaseMap = {};
+  workers.forEach(w => { workerFaseMap[w['Nome (auto)']] = w.Fase || '\u2014'; });
+
   assid.forEach(w => {
-    const wInfo = workers.find(ww => ww['Nome (auto)'] === w.nome);
-    const fase = (wInfo && wInfo.Fase) || '\u2014';
-    Object.entries(w.dias).forEach(([dateStr, d]) => {
+    const fase = workerFaseMap[w.nome] || '\u2014';
+    Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
       if (!dateInRange(dateStr)) return;
       if (d.falta) return;
       if (!faseAgg[fase]) faseAgg[fase] = { Fase: fase, Custo: 0, Horas: 0 };
-      faseAgg[fase].Custo += d.custo || 0;
-      faseAgg[fase].Horas += d.horas || 0;
+      faseAgg[fase].Custo += Number(d.custo) || 0;
+      faseAgg[fase].Horas += Number(d.horas) || 0;
     });
   });
-  const filteredFases = Object.values(faseAgg).filter(f => f.Custo > 0 || f.Horas > 0);
-  buildFasesChart(filteredFases);
+
+  // Aggregate materiais por fase (date-filtered)
+  const matFaseAgg = {};
+  filterMateriaisByDate().forEach(m => {
+    if (m.obra !== nome) return;
+    const fase = String(m.fase || '').trim() || 'Sem Fase';
+    if (!matFaseAgg[fase]) matFaseAgg[fase] = { Fase: fase, Custo: 0, Horas: 0 };
+    matFaseAgg[fase].Custo += matCost(m);
+  });
+
+  let filteredFases = [];
+  if (obraFaseMetric === 'materiais') {
+    filteredFases = Object.values(matFaseAgg).filter(f => f.Custo > 0);
+  } else if (obraFaseMetric === 'total') {
+    const totalMap = {};
+    Object.values(faseAgg).forEach(f => {
+      if (!totalMap[f.Fase]) totalMap[f.Fase] = { Fase: f.Fase, Custo: 0, Horas: 0 };
+      totalMap[f.Fase].Custo += f.Custo || 0;
+      totalMap[f.Fase].Horas += f.Horas || 0;
+    });
+    Object.values(matFaseAgg).forEach(f => {
+      if (!totalMap[f.Fase]) totalMap[f.Fase] = { Fase: f.Fase, Custo: 0, Horas: 0 };
+      totalMap[f.Fase].Custo += f.Custo || 0;
+    });
+    filteredFases = Object.values(totalMap).filter(f => f.Custo > 0 || f.Horas > 0);
+  } else {
+    filteredFases = Object.values(faseAgg).filter(f => f.Custo > 0 || f.Horas > 0);
+  }
+
+  buildFasesChart(filteredFases, obraFaseMetric, obraFaseChartType);
 }
 
 /* ── Daily line chart — disabled (card removed) ──────── */
@@ -650,36 +725,63 @@ function buildWeeklyChart(weekly) { /* disabled */ }
 function buildWorkersChart(workers) { /* disabled */ }
 
 /* ── Bar chart — cost by phase ──────────────────────────── */
-function buildFasesChart(fases) {
+function buildFasesChart(fases, metric, chartType) {
   if (obraCharts.fases) obraCharts.fases.destroy();
+  const canvas = document.getElementById('chart-fases');
+  if (!canvas) return;
   if (!fases || !fases.length) {
-    document.getElementById('chart-fases').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem fases no período</div>';
+    canvas.parentElement.innerHTML =
+      '<div class="no-chart-data">Sem fases no periodo</div>';
     return;
   }
+
+  const metricLabelMap = {
+    mao_obra: 'Mao de Obra',
+    materiais: 'Materiais',
+    total: 'Total'
+  };
+  const datasetLabel = metricLabelMap[metric] || 'Custo';
+  const type = chartType === 'doughnut' ? 'doughnut' : 'bar';
   const sorted = fases.slice().sort((a, b) => b.Custo - a.Custo);
-  const ctx = document.getElementById('chart-fases');
-  obraCharts.fases = new Chart(ctx, {
-    type: 'bar',
+
+  obraCharts.fases = new Chart(canvas, {
+    type: type,
     data: {
       labels: sorted.map(f => f.Fase),
       datasets: [{
-        label: 'Custo',
+        label: datasetLabel,
         data: sorted.map(f => f.Custo),
         backgroundColor: sorted.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderRadius: 4,
+        borderRadius: type === 'bar' ? 4 : 0,
+        borderWidth: type === 'doughnut' ? 1 : 0,
       }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: type === 'doughnut' ? '56%' : undefined,
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } }
+        legend: type === 'doughnut'
+          ? { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 }, padding: 8 } }
+          : { display: false },
+        tooltip: {
+          callbacks: {
+            label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
+          }
+        }
       },
-      scales: {
-        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } }
-      }
+      scales: type === 'bar'
+        ? {
+            y: {
+              grid: { color: 'rgba(255,255,255,.04)' },
+              ticks: {
+                font: { size: 10 },
+                callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+              }
+            },
+            x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+          }
+        : undefined
     }
   });
 }

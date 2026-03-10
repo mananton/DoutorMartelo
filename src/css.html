@@ -432,6 +432,20 @@ td { padding: 11px 16px; vertical-align: middle; }
   display: flex; align-items: center; justify-content: space-between;
   font-size: 12px; font-weight: 600; color: var(--text-muted);
 }
+.obra-chart-header { gap: 10px; }
+.obra-chart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.obra-chart-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.obra-chart-group .period-btn { padding: 4px 8px; }
 .chart-card-body { padding: 16px; position: relative; height: 280px; }
 
 .period-btns { display: flex; gap: 4px; }
@@ -893,6 +907,14 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
   .obra-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .table-toolbar { flex-wrap: wrap; }
   .table-search { width: 140px; }
+  .obra-chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .obra-chart-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 /* ── DESLOCAÇÕES ───────────────────────────────────────── */

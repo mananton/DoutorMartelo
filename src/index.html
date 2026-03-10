@@ -126,8 +126,19 @@
     <!-- Charts -->
     <div class="charts-grid" id="obra-charts-grid">
       <div class="chart-card">
-        <div class="chart-card-header">
+        <div class="chart-card-header obra-chart-header">
           <span><i class="fa-solid fa-chart-pie"></i> Custo por Fase</span>
+          <div class="obra-chart-controls">
+            <div class="obra-chart-group" id="obra-fase-metric-btns">
+              <button type="button" class="period-btn active" id="obra-fase-metric-mao_obra" onclick="setObraFaseMetric('mao_obra')">Mao de Obra</button>
+              <button type="button" class="period-btn" id="obra-fase-metric-materiais" onclick="setObraFaseMetric('materiais')">Materiais</button>
+              <button type="button" class="period-btn" id="obra-fase-metric-total" onclick="setObraFaseMetric('total')">Total</button>
+            </div>
+            <div class="obra-chart-group" id="obra-fase-type-btns">
+              <button type="button" class="period-btn active" id="obra-fase-type-bar" onclick="setObraFaseChartType('bar')">Barras</button>
+              <button type="button" class="period-btn" id="obra-fase-type-doughnut" onclick="setObraFaseChartType('doughnut')">Circular</button>
+            </div>
+          </div>
         </div>
         <div class="chart-card-body" id="chart-fases-wrap"><canvas id="chart-fases"></canvas></div>
       </div>
