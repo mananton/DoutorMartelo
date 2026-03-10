@@ -32,3 +32,8 @@ Expected output format:
 - Confirm `git status` is clean before starting.
 - Confirm if user wants commit at each phase or single final commit.
 
+## Recent High-Value Commits
+- `7ab59ac`: mobile-first Obra chart updates + phase visibility filters + click side-effect removal.
+- `76e5253`: worker filtering includes cost-only legacy days.
+- `b725a8d`: Obra phase chart metric/type controls.
+- `299536d`: collapsible Workers/Materials sections.

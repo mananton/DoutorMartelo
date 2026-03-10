@@ -11,6 +11,17 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-10
 
+### `7ab59ac`
+- **Type**: feat(ui)
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`
+- **Summary**:
+  - Added mobile-first updates to Obra phase chart interactions and layout behavior.
+  - Added phase visibility controls (strike/hide) with automatic chart recalculation.
+  - Removed chart-click side effect that auto-expanded Workers/Materials sections.
+- **Impact**:
+  - Better mobile usability and cleaner interaction model in Obra detail.
+  - Safer chart exploration without triggering unrelated UI changes.
+
 ### `76e5253`
 - **Type**: fix
 - **Scope**: `src/js.html`
@@ -41,6 +52,32 @@ Purpose: chronological, commit-based project history for fast handoff.
   - Kept empty-row cleanup temporarily disabled via config flag.
 - **Impact**:
   - Old datasets now contribute to totals without strict schema compliance.
+
+### `522dfab`
+- **Type**: feat(ui)
+- **Scope**: `src/index.html`, `src/js.html`
+- **Summary**:
+  - Added "Custo Mão de Obra" KPI card in Obra details.
+  - Reordered Obra KPI cards to the approved sequence.
+- **Impact**:
+  - KPI panel now matches business reading order and separates labor/materials visibility.
+
+### `299536d`
+- **Type**: feat(ui)
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`
+- **Summary**:
+  - Added collapsible sections for Obra Workers and Materials blocks.
+  - Introduced explicit expand/retract controls per section.
+- **Impact**:
+  - Reduced mobile scroll pressure and improved information scanning.
+
+### `085d42e`
+- **Type**: docs
+- **Scope**: `docs/*`
+- **Summary**:
+  - Added project state, decisions, worklog, open-items, and handoff docs.
+- **Impact**:
+  - Established repeatable session handoff and historical traceability.
 
 ## 2026-03-09
 
@@ -80,4 +117,3 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - expected effect
 ```
-

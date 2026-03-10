@@ -46,6 +46,12 @@ Last updated: 2026-03-10
 - Obra "Cost by phase" chart now supports:
   - Metric selector: Labor / Materials / Total.
   - Chart type selector: Bar / Doughnut.
+- Obra chart mobile-first improvements:
+  - Period label aligned with active date filter.
+  - Optional phase visibility toggles ("strike/hide") with instant chart recompute.
+  - Auto-avoid doughnut mode on mobile when phase count is high.
+- Chart click no longer auto-expands Workers/Materials sections (removed accidental drill side-effect).
+- Materiais section now supports name search (`Pesquisar material...`) while preserving phase grouping.
 - Workers table filtering updated to include legacy "cost-only" days in time-window filtering.
 
 ## 6. Operational Notes
@@ -57,5 +63,4 @@ Last updated: 2026-03-10
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
 - Legacy rows with inconsistent naming can still reduce per-worker detail accuracy.
-- Doughnut readability can degrade when many phases exist.
-
+- Material naming variance can still fragment search results (e.g., synonyms/typos).

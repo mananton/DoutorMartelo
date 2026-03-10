@@ -73,8 +73,30 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - Worker visibility aligns with cost totals in filtered windows.
 
+## D-007: Obra heavy sections are collapsible by default
+- **Status**: accepted
+- **Date**: 2026-03-10
+- **Commit**: `299536d`
+- **Decision**:
+  - Keep Workers and Materials cards collapsible to reduce initial page density.
+- **Rationale**:
+  - Mobile-first behavior benefits from progressive disclosure of dense lists.
+- **Impact**:
+  - Faster scanning in Obra detail and lower accidental scroll burden.
+
+## D-008: Obra phase chart uses explicit visibility filters (no click drill side-effects)
+- **Status**: accepted
+- **Date**: 2026-03-10
+- **Commit**: `7ab59ac`
+- **Decision**:
+  - Use dedicated phase chips to strike/hide phases and recompute chart totals.
+  - Remove chart-click action that expanded other sections.
+- **Rationale**:
+  - Chart interactions must be predictable and scoped to chart behavior only.
+- **Impact**:
+  - Cleaner UX and fewer accidental state changes while analyzing phases.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.
 - Keep legacy rules active unless business owner requests rollback.
-

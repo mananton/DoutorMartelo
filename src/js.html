@@ -1278,7 +1278,11 @@ function buildObraMateriais(nome) {
   if (expandedMateriaisObra !== nome) {
     expandedMateriaisFases = new Set();
     expandedMateriaisObra = nome;
+    const searchInput = document.getElementById('materiais-search');
+    if (searchInput) searchInput.value = '';
   }
+  const searchInput = document.getElementById('materiais-search');
+  const materialFilter = String(searchInput && searchInput.value || '').trim().toLowerCase();
 
   // Filtrar CONSUMO da obra, respeitando filtro de datas global
   const rows = matMovAll.filter(m =>
@@ -1312,8 +1316,20 @@ function buildObraMateriais(nome) {
     });
   });
 
-  const fases = Object.keys(fasesMap).sort((a, b) => {
-    const diff = (fasesMap[b].total || 0) - (fasesMap[a].total || 0);
+  const fasesFiltradasMap = {};
+  Object.keys(fasesMap).forEach(fase => {
+    const items = materialFilter
+      ? fasesMap[fase].items.filter(it => String(it.material || '').toLowerCase().includes(materialFilter))
+      : fasesMap[fase].items.slice();
+    if (!items.length) return;
+    fasesFiltradasMap[fase] = {
+      total: items.reduce((sum, it) => sum + (Number(it.custo) || 0), 0),
+      items: items
+    };
+  });
+
+  const fases = Object.keys(fasesFiltradasMap).sort((a, b) => {
+    const diff = (fasesFiltradasMap[b].total || 0) - (fasesFiltradasMap[a].total || 0);
     return diff !== 0 ? diff : a.localeCompare(b);
   });
   currentMateriaisFases = fases.slice();
@@ -1328,9 +1344,16 @@ function buildObraMateriais(nome) {
     return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : raw;
   };
 
+  if (!fases.length) {
+    list.innerHTML = '<div class="mat-empty">Sem materiais para o filtro atual</div>';
+    card.style.display = '';
+    applyObraSectionCollapseState_();
+    return;
+  }
+
   list.innerHTML = fases.map(fase => {
     const faseKey = encodeURIComponent(fase);
-    const data = fasesMap[fase];
+    const data = fasesFiltradasMap[fase];
     const expanded = expandedMateriaisFases.has(fase);
     const items = (data.items || []).slice().sort((a, b) => {
       const d = String(b.data || '').localeCompare(String(a.data || ''));
@@ -1363,6 +1386,10 @@ function buildObraMateriais(nome) {
 
   card.style.display = '';
   applyObraSectionCollapseState_();
+}
+
+function filterObraMateriais() {
+  if (currentObraName) buildObraMateriais(currentObraName);
 }
 
 function toggleObraMateriaisFase(faseKey) {

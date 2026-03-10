@@ -20,13 +20,19 @@ Last reviewed: 2026-03-10
 - Clean visible mojibake in UI strings/comments where present.
 - Keep this as a dedicated low-risk pass to avoid mixing functional changes.
 
-## P2 - Chart UX Guardrail for Many Phases
-- If phase count is high, consider auto-fallback from doughnut to bar or show a warning tooltip.
-- Keep current behavior unless explicitly approved.
+## P2 - Validate New Obra Materials Search
+- Confirm search behavior with:
+  - repeated material names across different phases
+  - partial text matching and case variations
+  - no-result state under active date filters
+- Ensure performance remains smooth on large consumption histories.
+
+## P2 - Chart UX Guardrail Follow-up
+- Current implementation already avoids doughnut on mobile for high phase counts.
+- Optional next step: add explicit user hint/toast explaining why doughnut is disabled in that case.
 
 ## P3 - Documentation Process
 - At end of each work session:
   - append new commit entries to `docs/WORKLOG.md`
   - update `docs/PROJECT_STATE.md` if architecture/flow changed
   - update `docs/DECISIONS.md` when a new technical decision is made
-

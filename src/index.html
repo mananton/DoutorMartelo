@@ -202,9 +202,13 @@
             <i class="fa-solid fa-chevron-down"></i> Expandir
           </button>
         </div>
-        <div class="table-toolbar" id="materiais-toolbar">
-          <button class="list-action-btn" onclick="expandAllMateriaisFases()">Expandir</button>
-          <button class="list-action-btn" onclick="collapseAllMateriaisFases()">Recolher</button>
+        <div class="table-toolbar materiais-toolbar-stack" id="materiais-toolbar">
+          <input type="text" class="table-search" id="materiais-search"
+                 placeholder="Pesquisar material..." oninput="filterObraMateriais()">
+          <div class="materiais-actions">
+            <button class="list-action-btn" onclick="expandAllMateriaisFases()">Expandir</button>
+            <button class="list-action-btn" onclick="collapseAllMateriaisFases()">Recolher</button>
+          </div>
         </div>
       </div>
       <div class="card-body" id="obra-materiais-body" style="padding:10px 12px 12px">
