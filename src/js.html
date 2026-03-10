@@ -563,11 +563,11 @@ function buildObraKpis(nome) {
 
     // Faltas, atrasos e workers a partir da assiduidade filtrada
     (o.assiduidade || []).forEach(w => {
-      Object.entries(w.dias).forEach(([dateStr, dayData]) => {
+      Object.entries(w.dias || {}).forEach(([dateStr, dayData]) => {
         if (!dateInRange(dateStr)) return;
         if (dayData.falta)      faltas++;
         if (dayData.atraso_min) atrasos += dayData.atraso_min;
-        if (dayData.horas > 0)  workerSet.add(w.nome);
+        if ((Number(dayData.horas) || 0) > 0 || (Number(dayData.custo) || 0) > 0) workerSet.add(w.nome);
       });
     });
 
@@ -807,8 +807,10 @@ function buildObraWorkersTable(nome) {
         horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0, dispensados: 0, faltasList: []
       };
     }
-    Object.entries(w.dias).forEach(([dateStr, d]) => {
+    Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
       if (!dateInRange(dateStr)) return;
+      const horasDia = Number(d.horas) || 0;
+      const custoDia = Number(d.custo) || 0;
       if (d.dispensado) agg[wName].dispensados++;
       if (d.falta) {
         agg[wName].faltas++;
@@ -821,12 +823,13 @@ function buildObraWorkersTable(nome) {
           fase: (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '\u2014',
           observacao: d.observacao || '\u2014'
         });
-      } else if (d.horas > 0) {
-        agg[wName].horas += d.horas;
-        agg[wName].custo += d.custo || 0;
+      } else if (horasDia > 0 || custoDia > 0) {
+        // Legacy-safe: treat cost-only entries as worked day for period filtering.
+        agg[wName].horas += horasDia;
+        agg[wName].custo += custoDia;
         agg[wName].dias++;
       }
-      if (d.atraso_min) agg[wName].atraso += d.atraso_min;
+      if (d.atraso_min) agg[wName].atraso += Number(d.atraso_min) || 0;
     });
   });
 
@@ -2489,11 +2492,11 @@ function computeFilteredGlobal() {
     });
     // Workers and faltas from assiduidade if available
     (obra.assiduidade || []).forEach(w => {
-      Object.entries(w.dias).forEach(([dateStr, dayData]) => {
+      Object.entries(w.dias || {}).forEach(([dateStr, dayData]) => {
         if (!dateInRange(dateStr)) return;
         if (dayData.falta) faltas++;
         if (dayData.atraso_min) totalAtrasos += dayData.atraso_min;
-        if (dayData.horas > 0) workerSet.add(w.nome);
+        if ((Number(dayData.horas) || 0) > 0 || (Number(dayData.custo) || 0) > 0) workerSet.add(w.nome);
       });
     });
   });
