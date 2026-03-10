@@ -433,6 +433,16 @@ td { padding: 11px 16px; vertical-align: middle; }
   font-size: 12px; font-weight: 600; color: var(--text-muted);
 }
 .obra-chart-header { gap: 10px; }
+.obra-chart-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.obra-chart-period {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
 .obra-chart-controls {
   display: flex;
   align-items: center;
@@ -446,7 +456,70 @@ td { padding: 11px 16px; vertical-align: middle; }
   gap: 4px;
 }
 .obra-chart-group .period-btn { padding: 4px 8px; }
-.chart-card-body { padding: 16px; position: relative; height: 280px; }
+.chart-card-body { padding: 16px; position: relative; }
+.chart-canvas-wrap { position: relative; height: 240px; }
+.obra-fase-filter-wrap {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.obra-fase-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.obra-fase-filter-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.obra-fase-reset-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.obra-fase-reset-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.obra-fase-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.obra-fase-chip {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.02);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.obra-fase-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.obra-fase-chip.hidden {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  opacity: .75;
+}
+.obra-fase-filter-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+}
 
 .period-btns { display: flex; gap: 4px; }
 .period-btn {
@@ -454,10 +527,23 @@ td { padding: 11px 16px; vertical-align: middle; }
   border: 1px solid var(--border); background: transparent;
   color: var(--text-dim); font-family: 'Inter', sans-serif;
   font-size: 11px; font-weight: 600; cursor: pointer;
+  min-height: 34px;
   transition: all .15s;
 }
 .period-btn:hover { border-color: var(--text-muted); color: var(--text-muted); }
 .period-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.period-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+.period-btn:focus-visible,
+.section-toggle-btn:focus-visible,
+.list-action-btn:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 1px;
+}
 
 .table-toolbar {
   display: flex; align-items: center; gap: 10px; margin-left: auto;
@@ -951,10 +1037,42 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
   .obra-chart-controls {
     width: 100%;
     justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    gap: 6px;
+  }
+  .obra-chart-group {
+    flex: 0 0 auto;
+  }
+  .obra-chart-group .period-btn {
+    min-height: 40px;
+    padding: 8px 11px;
+  }
+  .chart-canvas-wrap { height: 220px; }
+  .obra-fase-chip-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .obra-fase-chip {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 8px 12px;
   }
   .section-toggle-btn {
     font-size: 10px;
     padding: 5px 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .period-btn,
+  .section-toggle-btn,
+  .list-action-btn {
+    transition: none !important;
   }
 }
 

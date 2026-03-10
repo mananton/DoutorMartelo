@@ -127,20 +127,26 @@
     <div class="charts-grid" id="obra-charts-grid">
       <div class="chart-card">
         <div class="chart-card-header obra-chart-header">
-          <span><i class="fa-solid fa-chart-pie"></i> Custo por Fase</span>
+          <div class="obra-chart-title-wrap">
+            <span><i class="fa-solid fa-chart-pie"></i> Custo por Fase</span>
+            <small class="obra-chart-period" id="obra-fase-period-label"></small>
+          </div>
           <div class="obra-chart-controls">
             <div class="obra-chart-group" id="obra-fase-metric-btns">
-              <button type="button" class="period-btn active" id="obra-fase-metric-mao_obra" onclick="setObraFaseMetric('mao_obra')">Mao de Obra</button>
-              <button type="button" class="period-btn" id="obra-fase-metric-materiais" onclick="setObraFaseMetric('materiais')">Materiais</button>
-              <button type="button" class="period-btn" id="obra-fase-metric-total" onclick="setObraFaseMetric('total')">Total</button>
+              <button type="button" class="period-btn active" id="obra-fase-metric-mao_obra" onclick="setObraFaseMetric('mao_obra')" aria-label="Mostrar custo de mao de obra por fase">Mao de Obra</button>
+              <button type="button" class="period-btn" id="obra-fase-metric-materiais" onclick="setObraFaseMetric('materiais')" aria-label="Mostrar custo de materiais por fase">Materiais</button>
+              <button type="button" class="period-btn" id="obra-fase-metric-total" onclick="setObraFaseMetric('total')" aria-label="Mostrar custo total por fase">Total</button>
             </div>
             <div class="obra-chart-group" id="obra-fase-type-btns">
-              <button type="button" class="period-btn active" id="obra-fase-type-bar" onclick="setObraFaseChartType('bar')">Barras</button>
-              <button type="button" class="period-btn" id="obra-fase-type-doughnut" onclick="setObraFaseChartType('doughnut')">Circular</button>
+              <button type="button" class="period-btn active" id="obra-fase-type-bar" onclick="setObraFaseChartType('bar')" aria-label="Mostrar grafico de barras">Barras</button>
+              <button type="button" class="period-btn" id="obra-fase-type-doughnut" onclick="setObraFaseChartType('doughnut')" aria-label="Mostrar grafico circular">Circular</button>
             </div>
           </div>
         </div>
-        <div class="chart-card-body" id="chart-fases-wrap"><canvas id="chart-fases"></canvas></div>
+        <div class="chart-card-body">
+          <div class="chart-canvas-wrap" id="chart-fases-wrap"><canvas id="chart-fases"></canvas></div>
+          <div class="obra-fase-filter-wrap" id="obra-fase-filter-wrap"></div>
+        </div>
       </div>
     </div>
 
