@@ -23,6 +23,7 @@ const SHEET_NAO_REGISTADOS = "NAO_REGISTADOS_HIST";
 const TZ               = "Europe/Lisbon";
 const NREG_HOUR        = 23;
 const NREG_MINUTE      = 45;
+const ENABLE_EMPTY_ROW_CLEANUP = false; // mudar para true para reativar limpeza automática
 
 // ════════════════════════════════════════════════════════════
 //  SECÇÃO 1 — DASHBOARD WEB APP
@@ -77,7 +78,8 @@ function onSheetChange(e) {
  * Remove todas as linhas completamente vazias de REGISTOS_POR_DIA.
  * Percorre de baixo para cima para não deslocar índices ao apagar.
  */
-function limparLinhasVazias_() {
+function limparLinhasVazias_(forceRun) {
+  if (!ENABLE_EMPTY_ROW_CLEANUP && !forceRun) return;
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_REGISTOS);
   if (!sheet) return;
@@ -257,7 +259,7 @@ function ehFimDeSemana_(dateObj) {
  * Atalho manual no menu para limpar linhas vazias imediatamente.
  */
 function limparLinhasVaziasManual() {
-  limparLinhasVazias_();
+  limparLinhasVazias_(true);
   SpreadsheetApp.getUi().alert("✅ Linhas vazias eliminadas de REGISTOS_POR_DIA.");
 }
 

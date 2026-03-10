@@ -2214,10 +2214,49 @@ function updateAllChartsTheme() {
    ══════════════════════════════════════════════════════════ */
 function dateInRange(dateStr) {
   if (!globalDateFrom && !globalDateTo) return true;
-  if (!dateStr) return true;
-  if (globalDateFrom && dateStr < globalDateFrom) return false;
-  if (globalDateTo && dateStr > globalDateTo) return false;
+  const d = normalizeDateKey_(dateStr);
+  if (!d) return true;
+  const from = normalizeDateKey_(globalDateFrom);
+  const to = normalizeDateKey_(globalDateTo);
+  if (from && d < from) return false;
+  if (to && d > to) return false;
   return true;
+}
+
+function normalizeDateKey_(raw) {
+  if (!raw) return '';
+
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    const y = raw.getFullYear();
+    const m = String(raw.getMonth() + 1).padStart(2, '0');
+    const d = String(raw.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const s = String(raw).trim();
+  if (!s) return '';
+
+  // ISO or timestamp-like
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
+  // dd/mm/yyyy or dd-mm-yyyy
+  const pt = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (pt) {
+    const d = String(pt[1]).padStart(2, '0');
+    const m = String(pt[2]).padStart(2, '0');
+    const y = pt[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return s.slice(0, 10);
 }
 
 function syncFilterInputsUI_() {

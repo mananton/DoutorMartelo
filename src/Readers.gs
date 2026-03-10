@@ -44,12 +44,52 @@ function formatDateValue_(rawValue, withTime) {
       withTime ? "yyyy-MM-dd HH:mm:ss" : "yyyy-MM-dd"
     );
   }
+
   const text = String(rawValue || "").trim();
-  return withTime ? text : text.slice(0, 10);
+  if (!text) return "";
+  if (withTime) return text;
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  const ptDate = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (ptDate) {
+    const d = String(ptDate[1]).padStart(2, "0");
+    const m = String(ptDate[2]).padStart(2, "0");
+    const y = ptDate[3];
+    return y + "-" + m + "-" + d;
+  }
+
+  const parsed = new Date(text);
+  if (!isNaN(parsed.getTime())) {
+    return Utilities.formatDate(parsed, TZ, "yyyy-MM-dd");
+  }
+
+  return text.slice(0, 10);
 }
 
 function toBool_(value) {
   return value === true || String(value).trim().toLowerCase() === "true";
+}
+
+
+function hasValue_(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  return true;
+}
+
+function isIsoDateKey_(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function pickRegistoDate_(row, cols) {
+  const fromReg = formatDateValue_(row[cols.dataRegisto], false);
+  if (isIsoDateKey_(fromReg)) return fromReg;
+
+  const fromArquivo = formatDateValue_(row[cols.dataArquivo], false);
+  if (isIsoDateKey_(fromArquivo)) return fromArquivo;
+
+  return fromReg || fromArquivo || "";
 }
 
 function buildColabRateMap_(colabSheet) {
@@ -90,17 +130,19 @@ function readRegistos_(sheet, colabRateMap) {
 
 function getRegistosCols_(colMap) {
   return {
+    dataArquivo: pickCol_(colMap, ["DATA_ARQUIVO", "Data Arquivo"], 0),
     dataRegisto: pickCol_(colMap, ["DATA_REGISTO", "Data Registo", "Data"], 1),
     nome: pickCol_(colMap, ["Nome"], 2),
-    funcao: pickCol_(colMap, ["Função", "Funcao"], 3),
+    funcao: pickCol_(colMap, ["Fun??o", "Funcao"], 3),
     obra: pickCol_(colMap, ["Obra"], 4),
     fase: pickCol_(colMap, ["Fase de Obra", "Fase"], 5),
     horas: pickCol_(colMap, ["Horas"], 6),
     atraso: pickCol_(colMap, ["Atraso_Minutos", "Atraso Minutos"], 7),
     falta: pickCol_(colMap, ["Falta"], 8),
     motivo: pickCol_(colMap, ["Motivo Falta", "Motivo"], 9),
-    eurh: pickCol_(colMap, ["€/h", "Eur_h", "Eur h"], 10),
-    observacao: pickCol_(colMap, ["Observação", "Observacao"], 12),
+    eurh: pickCol_(colMap, ["?/h", "Eur_h", "Eur h"], 10),
+    custoDia: pickCol_(colMap, ["Custo Dia (?)", "Custo Dia", "Custo_Dia", "Custo Dia (EUR)"], 11),
+    observacao: pickCol_(colMap, ["Observa??o", "Observacao"], 12),
     dispensado: pickCol_(colMap, ["Dispensado"], 14),
     dispensaProc: pickCol_(colMap, ["Dispensa_Processada_Em", "Dispensa Processada Em"], 15)
   };
@@ -114,17 +156,23 @@ function mapRegistoRow_(row, cols, colabRateMap) {
   const horas = parseFloat(row[cols.horas]) || 0;
   const atrasoMin = parseFloat(row[cols.atraso]) || 0;
   const falta = toBool_(row[cols.falta]);
+  const custoDiaRaw = row[cols.custoDia];
+  const hasCustoDia = hasValue_(custoDiaRaw);
+  const custoDia = parseFloat(custoDiaRaw) || 0;
   const rate = (colabRateMap && colabRateMap[nome] !== undefined)
     ? colabRateMap[nome]
     : (parseFloat(row[cols.eurh]) || 0);
+
   const horasEfetivas = horas - (atrasoMin / 60);
+  const custoFormula = falta ? 0 : horasEfetivas * rate;
+  const custoFinal = hasCustoDia ? custoDia : custoFormula;
 
   return {
-    data: formatDateValue_(row[cols.dataRegisto], false),
+    data: pickRegistoDate_(row, cols),
     nome: nome,
-    funcao: String(row[cols.funcao] || "").trim(),
+    funcao: String(row[cols.funcao] || "").trim() || "-",
     obra: obra,
-    fase: String(row[cols.fase] || "").trim(),
+    fase: String(row[cols.fase] || "").trim() || "Sem Fase",
     horas: horas,
     atraso_min: atrasoMin,
     falta: falta,
@@ -133,7 +181,7 @@ function mapRegistoRow_(row, cols, colabRateMap) {
     dispensado: toBool_(row[cols.dispensado]),
     dispensa_processada_em: formatDateValue_(row[cols.dispensaProc], true),
     eur_h: rate,
-    custo: falta ? 0 : horasEfetivas * rate
+    custo: custoFinal
   };
 }
 
