@@ -38,8 +38,7 @@ const DEFAULT_COMP_FASES = [
   'E - paredes exteriores e interiores',
   'F - capoto',
   'G - eletricidade',
-  'U / M - janelas/caixilharias',
-  'Sem Fase'
+  'U / M - janelas/caixilharias'
 ];
 
 /* ── ASSIDUIDADE GLOBALS ───────────────────────────────── */
@@ -74,10 +73,10 @@ let compCustosChartType = 'bar';
 let compCustosDoughnutEnabled = true;
 let compCustosHiddenObras = {};
 let compFasesMetric = 'mao_obra';
-let compFasesChartType = 'bar';
-let compFasesDoughnutEnabled = true;
 let compFasesSelectedObras = {};
 let compFasesSelectedKeys = {};
+let compDiasSelectedObras = {};
+let compDiasSelectedKeys = {};
 
 /* ── FÉRIAS GLOBALS ──────────────────────────────────── */
 let feriasAllRows   = [];
@@ -2201,12 +2200,10 @@ function destroyCompCharts() {
   if (fasesCanvasWrap && !document.getElementById('comp-chart-fasesobra')) {
     fasesCanvasWrap.innerHTML = '<canvas id="comp-chart-fasesobra"></canvas>';
   }
-  ['diasfase'].forEach(key => {
-    const wrap = document.getElementById('comp-chart-' + key + '-wrap');
-    if (wrap && !document.getElementById('comp-chart-' + key)) {
-      wrap.innerHTML = '<canvas id="comp-chart-' + key + '"></canvas>';
-    }
-  });
+  const diasCanvasWrap = document.getElementById('comp-dias-canvas-wrap');
+  if (diasCanvasWrap && !document.getElementById('comp-chart-diasfase')) {
+    diasCanvasWrap.innerHTML = '<canvas id="comp-chart-diasfase"></canvas>';
+  }
 }
 
 /* ── PART A: Comparison of Obras ─────────────────────── */
@@ -2536,33 +2533,30 @@ function compactCompFasesForMobile_(items) {
   return top;
 }
 
-function setCompFasesTypeAvailability_(items) {
-  const doughnutBtn = document.getElementById('comp-fases-type-doughnut');
-  const count = Array.isArray(items) ? items.length : 0;
-  compFasesDoughnutEnabled = !isMobile() || count <= MOBILE_COMP_CUSTOS_MAX_DOUGHNUT;
+function getCompFaseSortRank_(label) {
+  const key = normalizeFaseKey_(label);
+  const idx = DEFAULT_COMP_FASES.findIndex(fase => normalizeFaseKey_(fase) === key);
+  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+}
 
-  if (doughnutBtn) {
-    doughnutBtn.disabled = !compFasesDoughnutEnabled;
-    doughnutBtn.setAttribute('aria-disabled', compFasesDoughnutEnabled ? 'false' : 'true');
-    doughnutBtn.title = compFasesDoughnutEnabled
-      ? 'Mostrar grafico circular'
-      : 'No mobile, o circular so e ativado com ate ' + MOBILE_COMP_CUSTOS_MAX_DOUGHNUT + ' fases';
-  }
+function sortCompFaseItems_(items) {
+  return (Array.isArray(items) ? items.slice() : []).sort((a, b) => {
+    const rankDiff = getCompFaseSortRank_(a && a.name) - getCompFaseSortRank_(b && b.name);
+    if (rankDiff !== 0) return rankDiff;
+    return String(a && a.name || '').localeCompare(String(b && b.name || ''), 'pt');
+  });
+}
 
-  if (!compFasesDoughnutEnabled && compFasesChartType === 'doughnut') {
-    compFasesChartType = 'bar';
-  }
+function shouldIncludeCompFase_(label) {
+  return normalizeFaseKey_(label) !== 'sem fase';
 }
 
 function syncCompFasesControls_(obraNames, faseItems) {
+  const selectedObrasCount = Object.keys(compFasesSelectedObras).reduce((acc, name) => acc + (compFasesSelectedObras[name] ? 1 : 0), 0);
+
   ['mao_obra', 'materiais', 'total'].forEach(metric => {
     const btn = document.getElementById('comp-fases-metric-' + metric);
     if (btn) btn.classList.toggle('active', compFasesMetric === metric);
-  });
-
-  [['bar', 'comp-fases-type-bar'], ['doughnut', 'comp-fases-type-doughnut']].forEach(([type, id]) => {
-    const btn = document.getElementById(id);
-    if (btn) btn.classList.toggle('active', compFasesChartType === type);
   });
 
   const obrasRow = document.getElementById('comp-fases-obras-row');
@@ -2586,7 +2580,16 @@ function syncCompFasesControls_(obraNames, faseItems) {
   const label = document.getElementById('comp-fases-label');
   if (label) {
     const selectedCount = Object.keys(compFasesSelectedKeys).reduce((acc, key) => acc + (compFasesSelectedKeys[key] ? 1 : 0), 0);
-    label.textContent = 'Fases visiveis' + (selectedCount ? ' (' + selectedCount + ' selecionada(s))' : '');
+    label.textContent = selectedCount
+      ? 'Fases visiveis (' + selectedCount + ' selecionada(s))'
+      : 'Fases disponiveis';
+  }
+
+  const fasesWrap = document.getElementById('comp-fases-filter-wrap');
+  if (fasesWrap) {
+    const shouldShow = selectedObrasCount > 0;
+    fasesWrap.classList.toggle('is-collapsed', !shouldShow);
+    fasesWrap.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
   }
 
   const fasesRow = document.getElementById('comp-fases-row');
@@ -2596,7 +2599,8 @@ function syncCompFasesControls_(obraNames, faseItems) {
     name: fase,
     total: 0
   }));
-  const list = (Array.isArray(faseItems) && faseItems.length) ? faseItems : fallbackList;
+  const list = ((Array.isArray(faseItems) && faseItems.length) ? faseItems : fallbackList)
+    .filter(item => shouldIncludeCompFase_(item && item.name));
 
   fasesRow.innerHTML = list.map(item => {
     const labelTxt = String(item.name || 'Sem Fase');
@@ -2615,14 +2619,6 @@ function setCompFasesMetric(metric) {
   const allowed = { mao_obra: true, materiais: true, total: true };
   if (!allowed[metric]) return;
   compFasesMetric = metric;
-  buildCompFasesObraChart(getCompObraNames_());
-}
-
-function setCompFasesChartType(type) {
-  const allowed = { bar: true, doughnut: true };
-  if (!allowed[type]) return;
-  if (type === 'doughnut' && !compFasesDoughnutEnabled) return;
-  compFasesChartType = type;
   buildCompFasesObraChart(getCompObraNames_());
 }
 
@@ -2680,6 +2676,12 @@ function clearCompFasesCanvas_() {
   return canvas;
 }
 
+function renderCompFasesPlaceholder_(message) {
+  const wrap = document.getElementById('comp-fases-canvas-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="no-chart-data">' + escapeHtml_(message || 'Sem dados para mostrar') + '</div>';
+}
+
 function getFallbackCompFaseItems_() {
   return DEFAULT_COMP_FASES.map(fase => {
     const label = String(fase || '').trim() || 'Sem Fase';
@@ -2703,6 +2705,7 @@ function collectAvailableCompFases_(selectedObras) {
 
     (obra.fases || []).forEach(item => {
       const fase = String(item && item.Fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
       const key = normalizeFaseKey_(fase);
       if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
       phaseMap[key].total += Number(item && item.Custo) || 0;
@@ -2710,6 +2713,7 @@ function collectAvailableCompFases_(selectedObras) {
 
     (obra.materiais_fases || []).forEach(item => {
       const fase = String(item && item.Fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
       const key = normalizeFaseKey_(fase);
       if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
       phaseMap[key].total += Number(item && item.Custo) || 0;
@@ -2718,6 +2722,7 @@ function collectAvailableCompFases_(selectedObras) {
     (obra.assiduidade || []).forEach(worker => {
       Object.values(worker.dias || {}).forEach(day => {
         getDayPhaseList_(day, 'Sem Fase').forEach(fase => {
+          if (!shouldIncludeCompFase_(fase)) return;
           const key = normalizeFaseKey_(fase);
           if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
         });
@@ -2725,10 +2730,7 @@ function collectAvailableCompFases_(selectedObras) {
     });
   });
 
-  return Object.values(phaseMap).sort((a, b) => {
-    const diff = (b.total || 0) - (a.total || 0);
-    return diff !== 0 ? diff : String(a.name || '').localeCompare(String(b.name || ''), 'pt');
-  });
+  return sortCompFaseItems_(Object.values(phaseMap));
 }
 
 function collectCompFasesData_(selectedObras) {
@@ -2753,8 +2755,9 @@ function collectCompFasesData_(selectedObras) {
           if (!dateInRange(dateStr) || d.falta) return;
           const phaseList = getDayPhaseList_(d, fallbackFase);
           const totalCost = Number(d.custo) || 0;
-          const splitCost = phaseList.length ? totalCost / phaseList.length : totalCost;
-          phaseList.forEach(fase => {
+          const validPhaseList = phaseList.filter(shouldIncludeCompFase_);
+          const splitCost = validPhaseList.length ? totalCost / validPhaseList.length : 0;
+          validPhaseList.forEach(fase => {
             if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
             perObra[nome][fase].mao_obra += splitCost;
           });
@@ -2767,6 +2770,7 @@ function collectCompFasesData_(selectedObras) {
     filterMateriaisByDate().forEach(m => {
       if (!selectedSet.has(m.obra)) return;
       const fase = String(m.fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
       if (!perObra[m.obra]) perObra[m.obra] = {};
       if (!perObra[m.obra][fase]) perObra[m.obra][fase] = { mao_obra: 0, materiais: 0, total: 0 };
       perObra[m.obra][fase].materiais += matCost(m);
@@ -2786,7 +2790,7 @@ function collectCompFasesData_(selectedObras) {
     });
   });
 
-  return Object.values(phaseMap).sort((a, b) => (b.total || 0) - (a.total || 0));
+  return sortCompFaseItems_(Object.values(phaseMap));
 }
 
 function buildCompFasesObraChart(obraNames) {
@@ -2813,171 +2817,311 @@ function buildCompFasesObraChart(obraNames) {
   if (!ctx) return;
 
   if (!selectedObras.length) {
-    clearCompFasesCanvas_();
+    renderCompFasesPlaceholder_('Selecione obras para comparar');
     return;
   }
   if (!availablePhases.length) {
-    clearCompFasesCanvas_();
+    renderCompFasesPlaceholder_('Sem fases no periodo');
     return;
   }
 
   const selectedPhaseItems = chartPhaseData.filter(item => !!compFasesSelectedKeys[item.key]);
   if (!selectedPhaseItems.length) {
-    clearCompFasesCanvas_();
+    renderCompFasesPlaceholder_('Selecione fases para visualizar');
     return;
   }
 
   const chartItems = compactCompFasesForMobile_(selectedPhaseItems);
-  setCompFasesTypeAvailability_(chartItems);
   syncCompFasesControls_(allObraNames, availablePhases);
 
-  if (isMobile() && compFasesChartType === 'doughnut' && !compFasesDoughnutEnabled) {
-    compFasesChartType = 'bar';
-    syncCompFasesControls_(allObraNames, availablePhases);
-  }
-
   const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const chartType = compFasesChartType === 'doughnut' ? 'doughnut' : 'bar';
   const metricLabelMap = { mao_obra: 'Mao de Obra', materiais: 'Materiais', total: 'Total' };
   const datasetLabel = metricLabelMap[compFasesMetric] || 'Custo';
 
   compCharts.fasesobra = new Chart(ctx, {
-    type: chartType,
-    data: chartType === 'doughnut'
-      ? {
-          labels: chartItems.map(item => item.name),
-          datasets: [{
-            label: datasetLabel,
-            data: chartItems.map(item => item.total),
-            backgroundColor: chartItems.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-            borderWidth: 1
-          }]
-        }
-      : {
-          labels: chartItems.map(item => item.name),
-          datasets: selectedObras.map((obraName, index) => ({
-            label: obraName,
-            data: chartItems.map(item => Number(item.valuesByObra[obraName]) || 0),
-            backgroundColor: CHART_PALETTE[index % CHART_PALETTE.length],
-            borderRadius: 4
-          }))
-        },
+    type: 'bar',
+    data: {
+      labels: chartItems.map(item => item.name),
+      datasets: selectedObras.map((obraName, index) => ({
+        label: obraName,
+        data: chartItems.map(item => Number(item.valuesByObra[obraName]) || 0),
+        backgroundColor: CHART_PALETTE[index % CHART_PALETTE.length],
+        borderRadius: 4
+      }))
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: reduceMotion ? false : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
-      cutout: chartType === 'doughnut' ? '56%' : undefined,
       plugins: {
-        legend: chartType === 'doughnut'
-          ? {
-              display: true,
-              position: 'bottom',
-              labels: {
-                boxWidth: 10,
-                font: { size: isMobile() ? 10 : 11 },
-                padding: isMobile() ? 6 : 8,
-                generateLabels: chart => {
-                  const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                  if (!isMobile()) return base;
-                  return base.map(it => Object.assign({}, it, { text: abbreviateChartLabel_(it.text, 12) }));
-                }
-              }
-            }
-          : mLegend({ position: isMobile() ? 'bottom' : 'top' }),
+        legend: mLegend({ position: isMobile() ? 'bottom' : 'top' }),
         tooltip: {
-          callbacks: chartType === 'doughnut'
-            ? {
-                title: items => items && items[0] ? String(items[0].label || '') : '',
-                label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
-              }
-            : {
-                title: items => items && items[0] ? String(items[0].label || '') : '',
-                label: tipCtx => tipCtx.dataset.label + ': ' + fmt(tipCtx.raw)
-              }
+          callbacks: {
+            title: items => items && items[0] ? String(items[0].label || '') : '',
+            label: tipCtx => tipCtx.dataset.label + ': ' + fmt(tipCtx.raw)
+          }
         }
       },
-      scales: chartType === 'bar'
-        ? {
-            y: {
-              grid: { color: 'rgba(255,255,255,.04)' },
-              ticks: {
-                font: { size: isMobile() ? 9 : 10 },
-                callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
-              }
-            },
-            x: {
-              grid: { display: false },
-              ticks: {
-                font: { size: isMobile() ? 9 : 10 },
-                callback: val => {
-                  const idx = Number(val);
-                  const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
-                  return isMobile() ? abbreviateChartLabel_(label, 10) : label;
-                }
-              }
+      scales: {
+        y: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+          }
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: val => {
+              const idx = Number(val);
+              const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+              return isMobile() ? abbreviateChartLabel_(label, 10) : label;
             }
           }
-        : undefined
+        }
+      }
     }
   });
 }
 
 /* ── Stacked bar: Dias por Fase de Obra ──────────────── */
-function buildCompDiasFaseChart(obraNames) {
-  if (compCharts.diasfase) compCharts.diasfase.destroy();
+function updateCompDiasPeriodLabel_() {
+  const el = document.getElementById('comp-dias-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
 
-  // Aggregate: obra → fase → Set<dateStr> (distinct days)
-  const obraFaseDias = {};
-  const allFases = new Set();
-  obraNames.forEach(nome => {
-    obraFaseDias[nome] = {};
-    const obra = DATA.obras[nome];
-    const workers = obra.workers || [];
+function getSelectedCompDiasObras_(obraNames) {
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  return list.filter(name => !!compDiasSelectedObras[name]);
+}
+
+function ensureCompDiasCanvas_() {
+  const wrap = document.getElementById('comp-dias-canvas-wrap');
+  if (!wrap) return null;
+  if (!document.getElementById('comp-chart-diasfase')) {
+    wrap.innerHTML = '<canvas id="comp-chart-diasfase"></canvas>';
+  }
+  return document.getElementById('comp-chart-diasfase');
+}
+
+function renderCompDiasPlaceholder_(message) {
+  const wrap = document.getElementById('comp-dias-canvas-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="no-chart-data">' + escapeHtml_(message || 'Sem dados para mostrar') + '</div>';
+}
+
+function syncCompDiasControls_(obraNames, faseItems) {
+  const selectedObrasCount = Object.keys(compDiasSelectedObras).reduce((acc, name) => acc + (compDiasSelectedObras[name] ? 1 : 0), 0);
+
+  const obrasRow = document.getElementById('comp-dias-obras-row');
+  if (obrasRow) {
+    const list = Array.isArray(obraNames) ? obraNames : [];
+    if (!list.length) {
+      obrasRow.innerHTML = '<span class="obra-fase-filter-empty">Sem obras disponiveis.</span>';
+    } else {
+      obrasRow.innerHTML = list.map(name => {
+        const active = !!compDiasSelectedObras[name];
+        const safeName = escapeHtml_(name);
+        const encoded = encodeURIComponent(name);
+        return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+          ' onclick="toggleCompDiasObra(\'' + encoded + '\')"' +
+          ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+          ' title="' + safeName + '">' + safeName + '</button>';
+      }).join('');
+    }
+  }
+
+  const label = document.getElementById('comp-dias-label');
+  if (label) {
+    const selectedCount = Object.keys(compDiasSelectedKeys).reduce((acc, key) => acc + (compDiasSelectedKeys[key] ? 1 : 0), 0);
+    label.textContent = selectedCount
+      ? 'Fases visiveis (' + selectedCount + ' selecionada(s))'
+      : 'Fases disponiveis';
+  }
+
+  const fasesWrap = document.getElementById('comp-dias-filter-wrap');
+  if (fasesWrap) {
+    const shouldShow = selectedObrasCount > 0;
+    fasesWrap.classList.toggle('is-collapsed', !shouldShow);
+    fasesWrap.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  }
+
+  const fasesRow = document.getElementById('comp-dias-row');
+  if (!fasesRow) return;
+  const fallbackList = DEFAULT_COMP_FASES.map(fase => ({
+    key: normalizeFaseKey_(fase),
+    name: fase,
+    total: 0
+  }));
+  const list = ((Array.isArray(faseItems) && faseItems.length) ? faseItems : fallbackList)
+    .filter(item => shouldIncludeCompFase_(item && item.name));
+
+  fasesRow.innerHTML = list.map(item => {
+    const labelTxt = String(item.name || 'Sem Fase');
+    const key = normalizeFaseKey_(labelTxt);
+    const active = !!compDiasSelectedKeys[key];
+    const safeLabel = escapeHtml_(labelTxt);
+    const encoded = encodeURIComponent(labelTxt);
+    return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+      ' onclick="toggleCompDiasFaseSelection(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+      ' title="' + safeLabel + ' · ' + (Number(item.total) || 0) + ' dias">' + safeLabel + '</button>';
+  }).join('');
+}
+
+function toggleCompDiasObra(obraEncoded) {
+  const obraName = decodeURIComponent(String(obraEncoded || ''));
+  if (!obraName) return;
+  const obraNames = getCompObraNames_();
+  if (!obraNames.includes(obraName)) return;
+  compDiasSelectedObras[obraName] = !compDiasSelectedObras[obraName];
+  buildCompDiasFaseChart(obraNames);
+}
+
+function resetCompDiasObrasSelection() {
+  compDiasSelectedObras = {};
+  compDiasSelectedKeys = {};
+  buildCompDiasFaseChart(getCompObraNames_());
+}
+
+function toggleCompDiasFaseSelection(faseEncoded) {
+  const faseName = decodeURIComponent(String(faseEncoded || ''));
+  if (!faseName) return;
+  const key = normalizeFaseKey_(faseName);
+  compDiasSelectedKeys[key] = !compDiasSelectedKeys[key];
+  if (!compDiasSelectedKeys[key]) delete compDiasSelectedKeys[key];
+  buildCompDiasFaseChart(getCompObraNames_());
+}
+
+function resetCompDiasSelection() {
+  compDiasSelectedKeys = {};
+  buildCompDiasFaseChart(getCompObraNames_());
+}
+
+function collectCompDiasData_(selectedObras) {
+  const selected = Array.isArray(selectedObras) ? selectedObras : [];
+  const phaseMap = {};
+
+  selected.forEach(nome => {
+    const obra = DATA && DATA.obras ? DATA.obras[nome] : null;
+    if (!obra) return;
+
+    const phaseDaysByName = {};
+    const workerFaseMap = {};
+    (obra.workers || []).forEach(w => {
+      workerFaseMap[w['Nome (auto)']] = w.Fase || 'Sem Fase';
+    });
+
     (obra.assiduidade || []).forEach(w => {
-      const wInfo = workers.find(ww => ww['Nome (auto)'] === w.nome);
-      const fase = (wInfo && wInfo.Fase) || '\u2014';
-      Object.entries(w.dias).forEach(([dateStr, d]) => {
+      const fallbackFase = workerFaseMap[w.nome] || 'Sem Fase';
+      Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
         if (!dateInRange(dateStr) || d.falta) return;
-        if (d.horas <= 0) return;
-        allFases.add(fase);
-        if (!obraFaseDias[nome][fase]) obraFaseDias[nome][fase] = new Set();
-        obraFaseDias[nome][fase].add(dateStr);
+        if ((Number(d.horas) || 0) <= 0) return;
+        const phaseList = getDayPhaseList_(d, fallbackFase).filter(shouldIncludeCompFase_);
+        phaseList.forEach(fase => {
+          if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
+          phaseDaysByName[fase].add(dateStr);
+        });
       });
+    });
+
+    Object.keys(phaseDaysByName).forEach(fase => {
+      const value = phaseDaysByName[fase].size;
+      if (value <= 0) return;
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0, valuesByObra: {} };
+      phaseMap[key].total += value;
+      phaseMap[key].valuesByObra[nome] = value;
     });
   });
 
-  const faseList = [...allFases].sort();
-  if (!faseList.length) {
-    document.getElementById('comp-chart-diasfase').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem fases no per\u00edodo</div>';
+  return sortCompFaseItems_(Object.values(phaseMap));
+}
+
+function buildCompDiasFaseChart(obraNames) {
+  if (compCharts.diasfase) compCharts.diasfase.destroy();
+
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+  updateCompDiasPeriodLabel_();
+
+  Object.keys(compDiasSelectedObras).forEach(name => {
+    if (!allObraNames.includes(name)) delete compDiasSelectedObras[name];
+  });
+
+  const selectedObras = getSelectedCompDiasObras_(allObraNames);
+  const availablePhases = collectAvailableCompFases_(allObraNames);
+  const chartPhaseData = collectCompDiasData_(selectedObras);
+  const validPhaseKeys = new Set(availablePhases.map(item => item.key));
+  Object.keys(compDiasSelectedKeys).forEach(key => {
+    if (!validPhaseKeys.has(key)) delete compDiasSelectedKeys[key];
+  });
+
+  syncCompDiasControls_(allObraNames, availablePhases);
+
+  const ctx = ensureCompDiasCanvas_();
+  if (!ctx) return;
+  if (!selectedObras.length) {
+    renderCompDiasPlaceholder_('Selecione obras para comparar');
+    return;
+  }
+  if (!availablePhases.length) {
+    renderCompDiasPlaceholder_('Sem fases no periodo');
     return;
   }
 
-  const shortNames = obraNames.map(n => n.length > 14 ? n.slice(0, 12) + '\u2026' : n);
+  const selectedPhaseItems = chartPhaseData.filter(item => !!compDiasSelectedKeys[item.key]);
+  if (!selectedPhaseItems.length) {
+    renderCompDiasPlaceholder_('Selecione fases para visualizar');
+    return;
+  }
 
-  // One dataset per fase, stacked — value = number of distinct days
-  const datasets = faseList.map((fase, i) => ({
-    label: fase,
-    data: obraNames.map(n => obraFaseDias[n][fase] ? obraFaseDias[n][fase].size : 0),
-    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    borderRadius: 4,
-  }));
+  const chartItems = compactCompFasesForMobile_(selectedPhaseItems);
+  syncCompDiasControls_(allObraNames, availablePhases);
 
-  const ctx = document.getElementById('comp-chart-diasfase');
-  if (!ctx) return;
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   compCharts.diasfase = new Chart(ctx, {
     type: 'bar',
-    data: { labels: shortNames, datasets },
+    data: {
+      labels: chartItems.map(item => item.name),
+      datasets: selectedObras.map((obraName, index) => ({
+        label: obraName,
+        data: chartItems.map(item => Number(item.valuesByObra[obraName]) || 0),
+        backgroundColor: CHART_PALETTE[index % CHART_PALETTE.length],
+        borderRadius: 4
+      }))
+    },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
       plugins: {
-        legend: mLegend(),
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw + ' dias' } }
+        legend: mLegend({ position: isMobile() ? 'bottom' : 'top' }),
+        tooltip: {
+          callbacks: {
+            title: items => items && items[0] ? String(items[0].label || '') : '',
+            label: tipCtx => tipCtx.dataset.label + ': ' + tipCtx.raw + ' dias'
+          }
+        }
       },
       scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
-        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' },
-             ticks: { font: { size: 10 }, stepSize: 1 } }
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: val => {
+              const idx = Number(val);
+              const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+              return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+            }
+          }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { font: { size: isMobile() ? 9 : 10 }, stepSize: 1 }
+        }
       }
     }
   });

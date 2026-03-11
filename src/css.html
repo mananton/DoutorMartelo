@@ -1421,23 +1421,63 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
   flex-direction: column;
   gap: 12px;
 }
+.comp-chart-body.tall.comp-custos-body,
+.comp-chart-body.tall.comp-fases-body,
+.comp-chart-body.tall.comp-dias-body {
+  height: auto;
+  min-height: 450px;
+}
 .comp-custos-header { gap: 10px; }
 .comp-custos-top-controls { flex-wrap: wrap; }
 .comp-custos-filter-wrap { margin-top: 0; }
-.comp-fases-header { gap: 10px; }
+.comp-fases-header,
+.comp-dias-header { gap: 10px; }
 .comp-fases-top-controls { flex-wrap: wrap; }
 .comp-fases-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+.comp-dias-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .comp-fases-obras-wrap,
-.comp-fases-filter-wrap { margin-top: 0; }
+.comp-fases-filter-wrap,
+.comp-dias-obras-wrap,
+.comp-dias-filter-wrap { margin-top: 0; }
+.comp-fases-filter-wrap {
+  overflow: hidden;
+  max-height: 320px;
+  opacity: 1;
+  transition: max-height .2s ease, opacity .18s ease, margin-top .18s ease;
+}
+.comp-fases-filter-wrap.is-collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-top: -4px;
+  pointer-events: none;
+}
 .comp-fases-obras-row,
-.comp-fases-chip-row {
+.comp-fases-chip-row,
+.comp-dias-obras-row,
+.comp-dias-chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.comp-dias-filter-wrap {
+  overflow: hidden;
+  max-height: 320px;
+  opacity: 1;
+  transition: max-height .2s ease, opacity .18s ease, margin-top .18s ease;
+}
+.comp-dias-filter-wrap.is-collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-top: -4px;
+  pointer-events: none;
 }
 .obra-fase-chip.active {
   background: var(--accent);
@@ -1464,6 +1504,15 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
   min-height: 220px;
 }
 .comp-fases-canvas-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.comp-dias-canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+.comp-dias-canvas-wrap canvas {
   width: 100% !important;
   height: 100% !important;
 }
@@ -1540,6 +1589,11 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 @media (max-width: 600px) {
   .comp-tabs { overflow-x: auto; }
   .comp-tab { white-space: nowrap; padding: 8px 14px; font-size: 12px; }
+  .comp-chart-body.tall.comp-custos-body,
+  .comp-chart-body.tall.comp-fases-body,
+  .comp-chart-body.tall.comp-dias-body {
+    min-height: 0;
+  }
   .comp-custos-top-controls {
     width: 100%;
     justify-content: flex-start;
