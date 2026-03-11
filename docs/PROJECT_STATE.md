@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-03-10
+Last updated: 2026-03-11
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
@@ -53,6 +53,15 @@ Last updated: 2026-03-10
 - Chart click no longer auto-expands Workers/Materials sections (removed accidental drill side-effect).
 - Materiais section now supports name search (`Pesquisar material...`) while preserving phase grouping.
 - Workers table filtering updated to include legacy "cost-only" days in time-window filtering.
+- Obra list buttons now:
+  - use period-button visual style (slightly larger touch targets),
+  - show only obras that have data in the currently active date filter.
+- Obra detail now supports explicit "no data" state when no obra matches the active period filter.
+- Deslocacoes section was restructured to match Obra interaction flow:
+  - top time filter controls,
+  - KPI cards,
+  - vertical obra selector,
+  - full register table driven only by the selected obra + active period.
 
 ## 6. Operational Notes
 - `ENABLE_EMPTY_ROW_CLEANUP` is currently `false` in `src/main.gs` (temporary deactivation).

@@ -350,29 +350,30 @@ td { padding: 11px 16px; vertical-align: middle; }
 }
 .obra-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
 }
 .obra-btn {
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 14px;
+  border-radius: 6px;
+  padding: 6px 12px;
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all .15s ease;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 38px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .obra-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--text-muted);
+  color: var(--text-muted);
 }
 .obra-btn.active {
-  background: rgba(233,69,96,.12);
-  border-color: rgba(233,69,96,.35);
-  color: var(--accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 .obra-empty {
   font-size: 12px;
@@ -1130,6 +1131,45 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
   font-size: 10px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: .5px;
 }
+.desl-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.desl-period-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.desl-quick-date-btn {
+  min-height: 38px;
+  padding: 6px 12px;
+}
+.desl-date-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.desl-obra-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.desl-obra-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 40px;
+  padding: 8px 12px;
+}
 .desl-charts-row {
   display: grid; grid-template-columns: 1fr 1fr;
   gap: 16px; margin-bottom: 24px;
@@ -1208,6 +1248,10 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 @media (max-width: 600px) {
   .desl-kpi-grid { grid-template-columns: 1fr; }
   .desl-table-toolbar { width: 100%; }
+  .desl-filter-row { align-items: stretch; }
+  .desl-period-btns { width: 100%; overflow-x: auto; padding-bottom: 2px; }
+  .desl-date-inline { width: 100%; }
+  .desl-date-input { flex: 1; min-width: 130px; }
 }
 
 /* ── EQUIPA / COLABORADORES ────────────────────────────── */
@@ -1487,8 +1531,7 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 [data-theme="light"] tbody tr:hover { background: rgba(0,0,0,.02); }
 [data-theme="light"] .table-search,
 [data-theme="light"] .desl-date-input,
-[data-theme="light"] .obra-select,
-[data-theme="light"] .obra-btn { background: #f0f2f5; }
+[data-theme="light"] .obra-select { background: #f0f2f5; }
 [data-theme="light"] .kpi-card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 [data-theme="light"] .card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 [data-theme="light"] #loading-overlay { background: #f0f2f5; }

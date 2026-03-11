@@ -1,6 +1,6 @@
 # Open Items
 
-Last reviewed: 2026-03-10
+Last reviewed: 2026-03-11
 
 ## P1 - Validate Worker Filtering Against Real Legacy Samples
 - Run focused checks on at least 3 obras with mixed old/new rows.
@@ -26,6 +26,15 @@ Last reviewed: 2026-03-10
   - partial text matching and case variations
   - no-result state under active date filters
 - Ensure performance remains smooth on large consumption histories.
+
+## P2 - Validate New Deslocacoes UX Flow
+- Validate full path on desktop/mobile:
+  - top time filter controls sync with global filter state,
+  - obra selector scroll + active state,
+  - table rows and popup details matching selected obra.
+- Confirm empty states:
+  - no deslocacoes in period,
+  - no rows for selected obra.
 
 ## P2 - Chart UX Guardrail Follow-up
 - Current implementation already avoids doughnut on mobile for high phase counts.

@@ -40,6 +40,7 @@ let deslCharts = {};
 let deslAllRows = [];
 let deslSortCol = 'data';
 let deslSortAsc = false;
+let deslSelectedObra = '';
 
 /* ── EQUIPA GLOBALS ────────────────────────────────────── */
 let equipaCharts = {};
@@ -550,22 +551,89 @@ function isObraAtiva_(nome) {
   return v === 'sim' || v === 'true' || v === '1';
 }
 
+function obraHasDataInCurrentFilter_(nome) {
+  if (!DATA || !DATA.obras || !DATA.obras[nome]) return false;
+  const obra = DATA.obras[nome];
+
+  const hasDaily = (obra.daily || []).some(d => {
+    const dateKey = d.DATA_str || d.Data || d.data || '';
+    return dateInRange(dateKey);
+  });
+  if (hasDaily) return true;
+
+  const hasAssid = (obra.assiduidade || []).some(w =>
+    Object.keys(w.dias || {}).some(dateStr => dateInRange(dateStr))
+  );
+  if (hasAssid) return true;
+
+  const hasDeslocacoes = (DATA.deslocacoes || []).some(d =>
+    d.obra === nome && dateInRange(d.data)
+  );
+  if (hasDeslocacoes) return true;
+
+  const hasMateriais = (matMovAll || []).some(m =>
+    m.obra === nome &&
+    m.tipo &&
+    String(m.tipo).toUpperCase() === 'CONSUMO' &&
+    dateInRange(m.data)
+  );
+  return hasMateriais;
+}
+
+function getVisibleObraNames_() {
+  if (!DATA || !DATA.obras) return [];
+  const allNames = Object.keys(DATA.obras).sort();
+  let names = allNames.filter(isObraAtiva_);
+  if (!names.length) names = allNames;
+  return names.filter(obraHasDataInCurrentFilter_);
+}
+
 function buildObraButtons() {
   const container = document.getElementById('obra-buttons');
   if (!container || !DATA || !DATA.obras) return;
 
-  const allNames = Object.keys(DATA.obras).sort();
-  let names = allNames.filter(isObraAtiva_);
-  if (!names.length) names = allNames;
+  const names = getVisibleObraNames_();
+
+  if (currentObraName && names.indexOf(currentObraName) === -1) {
+    currentObraName = names.length ? names[0] : null;
+  } else if (!currentObraName && names.length) {
+    currentObraName = names[0];
+  }
 
   if (!names.length) {
-    container.innerHTML = '<span class="obra-empty">Sem obras para mostrar.</span>';
+    container.innerHTML = '<span class="obra-empty">Sem obras com dados no filtro atual.</span>';
     return;
   }
 
   container.innerHTML = names.map(nome =>
-    `<button type="button" class="obra-btn${currentObraName === nome ? ' active' : ''}" onclick="openObra('${nome.replace(/'/g, "\\'")}')">${nome}</button>`
+    `<button type="button" class="period-btn obra-btn${currentObraName === nome ? ' active' : ''}" onclick="openObra('${nome.replace(/'/g, "\\'")}')">${nome}</button>`
   ).join('');
+}
+
+function renderObraNoDataState_() {
+  const badge = document.getElementById('obra-status-badge');
+  if (badge) {
+    badge.textContent = '';
+    badge.className = 'obra-status';
+  }
+
+  const kpi = document.getElementById('obra-kpis');
+  if (kpi) kpi.innerHTML = '<div class="obra-empty">Sem dados para o filtro atual.</div>';
+
+  destroyObraCharts();
+  const chartWrap = document.getElementById('chart-fases-wrap');
+  if (chartWrap) chartWrap.innerHTML = '<div class="no-chart-data">Sem fases no periodo</div>';
+
+  const faseFilter = document.getElementById('obra-fase-filter-wrap');
+  if (faseFilter) faseFilter.innerHTML = '<div class="obra-fase-filter-empty">Sem fases para filtrar</div>';
+
+  const workersCard = document.getElementById('obra-workers-card');
+  if (workersCard) workersCard.style.display = 'none';
+
+  const materiaisCard = document.getElementById('obra-materiais-card');
+  if (materiaisCard) materiaisCard.style.display = 'none';
+
+  obraWorkerPopupClose();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1019,6 +1087,9 @@ function buildFasesChart(fases, metric, chartType) {
    OBRA — WORKERS TABLE (sort, filter, export)
    ══════════════════════════════════════════════════════════ */
 function buildObraWorkersTable(nome) {
+  const workersCard = document.getElementById('obra-workers-card');
+  if (workersCard) workersCard.style.display = '';
+
   const obra = DATA.obras[nome];
   const assid = obra.assiduidade || [];
   const workers = obra.workers || [];
@@ -1495,52 +1566,55 @@ function animateCounters() {
 function buildDeslocacoes() {
   if (!DATA || !DATA.deslocacoes) return;
   const desl = DATA.deslocacoes.filter(d => dateInRange(d.data));
+  syncDeslFilterInputsUI_();
+
   if (!desl.length) {
-    // Limpar todos os containers para não mostrar dados de render anterior
-    const empty = '<div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-route" style="font-size:28px;display:block;margin-bottom:12px;opacity:.4"></i>Sem deslocações no período seleccionado</div>';
+    const empty = '<div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-route" style="font-size:28px;display:block;margin-bottom:12px;opacity:.4"></i>Sem deslocacoes no periodo selecionado</div>';
     document.getElementById('desl-kpis').innerHTML = empty;
-    const origensEl = document.getElementById('desl-origens');
-    if (origensEl) origensEl.innerHTML = '';
+    const list = document.getElementById('desl-obra-list');
+    if (list) list.innerHTML = '<div class="obra-empty">Sem obras com deslocacoes neste periodo.</div>';
     deslAllRows = [];
+    deslSelectedObra = '';
     const tbody = document.getElementById('desl-tbody');
     if (tbody) tbody.innerHTML = '';
     destroyDeslCharts();
     return;
   }
 
-  // Store for table filtering
   deslAllRows = desl.slice();
   deslSortCol = 'data';
   deslSortAsc = false;
 
-  // ── KPI CARDS ──
-  const totalViagens = desl.reduce((s, d) => s + d.qtd, 0);
-  const totalCusto = desl.reduce((s, d) => s + d.custo, 0);
+  const obras = [...new Set(desl.map(d => d.obra).filter(Boolean))].sort();
+  if (!deslSelectedObra || obras.indexOf(deslSelectedObra) === -1) {
+    deslSelectedObra = obras.length ? obras[0] : '';
+  }
+  renderDeslObraSelector_(obras);
+
+  const totalViagens = desl.reduce((s, d) => s + (Number(d.qtd) || 0), 0);
+  const totalCusto = desl.reduce((s, d) => s + (Number(d.custo) || 0), 0);
   const custoMedio = totalViagens > 0 ? totalCusto / totalViagens : 0;
 
-  // Obra with most deslocações
   const obraCounts = {};
   desl.forEach(d => {
-    if (!obraCounts[d.obra]) obraCounts[d.obra] = { qtd: 0, custo: 0 };
-    obraCounts[d.obra].qtd += d.qtd;
-    obraCounts[d.obra].custo += d.custo;
+    if (!obraCounts[d.obra]) obraCounts[d.obra] = { qtd: 0 };
+    obraCounts[d.obra].qtd += Number(d.qtd) || 0;
   });
   const obraTop = Object.entries(obraCounts).sort((a, b) => b[1].qtd - a[1].qtd);
   const obraMaisDesl = obraTop.length > 0 ? obraTop[0][0] : '\u2014';
 
-  // Most frequent origin
   const origemCounts = {};
   desl.forEach(d => {
     const o = d.origem || 'Desconhecida';
-    origemCounts[o] = (origemCounts[o] || 0) + d.qtd;
+    origemCounts[o] = (origemCounts[o] || 0) + (Number(d.qtd) || 0);
   });
   const origemTop = Object.entries(origemCounts).sort((a, b) => b[1] - a[1]);
   const origemFreq = origemTop.length > 0 ? origemTop[0][0] : '\u2014';
 
   const kpiItems = [
     { icon: 'fa-route', color: 'var(--info)', bg: 'rgba(99,179,237,.12)', val: totalViagens, label: 'Total Viagens' },
-    { icon: 'fa-money-bill-wave', color: 'var(--warning)', bg: 'rgba(246,173,85,.12)', val: fmt(custoMedio), label: 'Custo Médio / Viagem' },
-    { icon: 'fa-building', color: 'var(--accent)', bg: 'rgba(233,69,96,.12)', val: obraMaisDesl, label: 'Obra c/ Mais Deslocações' },
+    { icon: 'fa-money-bill-wave', color: 'var(--warning)', bg: 'rgba(246,173,85,.12)', val: fmt(custoMedio), label: 'Custo Medio Viagens' },
+    { icon: 'fa-building', color: 'var(--accent)', bg: 'rgba(233,69,96,.12)', val: obraMaisDesl, label: 'Obra c/ Mais Deslocacoes' },
     { icon: 'fa-location-dot', color: 'var(--success)', bg: 'rgba(72,187,120,.12)', val: origemFreq, label: 'Origem Mais Frequente' },
   ];
 
@@ -1554,15 +1628,57 @@ function buildDeslocacoes() {
     </div>
   `).join('');
 
-  // ── MAPA DE ORIGENS ──
-  buildDeslOrigens(desl);
-
-  // ── TABLE ──
-  populateDeslFilters(desl);
   renderDeslTable();
 }
 
-/* ── Origens Map ──────────────────────────────────────── */
+function renderDeslObraSelector_(obras) {
+  const list = document.getElementById('desl-obra-list');
+  if (!list) return;
+  if (!obras || !obras.length) {
+    list.innerHTML = '<div class="obra-empty">Sem obras para mostrar.</div>';
+    return;
+  }
+  list.innerHTML = obras.map(nome => {
+    const safe = nome.replace(/'/g, "\\'");
+    const active = nome === deslSelectedObra ? ' active' : '';
+    return '<button type="button" class="period-btn desl-obra-btn' + active + '" onclick="selectDeslObra(\'' + safe + '\')">' + nome + '</button>';
+  }).join('');
+}
+
+function selectDeslObra(nome) {
+  deslSelectedObra = nome || '';
+  renderDeslObraSelector_([...new Set(deslAllRows.map(d => d.obra).filter(Boolean))].sort());
+  renderDeslTable();
+}
+
+function getFilteredDeslRows_() {
+  return deslAllRows.filter(d => !deslSelectedObra || d.obra === deslSelectedObra);
+}
+
+function applyDeslGlobalFilter() {
+  const from = document.getElementById('desl-global-date-from');
+  const to = document.getElementById('desl-global-date-to');
+  globalDateFrom = (from && from.value) || '';
+  globalDateTo = (to && to.value) || '';
+  activeQuickFilter = '';
+  if (!globalDateFrom && !globalDateTo) activeQuickFilter = 'tudo';
+  syncFilterInputsUI_();
+  syncQuickFilterButtonsUI_();
+  if (DATA) {
+    buildAll();
+    if (currentSection === 'obra-detail') {
+      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
+      else renderObraNoDataState_();
+    }
+  }
+}
+
+function syncDeslFilterInputsUI_() {
+  const from = document.getElementById('desl-global-date-from');
+  const to = document.getElementById('desl-global-date-to');
+  if (from) from.value = globalDateFrom;
+  if (to) to.value = globalDateTo;
+}
 function buildDeslOrigens(desl) {
   // Group: obra -> { origem -> { qtd, custo } }
   const map = {};
@@ -1633,29 +1749,9 @@ function buildDeslObraChart(desl) { /* disabled */ }
 function buildDeslTimeChart(desl) { /* disabled */ }
 
 /* ── Table filters populate ──────────────────────────── */
-function populateDeslFilters(desl) {
-  const obras = [...new Set(desl.map(d => d.obra))].sort();
-  const sel = document.getElementById('desl-filter-obra');
-  sel.innerHTML = '<option value="">Todas as obras</option>' +
-    obras.map(o => `<option value="${o}">${o}</option>`).join('');
-
-  // Clear local date filters — global filter already applied to deslAllRows
-  document.getElementById('desl-date-from').value = '';
-  document.getElementById('desl-date-to').value = '';
-}
-
-/* ── Table render ────────────────────────────────────── */
+/* Table render */
 function renderDeslTable() {
-  const obraFilter = document.getElementById('desl-filter-obra').value;
-  const dateFrom = document.getElementById('desl-date-from').value;
-  const dateTo = document.getElementById('desl-date-to').value;
-
-  let rows = deslAllRows.filter(d => {
-    if (obraFilter && d.obra !== obraFilter) return false;
-    if (dateFrom && d.data < dateFrom) return false;
-    if (dateTo && d.data > dateTo) return false;
-    return true;
-  });
+  let rows = getFilteredDeslRows_();
 
   rows.sort((a, b) => {
     let va = a[deslSortCol], vb = b[deslSortCol];
@@ -1664,19 +1760,21 @@ function renderDeslTable() {
   });
 
   const tbody = document.getElementById('desl-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="td-center" style="padding:14px;color:var(--text-dim)">Sem deslocacoes para o filtro atual</td></tr>';
+    return;
+  }
+
   tbody.innerHTML = rows.map((d, idx) => {
     const dateParts = d.data.split('-');
     const dateDisplay = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : d.data;
-    // Só mostra indicador de clique se tiver veículo ou motorista
     const hasExtra = d.veiculo || d.motorista;
     const rowClass = hasExtra ? 'class="desl-row-clickable"' : '';
-    const clickAttr = hasExtra
-      ? ' onclick="deslShowPopup(event,' + idx + ')"'
-      : '';
+    const clickAttr = hasExtra ? ' onclick="deslShowPopup(event,' + idx + ')"' : '';
     return '<tr ' + rowClass + clickAttr + '>' +
       '<td data-label="Data" class="td-mono">' + dateDisplay + '</td>' +
       '<td data-label="Obra"><strong>' + (d.obra || '\u2014') + '</strong>' +
-        (hasExtra ? ' <i class="fa-solid fa-circle-info" style="font-size:9px;color:var(--info);opacity:.6;margin-left:4px" title="Clique para ver veículo e motorista"></i>' : '') +
+        (hasExtra ? ' <i class="fa-solid fa-circle-info" style="font-size:9px;color:var(--info);opacity:.6;margin-left:4px" title="Clique para ver veiculo e motorista"></i>' : '') +
       '</td>' +
       '<td data-label="Origem">' + (d.origem || '\u2014') + '</td>' +
       '<td data-label="Viagens" class="td-right td-mono">' + d.qtd + '</td>' +
@@ -1684,7 +1782,6 @@ function renderDeslTable() {
       '</tr>';
   }).join('');
 
-  // Update sort indicators
   const colMap = { data: 0, obra: 1, origem: 2, qtd: 3, custo: 4 };
   const ths = document.querySelectorAll('#desl-thead th');
   ths.forEach(th => {
@@ -1699,9 +1796,6 @@ function renderDeslTable() {
     if (icon) icon.className = 'fa-solid ' + (deslSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
   }
 }
-
-function filterDeslTable() { renderDeslTable(); }
-
 function sortDesl(col) {
   if (deslSortCol === col) {
     deslSortAsc = !deslSortAsc;
@@ -1718,15 +1812,7 @@ function deslShowPopup(event, idx) {
   event.stopPropagation();
 
   // Reconstituir rows filtradas (mesma lógica de renderDeslTable)
-  const obraFilter = document.getElementById('desl-filter-obra').value;
-  const dateFrom   = document.getElementById('desl-date-from').value;
-  const dateTo     = document.getElementById('desl-date-to').value;
-  let rows = deslAllRows.filter(d => {
-    if (obraFilter && d.obra !== obraFilter) return false;
-    if (dateFrom && d.data < dateFrom) return false;
-    if (dateTo && d.data > dateTo) return false;
-    return true;
-  });
+  let rows = getFilteredDeslRows_();
   rows.sort((a, b) => {
     let va = a[deslSortCol], vb = b[deslSortCol];
     if (typeof va === 'string') return deslSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -2628,13 +2714,17 @@ function syncFilterInputsUI_() {
   const topTo = document.getElementById('global-date-to');
   if (topFrom) topFrom.value = globalDateFrom;
   if (topTo) topTo.value = globalDateTo;
+  syncDeslFilterInputsUI_();
 }
 
 function syncQuickFilterButtonsUI_() {
   document.querySelectorAll('.quick-date-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.desl-quick-date-btn').forEach(b => b.classList.remove('active'));
   if (activeQuickFilter) {
     const btn = document.querySelector('.quick-date-btn[onclick*="' + activeQuickFilter + '"]');
     if (btn) btn.classList.add('active');
+    const btnDesl = document.querySelector('.desl-quick-date-btn[data-deslquick="' + activeQuickFilter + '"]');
+    if (btnDesl) btnDesl.classList.add('active');
   }
 }
 
@@ -2651,9 +2741,9 @@ function applyGlobalFilter() {
 
   if (DATA) {
     buildAll();
-    if (currentSection === 'obra-detail' &&
-        currentObraName && DATA.obras[currentObraName]) {
-      openObra(currentObraName);
+    if (currentSection === 'obra-detail') {
+      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
+      else renderObraNoDataState_();
     }
   }
 }
@@ -2698,9 +2788,9 @@ function setQuickFilter(preset) {
 
   if (DATA) {
     buildAll();
-    if (currentSection === 'obra-detail' &&
-        currentObraName && DATA.obras[currentObraName]) {
-      openObra(currentObraName);
+    if (currentSection === 'obra-detail') {
+      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
+      else renderObraNoDataState_();
     }
   }
 }

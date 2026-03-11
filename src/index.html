@@ -220,33 +220,42 @@
 
   <!-- Deslocações -->
   <div class="section" id="section-deslocacoes">
-    <!-- KPI Cards -->
-    <div class="desl-kpi-grid" id="desl-kpis"></div>
-
-    <!-- Mapa de Origens -->
-    <div class="desl-origens-card">
-      <div class="desl-origens-header">
-        <i class="fa-solid fa-map-location-dot"></i> Mapa de Origens por Obra
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-calendar-days"></i> Filtro de Tempo
       </div>
-      <div class="desl-origens-body" id="desl-origens"></div>
+      <div class="card-body">
+        <div class="desl-filter-row">
+          <div class="period-btns desl-period-btns">
+            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('hoje')" data-deslquick="hoje">Hoje</button>
+            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('semana')" data-deslquick="semana">Semana</button>
+            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('mes')" data-deslquick="mes">Mes</button>
+            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('tudo')" data-deslquick="tudo">Tudo</button>
+          </div>
+          <div class="desl-date-inline">
+            <span class="desl-date-label">De</span>
+            <input type="date" class="desl-date-input" id="desl-global-date-from" onchange="applyDeslGlobalFilter()">
+            <span class="desl-date-label">Ate</span>
+            <input type="date" class="desl-date-input" id="desl-global-date-to" onchange="applyDeslGlobalFilter()">
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Full Table -->
+    <div class="desl-kpi-grid" id="desl-kpis"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-building"></i> Selecionar Obra
+      </div>
+      <div class="card-body">
+        <div class="desl-obra-scroll" id="desl-obra-list"></div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header">
         <i class="fa-solid fa-table-list"></i> Registo Completo
-        <div class="desl-table-toolbar">
-          <div class="obra-select-wrap">
-            <select class="obra-select" id="desl-filter-obra" onchange="filterDeslTable()" style="min-width:160px;font-size:12px;padding:6px 30px 6px 10px">
-              <option value="">Todas as obras</option>
-            </select>
-            <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
-          </div>
-          <span class="desl-date-label">De</span>
-          <input type="date" class="desl-date-input" id="desl-date-from" onchange="filterDeslTable()">
-          <span class="desl-date-label">Até</span>
-          <input type="date" class="desl-date-input" id="desl-date-to" onchange="filterDeslTable()">
-        </div>
       </div>
       <div class="card-body" style="padding:0">
         <div class="table-wrap">
@@ -256,7 +265,7 @@
                 <th class="sortable" onclick="sortDesl('data')">Data <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable" onclick="sortDesl('obra')">Obra Destino <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable" onclick="sortDesl('origem')">Origem <i class="fa-solid fa-sort sort-icon"></i></th>
-                <th class="sortable td-right" onclick="sortDesl('qtd')">Nº Viagens <i class="fa-solid fa-sort sort-icon"></i></th>
+                <th class="sortable td-right" onclick="sortDesl('qtd')">N. Viagens <i class="fa-solid fa-sort sort-icon"></i></th>
                 <th class="sortable td-right" onclick="sortDesl('custo')">Custo <i class="fa-solid fa-sort sort-icon"></i></th>
               </tr>
             </thead>

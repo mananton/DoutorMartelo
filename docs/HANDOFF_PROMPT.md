@@ -37,3 +37,8 @@ Expected output format:
 - `76e5253`: worker filtering includes cost-only legacy days.
 - `b725a8d`: Obra phase chart metric/type controls.
 - `299536d`: collapsible Workers/Materials sections.
+
+## Current UI Focus Snapshot
+- Obra buttons are now filter-aware (only obras with data in active period are shown).
+- Deslocacoes page is transitioning to Obra-like flow: period controls -> KPIs -> obra selector -> register table.
+- Verify empty-state handling before deploy (`Sem obras...`, `Sem deslocacoes...`).
