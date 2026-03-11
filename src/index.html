@@ -379,16 +379,84 @@
   <div class="section" id="section-comparativa">
     <div class="comp-charts-row">
       <div class="comp-chart-card">
-        <div class="comp-chart-header">
-          <i class="fa-solid fa-chart-bar"></i> Custo: Mão de Obra vs Deslocações
+        <div class="chart-card-header obra-chart-header comp-custos-header">
+          <div class="obra-chart-title-wrap">
+            <span><i class="fa-solid fa-chart-bar"></i> Custo: Mão de Obra vs Materiais vs Deslocações</span>
+            <small class="obra-chart-period" id="comp-custos-period-label"></small>
+          </div>
+          <div class="obra-chart-controls comp-custos-top-controls">
+            <div class="obra-chart-group" id="comp-custos-metric-btns">
+              <button type="button" class="period-btn active" id="comp-custos-metric-mao_obra" onclick="setCompCustosMetric('mao_obra')" aria-label="Mostrar custo de mao de obra por obra">Mao de Obra</button>
+              <button type="button" class="period-btn" id="comp-custos-metric-materiais" onclick="setCompCustosMetric('materiais')" aria-label="Mostrar custo de materiais por obra">Materiais</button>
+              <button type="button" class="period-btn" id="comp-custos-metric-deslocacoes" onclick="setCompCustosMetric('deslocacoes')" aria-label="Mostrar custo de deslocacoes por obra">Deslocacoes</button>
+              <button type="button" class="period-btn" id="comp-custos-metric-total" onclick="setCompCustosMetric('total')" aria-label="Mostrar custo total por obra">Total</button>
+            </div>
+            <div class="obra-chart-group" id="comp-custos-type-btns">
+              <button type="button" class="period-btn active" id="comp-custos-type-bar" onclick="setCompCustosChartType('bar')" aria-label="Mostrar grafico de barras">Barras</button>
+              <button type="button" class="period-btn" id="comp-custos-type-doughnut" onclick="setCompCustosChartType('doughnut')" aria-label="Mostrar grafico circular">Circular</button>
+            </div>
+          </div>
         </div>
-        <div class="comp-chart-body tall" id="comp-chart-custos-wrap"><canvas id="comp-chart-custos"></canvas></div>
+        <div class="comp-chart-body tall comp-custos-body" id="comp-chart-custos-wrap">
+          <div class="comp-custos-canvas-wrap" id="comp-custos-canvas-wrap">
+            <canvas id="comp-chart-custos"></canvas>
+          </div>
+          <div class="obra-fase-filter-wrap comp-custos-filter-wrap" id="comp-custos-filter-wrap">
+            <div class="obra-fase-filter-head">
+              <span class="obra-fase-filter-title" id="comp-custos-obras-label">Obras visiveis</span>
+              <button type="button" class="obra-fase-reset-btn" onclick="resetCompCustosObrasVisibility()">Mostrar todas</button>
+            </div>
+            <div class="obra-fase-chip-row comp-custos-chip-row" id="comp-custos-obras-row"></div>
+          </div>
+        </div>
       </div>
       <div class="comp-chart-card">
-        <div class="comp-chart-header">
-          <i class="fa-solid fa-layer-group"></i> Custo: Fases de Obra
+        <div class="chart-card-header obra-chart-header comp-fases-header">
+          <div class="obra-chart-title-wrap">
+            <span><i class="fa-solid fa-layer-group"></i> Custo: Fases de Obra</span>
+            <small class="obra-chart-period" id="comp-fases-period-label"></small>
+          </div>
+          <div class="obra-chart-controls comp-fases-top-controls">
+            <div class="obra-chart-group" id="comp-fases-metric-btns">
+              <button type="button" class="period-btn active" id="comp-fases-metric-mao_obra" onclick="setCompFasesMetric('mao_obra')" aria-label="Mostrar custo de mao de obra por fase">Mao de Obra</button>
+              <button type="button" class="period-btn" id="comp-fases-metric-materiais" onclick="setCompFasesMetric('materiais')" aria-label="Mostrar custo de materiais por fase">Materiais</button>
+              <button type="button" class="period-btn" id="comp-fases-metric-total" onclick="setCompFasesMetric('total')" aria-label="Mostrar custo total por fase">Total</button>
+            </div>
+            <div class="obra-chart-group" id="comp-fases-type-btns">
+              <button type="button" class="period-btn active" id="comp-fases-type-bar" onclick="setCompFasesChartType('bar')" aria-label="Mostrar grafico de barras">Barras</button>
+              <button type="button" class="period-btn" id="comp-fases-type-doughnut" onclick="setCompFasesChartType('doughnut')" aria-label="Mostrar grafico circular">Circular</button>
+            </div>
+          </div>
         </div>
-        <div class="comp-chart-body tall" id="comp-chart-fasesobra-wrap"><canvas id="comp-chart-fasesobra"></canvas></div>
+        <div class="comp-chart-body tall comp-fases-body" id="comp-chart-fasesobra-wrap">
+          <div class="obra-fase-filter-wrap comp-fases-obras-wrap" id="comp-fases-obras-wrap">
+            <div class="obra-fase-filter-head">
+              <span class="obra-fase-filter-title">Obras a comparar</span>
+              <button type="button" class="obra-fase-reset-btn" onclick="resetCompFasesObrasSelection()">Limpar</button>
+            </div>
+            <div class="obra-fase-chip-row comp-fases-obras-row" id="comp-fases-obras-row"></div>
+          </div>
+          <div class="comp-custos-canvas-wrap comp-fases-canvas-wrap" id="comp-fases-canvas-wrap">
+            <canvas id="comp-chart-fasesobra"></canvas>
+          </div>
+          <div class="obra-fase-filter-wrap comp-fases-filter-wrap" id="comp-fases-filter-wrap">
+            <div class="obra-fase-filter-head">
+              <span class="obra-fase-filter-title" id="comp-fases-label">Fases visiveis</span>
+              <button type="button" class="obra-fase-reset-btn" onclick="resetCompFasesSelection()">Limpar</button>
+            </div>
+            <div class="obra-fase-chip-row comp-fases-chip-row" id="comp-fases-row">
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('A%20-%20projetos')" aria-pressed="false">A - projetos</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('B%20-%20abertura%20estaleiro')" aria-pressed="false">B - abertura estaleiro</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('C%20-%20movimentacao%20terras')" aria-pressed="false">C - movimentacao terras</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('D%20-%20estrutura')" aria-pressed="false">D - estrutura</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('E%20-%20paredes%20exteriores%20e%20interiores')" aria-pressed="false">E - paredes exteriores e interiores</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('F%20-%20capoto')" aria-pressed="false">F - capoto</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('G%20-%20eletricidade')" aria-pressed="false">G - eletricidade</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('U%20%2F%20M%20-%20janelas%2Fcaixilharias')" aria-pressed="false">U / M - janelas/caixilharias</button>
+              <button type="button" class="obra-fase-chip" onclick="toggleCompFaseSelection('Sem%20Fase')" aria-pressed="false">Sem Fase</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="comp-chart-card">
         <div class="comp-chart-header">

@@ -28,6 +28,19 @@ let obraFaseHiddenByKey = {};
 
 const MOBILE_OBRA_CHART_MAX_DOUGHNUT = 5;
 const MOBILE_OBRA_CHART_TOP_PHASES = 6;
+const MOBILE_COMP_CUSTOS_MAX_DOUGHNUT = 5;
+const MOBILE_COMP_CUSTOS_TOP_OBRAS = 6;
+const DEFAULT_COMP_FASES = [
+  'A - projetos',
+  'B - abertura estaleiro',
+  'C - movimentacao terras',
+  'D - estrutura',
+  'E - paredes exteriores e interiores',
+  'F - capoto',
+  'G - eletricidade',
+  'U / M - janelas/caixilharias',
+  'Sem Fase'
+];
 
 /* ── ASSIDUIDADE GLOBALS ───────────────────────────────── */
 let assidCurrentObra = null;
@@ -56,6 +69,15 @@ let compCharts = {};
 let compCurrentTab = 'obras';
 let compEvoMetric = 'custo';
 let compEvoHidden = {};
+let compCustosMetric = 'mao_obra';
+let compCustosChartType = 'bar';
+let compCustosDoughnutEnabled = true;
+let compCustosHiddenObras = {};
+let compFasesMetric = 'mao_obra';
+let compFasesChartType = 'bar';
+let compFasesDoughnutEnabled = true;
+let compFasesSelectedObras = {};
+let compFasesSelectedKeys = {};
 
 /* ── FÉRIAS GLOBALS ──────────────────────────────────── */
 let feriasAllRows   = [];
@@ -471,7 +493,6 @@ function buildObrasSidebar() {
       <i class="fa-solid fa-circle"></i><span>${nome}</span>
     </button>`
   ).join('');
-  // Auto-open if there are obras
   if (obraNames.length > 0) {
     obrasMenuOpen = true;
     container.classList.add('open');
@@ -2172,7 +2193,15 @@ function switchCompTab(tab) { /* disabled */ }
 function destroyCompCharts() {
   Object.values(compCharts).forEach(c => { if (c) c.destroy(); });
   compCharts = {};
-  ['custos','fasesobra','diasfase'].forEach(key => {
+  const custosCanvasWrap = document.getElementById('comp-custos-canvas-wrap');
+  if (custosCanvasWrap && !document.getElementById('comp-chart-custos')) {
+    custosCanvasWrap.innerHTML = '<canvas id="comp-chart-custos"></canvas>';
+  }
+  const fasesCanvasWrap = document.getElementById('comp-fases-canvas-wrap');
+  if (fasesCanvasWrap && !document.getElementById('comp-chart-fasesobra')) {
+    fasesCanvasWrap.innerHTML = '<canvas id="comp-chart-fasesobra"></canvas>';
+  }
+  ['diasfase'].forEach(key => {
     const wrap = document.getElementById('comp-chart-' + key + '-wrap');
     if (wrap && !document.getElementById('comp-chart-' + key)) {
       wrap.innerHTML = '<canvas id="comp-chart-' + key + '"></canvas>';
@@ -2191,8 +2220,150 @@ function buildCompObras() {
   buildCompDiasFaseChart(obraNames);
 }
 
+function getCompObraNames_() {
+  if (!DATA || !DATA.obras) return [];
+  return Object.keys(DATA.obras).sort();
+}
+
+function updateCompCustosPeriodLabel_() {
+  const el = document.getElementById('comp-custos-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
+
+function compactCompCustosObrasForMobile_(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!isMobile() || list.length <= MOBILE_COMP_CUSTOS_TOP_OBRAS) return list;
+
+  const sorted = list.sort((a, b) => (b.value || 0) - (a.value || 0));
+  const top = sorted.slice(0, MOBILE_COMP_CUSTOS_TOP_OBRAS);
+  const rest = sorted.slice(MOBILE_COMP_CUSTOS_TOP_OBRAS);
+  const restValue = rest.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+  if (restValue > 0) top.push({ name: 'Outras Obras', value: restValue, _isGroupedOther: true });
+  return top;
+}
+
+function setCompCustosTypeAvailability_(items) {
+  const doughnutBtn = document.getElementById('comp-custos-type-doughnut');
+  const count = Array.isArray(items) ? items.length : 0;
+  compCustosDoughnutEnabled = !isMobile() || count <= MOBILE_COMP_CUSTOS_MAX_DOUGHNUT;
+
+  if (doughnutBtn) {
+    doughnutBtn.disabled = !compCustosDoughnutEnabled;
+    doughnutBtn.setAttribute('aria-disabled', compCustosDoughnutEnabled ? 'false' : 'true');
+    doughnutBtn.title = compCustosDoughnutEnabled
+      ? 'Mostrar grafico circular'
+      : 'No mobile, o circular so e ativado com ate ' + MOBILE_COMP_CUSTOS_MAX_DOUGHNUT + ' obras';
+  }
+
+  if (!compCustosDoughnutEnabled && compCustosChartType === 'doughnut') {
+    compCustosChartType = 'bar';
+  }
+}
+
+function pruneCompCustosObraState_(obraNames) {
+  const valid = new Set(obraNames || []);
+  Object.keys(compCustosHiddenObras).forEach(name => {
+    if (!valid.has(name)) delete compCustosHiddenObras[name];
+  });
+}
+
+function getVisibleCompObraNames_(obraNames) {
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  const visible = list.filter(name => !compCustosHiddenObras[name]);
+  if (visible.length) return visible;
+  if (list.length) {
+    compCustosHiddenObras[list[0]] = false;
+    return [list[0]];
+  }
+  return [];
+}
+
+function syncCompCustosControls_(obraNames) {
+  pruneCompCustosObraState_(obraNames);
+
+  ['mao_obra', 'materiais', 'deslocacoes', 'total'].forEach(metric => {
+    const btn = document.getElementById('comp-custos-metric-' + metric);
+    if (!btn) return;
+    btn.classList.toggle('active', compCustosMetric === metric);
+  });
+
+  [['bar', 'comp-custos-type-bar'], ['doughnut', 'comp-custos-type-doughnut']].forEach(([type, id]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle('active', compCustosChartType === type);
+  });
+
+  const label = document.getElementById('comp-custos-obras-label');
+  if (label) {
+    const hiddenCount = (obraNames || []).reduce((acc, name) => acc + (compCustosHiddenObras[name] ? 1 : 0), 0);
+    label.textContent = 'Obras visiveis' + (hiddenCount ? ' (' + hiddenCount + ' oculta(s))' : '');
+  }
+
+  const row = document.getElementById('comp-custos-obras-row');
+  if (!row) return;
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  if (!list.length) {
+    row.innerHTML = '<span class="obra-fase-filter-empty">Sem obras disponiveis.</span>';
+    return;
+  }
+
+  row.innerHTML = list.map(name => {
+    const hidden = !!compCustosHiddenObras[name];
+    const safeName = escapeHtml_(name);
+    const encoded = encodeURIComponent(name);
+    return '<button type="button" class="obra-fase-chip' + (hidden ? ' hidden' : '') + '"' +
+      ' onclick="toggleCompCustosObra(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (hidden ? 'true' : 'false') + '"' +
+      ' title="' + safeName + '">' + safeName + '</button>';
+  }).join('');
+}
+
+function setCompCustosMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, deslocacoes: true, total: true };
+  if (!allowed[metric]) return;
+  compCustosMetric = metric;
+  buildCompCustosChart(getCompObraNames_());
+}
+
+function setCompCustosChartType(type) {
+  const allowed = { bar: true, doughnut: true };
+  if (!allowed[type]) return;
+  if (type === 'doughnut' && !compCustosDoughnutEnabled) return;
+  compCustosChartType = type;
+  buildCompCustosChart(getCompObraNames_());
+}
+
+function toggleCompCustosObra(obraEncoded) {
+  const obraName = decodeURIComponent(String(obraEncoded || ''));
+  if (!obraName) return;
+  const obraNames = getCompObraNames_();
+  if (!obraNames.includes(obraName)) return;
+
+  const hideObra = !compCustosHiddenObras[obraName];
+  if (hideObra) {
+    const visibleCount = obraNames.reduce((acc, name) => acc + (compCustosHiddenObras[name] ? 0 : 1), 0);
+    if (visibleCount <= 1) return;
+  }
+  compCustosHiddenObras[obraName] = hideObra;
+  buildCompCustosChart(obraNames);
+}
+
+function resetCompCustosObrasVisibility() {
+  Object.keys(compCustosHiddenObras).forEach(name => {
+    compCustosHiddenObras[name] = false;
+  });
+  buildCompCustosChart(getCompObraNames_());
+}
+
 function buildCompCustosChart(obraNames) {
   if (compCharts.custos) compCharts.custos.destroy();
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+
+  pruneCompCustosObraState_(allObraNames);
+  const visibleObraNames = getVisibleCompObraNames_(allObraNames);
+  updateCompCustosPeriodLabel_();
+  syncCompCustosControls_(allObraNames);
 
   // Aggregate deslocações (date-filtered)
   const deslPerObra = {};
@@ -2203,10 +2374,10 @@ function buildCompCustosChart(obraNames) {
 
   // Aggregate labour from assiduidade (date-filtered)
   const labourPerObra = {};
-  obraNames.forEach(n => {
+  allObraNames.forEach(n => {
     labourPerObra[n] = 0;
     (DATA.obras[n].assiduidade || []).forEach(w => {
-      Object.entries(w.dias).forEach(([dateStr, d]) => {
+      Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
         if (!dateInRange(dateStr)) return;
         if (d.falta) return;
         labourPerObra[n] += d.custo || 0;
@@ -2214,33 +2385,119 @@ function buildCompCustosChart(obraNames) {
     });
   });
 
-  const labourData = obraNames.map(n => labourPerObra[n] || 0);
-  const deslData = obraNames.map(n => deslPerObra[n] || 0);
-  const totalData = obraNames.map((n, i) => labourData[i] + deslData[i]);
-  const shortNames = obraNames.map(n => n.length > 14 ? n.slice(0, 12) + '\u2026' : n);
+  const metricLabelMap = {
+    mao_obra: 'Mao de Obra',
+    materiais: 'Materiais',
+    deslocacoes: 'Deslocacoes',
+    total: 'Total'
+  };
+  const metricColorMap = {
+    mao_obra: 'rgba(99,179,237,.78)',
+    materiais: 'rgba(72,187,120,.78)',
+    deslocacoes: 'rgba(246,173,85,.78)',
+    total: 'rgba(233,69,96,.78)'
+  };
+
+  const chartBaseItems = visibleObraNames.map(name => {
+    const maoObra = labourPerObra[name] || 0;
+    const materiais = sumMateriaisByObra(name) || 0;
+    const deslocacoes = deslPerObra[name] || 0;
+    const total = maoObra + materiais + deslocacoes;
+    return {
+      name,
+      value: Number(({ mao_obra: maoObra, materiais, deslocacoes, total })[compCustosMetric]) || 0
+    };
+  }).filter(item => item.value > 0);
+
+  const chartItems = compactCompCustosObrasForMobile_(chartBaseItems).sort((a, b) => (b.value || 0) - (a.value || 0));
+  setCompCustosTypeAvailability_(chartItems);
+  syncCompCustosControls_(allObraNames);
+
+  if (isMobile() && compCustosChartType === 'doughnut' && !compCustosDoughnutEnabled) {
+    compCustosChartType = 'bar';
+    syncCompCustosControls_(allObraNames);
+  }
 
   const ctx = document.getElementById('comp-chart-custos');
   if (!ctx) return;
+  if (!chartItems.length) {
+    const wrap = document.getElementById('comp-custos-canvas-wrap');
+    if (wrap) wrap.innerHTML = '<div class="no-chart-data">Sem obras no periodo</div>';
+    return;
+  }
+
+  const datasetLabel = metricLabelMap[compCustosMetric] || 'Custo';
+  const chartType = compCustosChartType === 'doughnut' ? 'doughnut' : 'bar';
   compCharts.custos = new Chart(ctx, {
-    type: 'bar',
+    type: chartType,
     data: {
-      labels: shortNames,
-      datasets: [
-        { label: 'M\u00e3o de Obra', data: labourData, backgroundColor: 'rgba(99,179,237,.7)', borderRadius: 4 },
-        { label: 'Desloca\u00e7\u00f5es', data: deslData, backgroundColor: 'rgba(246,173,85,.7)', borderRadius: 4 },
-        { label: 'Total', data: totalData, backgroundColor: 'rgba(233,69,96,.7)', borderRadius: 4 }
-      ]
+      labels: chartItems.map(item => item.name),
+      datasets: [{
+        label: datasetLabel,
+        data: chartItems.map(item => item.value),
+        backgroundColor: chartType === 'doughnut'
+          ? chartItems.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length])
+          : metricColorMap[compCustosMetric] || 'rgba(99,179,237,.78)',
+        borderRadius: chartType === 'bar' ? 4 : 0,
+        borderWidth: chartType === 'doughnut' ? 1 : 0
+      }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        ? false
+        : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      cutout: chartType === 'doughnut' ? '56%' : undefined,
       plugins: {
-        legend: mLegend(),
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } }
+        legend: chartType === 'doughnut'
+          ? {
+              display: true,
+              position: 'bottom',
+              labels: {
+                boxWidth: 10,
+                font: { size: isMobile() ? 10 : 11 },
+                padding: isMobile() ? 6 : 8,
+                generateLabels: chart => {
+                  const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                  if (!isMobile()) return base;
+                  return base.map(it => Object.assign({}, it, { text: abbreviateChartLabel_(it.text, 12) }));
+                }
+              }
+            }
+          : { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              if (!items || !items.length) return '';
+              return String(items[0].label || '');
+            },
+            label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
+          }
+        }
       },
-      scales: {
-        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } },
-        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } }
-      }
+      scales: chartType === 'bar'
+        ? {
+            y: {
+              grid: { color: 'rgba(255,255,255,.04)' },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: val => {
+                  const idx = Number(val);
+                  const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+                  return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+                }
+              }
+            }
+          }
+        : undefined
     }
   });
 }
@@ -2248,61 +2505,419 @@ function buildCompCustosChart(obraNames) {
 /* ── Radar chart — disabled (card removed) ────────────── */
 function buildCompRadarChart(obraNames) { /* disabled */ }
 
-/* ── Stacked bar: Fases de Obra por Obra ─────────────── */
-function buildCompFasesObraChart(obraNames) {
-  if (compCharts.fasesobra) compCharts.fasesobra.destroy();
+function updateCompFasesPeriodLabel_() {
+  const el = document.getElementById('comp-fases-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
 
-  // Aggregate: obra → fase → custo (date-filtered)
-  const obraFases = {};
-  const allFases = new Set();
-  obraNames.forEach(nome => {
-    obraFases[nome] = {};
-    const obra = DATA.obras[nome];
-    const workers = obra.workers || [];
-    (obra.assiduidade || []).forEach(w => {
-      const wInfo = workers.find(ww => ww['Nome (auto)'] === w.nome);
-      const fase = (wInfo && wInfo.Fase) || '\u2014';
-      Object.entries(w.dias).forEach(([dateStr, d]) => {
-        if (!dateInRange(dateStr) || d.falta) return;
-        allFases.add(fase);
-        obraFases[nome][fase] = (obraFases[nome][fase] || 0) + (d.custo || 0);
+function getSelectedCompFasesObras_(obraNames) {
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  return list.filter(name => !!compFasesSelectedObras[name]);
+}
+
+function compactCompFasesForMobile_(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!isMobile() || list.length <= MOBILE_OBRA_CHART_TOP_PHASES) return list;
+
+  const sorted = list.sort((a, b) => (b.total || 0) - (a.total || 0));
+  const top = sorted.slice(0, MOBILE_OBRA_CHART_TOP_PHASES);
+  const rest = sorted.slice(MOBILE_OBRA_CHART_TOP_PHASES);
+  if (!rest.length) return top;
+
+  const grouped = { name: 'Outras Fases', total: 0, valuesByObra: {}, _isGroupedOther: true };
+  rest.forEach(item => {
+    grouped.total += Number(item.total) || 0;
+    Object.entries(item.valuesByObra || {}).forEach(([obra, value]) => {
+      grouped.valuesByObra[obra] = (grouped.valuesByObra[obra] || 0) + (Number(value) || 0);
+    });
+  });
+  top.push(grouped);
+  return top;
+}
+
+function setCompFasesTypeAvailability_(items) {
+  const doughnutBtn = document.getElementById('comp-fases-type-doughnut');
+  const count = Array.isArray(items) ? items.length : 0;
+  compFasesDoughnutEnabled = !isMobile() || count <= MOBILE_COMP_CUSTOS_MAX_DOUGHNUT;
+
+  if (doughnutBtn) {
+    doughnutBtn.disabled = !compFasesDoughnutEnabled;
+    doughnutBtn.setAttribute('aria-disabled', compFasesDoughnutEnabled ? 'false' : 'true');
+    doughnutBtn.title = compFasesDoughnutEnabled
+      ? 'Mostrar grafico circular'
+      : 'No mobile, o circular so e ativado com ate ' + MOBILE_COMP_CUSTOS_MAX_DOUGHNUT + ' fases';
+  }
+
+  if (!compFasesDoughnutEnabled && compFasesChartType === 'doughnut') {
+    compFasesChartType = 'bar';
+  }
+}
+
+function syncCompFasesControls_(obraNames, faseItems) {
+  ['mao_obra', 'materiais', 'total'].forEach(metric => {
+    const btn = document.getElementById('comp-fases-metric-' + metric);
+    if (btn) btn.classList.toggle('active', compFasesMetric === metric);
+  });
+
+  [['bar', 'comp-fases-type-bar'], ['doughnut', 'comp-fases-type-doughnut']].forEach(([type, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', compFasesChartType === type);
+  });
+
+  const obrasRow = document.getElementById('comp-fases-obras-row');
+  if (obrasRow) {
+    const list = Array.isArray(obraNames) ? obraNames : [];
+    if (!list.length) {
+      obrasRow.innerHTML = '<span class="obra-fase-filter-empty">Sem obras disponiveis.</span>';
+    } else {
+      obrasRow.innerHTML = list.map(name => {
+        const active = !!compFasesSelectedObras[name];
+        const safeName = escapeHtml_(name);
+        const encoded = encodeURIComponent(name);
+        return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+          ' onclick="toggleCompFasesObra(\'' + encoded + '\')"' +
+          ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+          ' title="' + safeName + '">' + safeName + '</button>';
+      }).join('');
+    }
+  }
+
+  const label = document.getElementById('comp-fases-label');
+  if (label) {
+    const selectedCount = Object.keys(compFasesSelectedKeys).reduce((acc, key) => acc + (compFasesSelectedKeys[key] ? 1 : 0), 0);
+    label.textContent = 'Fases visiveis' + (selectedCount ? ' (' + selectedCount + ' selecionada(s))' : '');
+  }
+
+  const fasesRow = document.getElementById('comp-fases-row');
+  if (!fasesRow) return;
+  const fallbackList = DEFAULT_COMP_FASES.map(fase => ({
+    key: normalizeFaseKey_(fase),
+    name: fase,
+    total: 0
+  }));
+  const list = (Array.isArray(faseItems) && faseItems.length) ? faseItems : fallbackList;
+
+  fasesRow.innerHTML = list.map(item => {
+    const labelTxt = String(item.name || 'Sem Fase');
+    const key = normalizeFaseKey_(labelTxt);
+    const active = !!compFasesSelectedKeys[key];
+    const safeLabel = escapeHtml_(labelTxt);
+    const encoded = encodeURIComponent(labelTxt);
+    return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+      ' onclick="toggleCompFaseSelection(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+      ' title="' + safeLabel + ' · ' + fmt(Number(item.total) || 0) + '">' + safeLabel + '</button>';
+  }).join('');
+}
+
+function setCompFasesMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, total: true };
+  if (!allowed[metric]) return;
+  compFasesMetric = metric;
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function setCompFasesChartType(type) {
+  const allowed = { bar: true, doughnut: true };
+  if (!allowed[type]) return;
+  if (type === 'doughnut' && !compFasesDoughnutEnabled) return;
+  compFasesChartType = type;
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function toggleCompFasesObra(obraEncoded) {
+  const obraName = decodeURIComponent(String(obraEncoded || ''));
+  if (!obraName) return;
+  const obraNames = getCompObraNames_();
+  if (!obraNames.includes(obraName)) return;
+  compFasesSelectedObras[obraName] = !compFasesSelectedObras[obraName];
+  buildCompFasesObraChart(obraNames);
+}
+
+function resetCompFasesObrasSelection() {
+  compFasesSelectedObras = {};
+  compFasesSelectedKeys = {};
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function toggleCompFaseSelection(faseEncoded) {
+  const faseName = decodeURIComponent(String(faseEncoded || ''));
+  if (!faseName) return;
+  const key = normalizeFaseKey_(faseName);
+  compFasesSelectedKeys[key] = !compFasesSelectedKeys[key];
+  if (!compFasesSelectedKeys[key]) delete compFasesSelectedKeys[key];
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function resetCompFasesSelection() {
+  compFasesSelectedKeys = {};
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function getDayPhaseList_(dayEntry, fallbackPhase) {
+  const phases = Array.isArray(dayEntry && dayEntry.fases)
+    ? dayEntry.fases.map(f => String(f || '').trim()).filter(Boolean)
+    : [];
+  if (phases.length) return [...new Set(phases)];
+  return [String(fallbackPhase || 'Sem Fase').trim() || 'Sem Fase'];
+}
+
+function ensureCompFasesCanvas_() {
+  const wrap = document.getElementById('comp-fases-canvas-wrap');
+  if (!wrap) return null;
+  if (!document.getElementById('comp-chart-fasesobra')) {
+    wrap.innerHTML = '<canvas id="comp-chart-fasesobra"></canvas>';
+  }
+  return document.getElementById('comp-chart-fasesobra');
+}
+
+function clearCompFasesCanvas_() {
+  const canvas = ensureCompFasesCanvas_();
+  if (!canvas) return null;
+  const ctx = canvas.getContext('2d');
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function getFallbackCompFaseItems_() {
+  return DEFAULT_COMP_FASES.map(fase => {
+    const label = String(fase || '').trim() || 'Sem Fase';
+    return { key: normalizeFaseKey_(label), name: label, total: 0 };
+  });
+}
+
+function collectAvailableCompFases_(selectedObras) {
+  const selected = Array.isArray(selectedObras) ? selectedObras : [];
+  const phaseMap = {};
+
+  DEFAULT_COMP_FASES.forEach(fase => {
+    const label = String(fase || '').trim() || 'Sem Fase';
+    const key = normalizeFaseKey_(label);
+    phaseMap[key] = { key, name: label, total: 0 };
+  });
+
+  selected.forEach(nome => {
+    const obra = DATA && DATA.obras ? DATA.obras[nome] : null;
+    if (!obra) return;
+
+    (obra.fases || []).forEach(item => {
+      const fase = String(item && item.Fase || '').trim() || 'Sem Fase';
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
+      phaseMap[key].total += Number(item && item.Custo) || 0;
+    });
+
+    (obra.materiais_fases || []).forEach(item => {
+      const fase = String(item && item.Fase || '').trim() || 'Sem Fase';
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
+      phaseMap[key].total += Number(item && item.Custo) || 0;
+    });
+
+    (obra.assiduidade || []).forEach(worker => {
+      Object.values(worker.dias || {}).forEach(day => {
+        getDayPhaseList_(day, 'Sem Fase').forEach(fase => {
+          const key = normalizeFaseKey_(fase);
+          if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
+        });
       });
     });
   });
 
-  const faseList = [...allFases].sort();
-  if (!faseList.length) {
-    document.getElementById('comp-chart-fasesobra').parentElement.innerHTML =
-      '<div class="no-chart-data">Sem fases no per\u00edodo</div>';
+  return Object.values(phaseMap).sort((a, b) => {
+    const diff = (b.total || 0) - (a.total || 0);
+    return diff !== 0 ? diff : String(a.name || '').localeCompare(String(b.name || ''), 'pt');
+  });
+}
+
+function collectCompFasesData_(selectedObras) {
+  const selected = Array.isArray(selectedObras) ? selectedObras : [];
+  const selectedSet = new Set(selected);
+  const perObra = {};
+  const phaseMap = {};
+
+  selected.forEach(nome => {
+    perObra[nome] = {};
+    const obra = DATA.obras[nome];
+    if (!obra) return;
+    const workerFaseMap = {};
+    (obra.workers || []).forEach(w => {
+      workerFaseMap[w['Nome (auto)']] = w.Fase || 'Sem Fase';
+    });
+
+    if (compFasesMetric !== 'materiais') {
+      (obra.assiduidade || []).forEach(w => {
+        const fallbackFase = workerFaseMap[w.nome] || 'Sem Fase';
+        Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
+          if (!dateInRange(dateStr) || d.falta) return;
+          const phaseList = getDayPhaseList_(d, fallbackFase);
+          const totalCost = Number(d.custo) || 0;
+          const splitCost = phaseList.length ? totalCost / phaseList.length : totalCost;
+          phaseList.forEach(fase => {
+            if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+            perObra[nome][fase].mao_obra += splitCost;
+          });
+        });
+      });
+    }
+  });
+
+  if (compFasesMetric !== 'mao_obra') {
+    filterMateriaisByDate().forEach(m => {
+      if (!selectedSet.has(m.obra)) return;
+      const fase = String(m.fase || '').trim() || 'Sem Fase';
+      if (!perObra[m.obra]) perObra[m.obra] = {};
+      if (!perObra[m.obra][fase]) perObra[m.obra][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+      perObra[m.obra][fase].materiais += matCost(m);
+    });
+  }
+
+  selected.forEach(nome => {
+    Object.keys(perObra[nome] || {}).forEach(fase => {
+      const entry = perObra[nome][fase];
+      entry.total = (Number(entry.mao_obra) || 0) + (Number(entry.materiais) || 0);
+      const value = Number(entry[compFasesMetric]) || 0;
+      if (value <= 0) return;
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0, valuesByObra: {} };
+      phaseMap[key].total += value;
+      phaseMap[key].valuesByObra[nome] = value;
+    });
+  });
+
+  return Object.values(phaseMap).sort((a, b) => (b.total || 0) - (a.total || 0));
+}
+
+function buildCompFasesObraChart(obraNames) {
+  if (compCharts.fasesobra) compCharts.fasesobra.destroy();
+
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+  updateCompFasesPeriodLabel_();
+
+  Object.keys(compFasesSelectedObras).forEach(name => {
+    if (!allObraNames.includes(name)) delete compFasesSelectedObras[name];
+  });
+
+  const selectedObras = getSelectedCompFasesObras_(allObraNames);
+  const availablePhases = collectAvailableCompFases_(allObraNames);
+  const chartPhaseData = collectCompFasesData_(selectedObras);
+  const validPhaseKeys = new Set(availablePhases.map(item => item.key));
+  Object.keys(compFasesSelectedKeys).forEach(key => {
+    if (!validPhaseKeys.has(key)) delete compFasesSelectedKeys[key];
+  });
+
+  syncCompFasesControls_(allObraNames, availablePhases);
+
+  const ctx = ensureCompFasesCanvas_();
+  if (!ctx) return;
+
+  if (!selectedObras.length) {
+    clearCompFasesCanvas_();
+    return;
+  }
+  if (!availablePhases.length) {
+    clearCompFasesCanvas_();
     return;
   }
 
-  const shortNames = obraNames.map(n => n.length > 14 ? n.slice(0, 12) + '\u2026' : n);
+  const selectedPhaseItems = chartPhaseData.filter(item => !!compFasesSelectedKeys[item.key]);
+  if (!selectedPhaseItems.length) {
+    clearCompFasesCanvas_();
+    return;
+  }
 
-  // One dataset per fase, stacked
-  const datasets = faseList.map((fase, i) => ({
-    label: fase,
-    data: obraNames.map(n => obraFases[n][fase] || 0),
-    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    borderRadius: 4,
-  }));
+  const chartItems = compactCompFasesForMobile_(selectedPhaseItems);
+  setCompFasesTypeAvailability_(chartItems);
+  syncCompFasesControls_(allObraNames, availablePhases);
 
-  const ctx = document.getElementById('comp-chart-fasesobra');
-  if (!ctx) return;
+  if (isMobile() && compFasesChartType === 'doughnut' && !compFasesDoughnutEnabled) {
+    compFasesChartType = 'bar';
+    syncCompFasesControls_(allObraNames, availablePhases);
+  }
+
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const chartType = compFasesChartType === 'doughnut' ? 'doughnut' : 'bar';
+  const metricLabelMap = { mao_obra: 'Mao de Obra', materiais: 'Materiais', total: 'Total' };
+  const datasetLabel = metricLabelMap[compFasesMetric] || 'Custo';
+
   compCharts.fasesobra = new Chart(ctx, {
-    type: 'bar',
-    data: { labels: shortNames, datasets },
+    type: chartType,
+    data: chartType === 'doughnut'
+      ? {
+          labels: chartItems.map(item => item.name),
+          datasets: [{
+            label: datasetLabel,
+            data: chartItems.map(item => item.total),
+            backgroundColor: chartItems.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+            borderWidth: 1
+          }]
+        }
+      : {
+          labels: chartItems.map(item => item.name),
+          datasets: selectedObras.map((obraName, index) => ({
+            label: obraName,
+            data: chartItems.map(item => Number(item.valuesByObra[obraName]) || 0),
+            backgroundColor: CHART_PALETTE[index % CHART_PALETTE.length],
+            borderRadius: 4
+          }))
+        },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      cutout: chartType === 'doughnut' ? '56%' : undefined,
       plugins: {
-        legend: mLegend(),
-        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } }
+        legend: chartType === 'doughnut'
+          ? {
+              display: true,
+              position: 'bottom',
+              labels: {
+                boxWidth: 10,
+                font: { size: isMobile() ? 10 : 11 },
+                padding: isMobile() ? 6 : 8,
+                generateLabels: chart => {
+                  const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                  if (!isMobile()) return base;
+                  return base.map(it => Object.assign({}, it, { text: abbreviateChartLabel_(it.text, 12) }));
+                }
+              }
+            }
+          : mLegend({ position: isMobile() ? 'bottom' : 'top' }),
+        tooltip: {
+          callbacks: chartType === 'doughnut'
+            ? {
+                title: items => items && items[0] ? String(items[0].label || '') : '',
+                label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
+              }
+            : {
+                title: items => items && items[0] ? String(items[0].label || '') : '',
+                label: tipCtx => tipCtx.dataset.label + ': ' + fmt(tipCtx.raw)
+              }
+        }
       },
-      scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
-        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' },
-             ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac' } }
-      }
+      scales: chartType === 'bar'
+        ? {
+            y: {
+              grid: { color: 'rgba(255,255,255,.04)' },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: val => {
+                  const idx = Number(val);
+                  const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+                  return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+                }
+              }
+            }
+          }
+        : undefined
     }
   });
 }
@@ -2632,10 +3247,10 @@ function applyTheme() {
       ? 'fa-solid fa-moon'
       : 'fa-solid fa-sun';
   }
-  // Update Chart.js global defaults
+
   if (currentTheme === 'light') {
     Chart.defaults.color = '#4a5568';
-    Chart.defaults.borderColor = 'rgba(0,0,0,0.08)';
+    Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
   } else {
     Chart.defaults.color = '#a0aec0';
     Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';

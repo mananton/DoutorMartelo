@@ -1090,6 +1090,36 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
     min-height: 36px;
     padding: 8px 12px;
   }
+  .comp-custos-chip-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .comp-custos-chip-row .obra-fase-chip {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 8px 12px;
+  }
+  .comp-fases-obras-row,
+  .comp-fases-chip-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .comp-fases-obras-row .obra-fase-chip,
+  .comp-fases-chip-row .obra-fase-chip {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 8px 12px;
+  }
+  .comp-custos-canvas-wrap {
+    min-height: 220px;
+  }
+  .comp-fases-canvas-wrap {
+    min-height: 220px;
+  }
   .section-toggle-btn {
     font-size: 10px;
     padding: 5px 8px;
@@ -1386,6 +1416,57 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 }
 .comp-chart-body { padding: 16px; position: relative; height: 350px; }
 .comp-chart-body.tall { height: 450px; }
+.comp-custos-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comp-custos-header { gap: 10px; }
+.comp-custos-top-controls { flex-wrap: wrap; }
+.comp-custos-filter-wrap { margin-top: 0; }
+.comp-fases-header { gap: 10px; }
+.comp-fases-top-controls { flex-wrap: wrap; }
+.comp-fases-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comp-fases-obras-wrap,
+.comp-fases-filter-wrap { margin-top: 0; }
+.comp-fases-obras-row,
+.comp-fases-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.obra-fase-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.comp-custos-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.comp-custos-canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+.comp-custos-canvas-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.comp-fases-canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+.comp-fases-canvas-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
 
 .comp-table-wrap {
   overflow-x: auto; border-radius: var(--radius);
@@ -1459,6 +1540,38 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 @media (max-width: 600px) {
   .comp-tabs { overflow-x: auto; }
   .comp-tab { white-space: nowrap; padding: 8px 14px; font-size: 12px; }
+  .comp-custos-top-controls {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    gap: 6px;
+  }
+  .comp-custos-top-controls .obra-chart-group {
+    flex: 0 0 auto;
+  }
+  .comp-custos-top-controls .period-btn {
+    min-height: 40px;
+    padding: 8px 11px;
+  }
+  .comp-fases-top-controls {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    gap: 6px;
+  }
+  .comp-fases-top-controls .obra-chart-group {
+    flex: 0 0 auto;
+  }
+  .comp-fases-top-controls .period-btn {
+    min-height: 40px;
+    padding: 8px 11px;
+  }
 }
 
 /* ── ERROR ──────────────────────────────────────────────── */
