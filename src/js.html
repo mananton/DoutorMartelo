@@ -41,6 +41,7 @@ let deslAllRows = [];
 let deslSortCol = 'data';
 let deslSortAsc = false;
 let deslSelectedObra = '';
+let deslRegistoCollapsed = true;
 
 /* ── EQUIPA GLOBALS ────────────────────────────────────── */
 let equipaCharts = {};
@@ -1566,7 +1567,6 @@ function animateCounters() {
 function buildDeslocacoes() {
   if (!DATA || !DATA.deslocacoes) return;
   const desl = DATA.deslocacoes.filter(d => dateInRange(d.data));
-  syncDeslFilterInputsUI_();
 
   if (!desl.length) {
     const empty = '<div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-route" style="font-size:28px;display:block;margin-bottom:12px;opacity:.4"></i>Sem deslocacoes no periodo selecionado</div>';
@@ -1577,6 +1577,7 @@ function buildDeslocacoes() {
     deslSelectedObra = '';
     const tbody = document.getElementById('desl-tbody');
     if (tbody) tbody.innerHTML = '';
+    applyDeslRegistoCollapseState_();
     destroyDeslCharts();
     return;
   }
@@ -1612,22 +1613,20 @@ function buildDeslocacoes() {
   const origemFreq = origemTop.length > 0 ? origemTop[0][0] : '\u2014';
 
   const kpiItems = [
-    { icon: 'fa-route', color: 'var(--info)', bg: 'rgba(99,179,237,.12)', val: totalViagens, label: 'Total Viagens' },
-    { icon: 'fa-money-bill-wave', color: 'var(--warning)', bg: 'rgba(246,173,85,.12)', val: fmt(custoMedio), label: 'Custo Medio Viagens' },
-    { icon: 'fa-building', color: 'var(--accent)', bg: 'rgba(233,69,96,.12)', val: obraMaisDesl, label: 'Obra c/ Mais Deslocacoes' },
-    { icon: 'fa-location-dot', color: 'var(--success)', bg: 'rgba(72,187,120,.12)', val: origemFreq, label: 'Origem Mais Frequente' },
+    { val: Number(totalViagens || 0).toLocaleString('pt-PT'), label: 'Total Viagens' },
+    { val: fmt(custoMedio), label: 'Custo Medio Viagens' },
+    { val: obraMaisDesl, label: 'Obra c/ Mais Deslocacoes' },
+    { val: origemFreq, label: 'Origem Mais Frequente' },
   ];
 
   document.getElementById('desl-kpis').innerHTML = kpiItems.map(k => `
-    <div class="desl-kpi">
-      <div class="desl-kpi-icon" style="background:${k.bg};color:${k.color}">
-        <i class="fa-solid ${k.icon}"></i>
-      </div>
-      <div class="desl-kpi-val">${k.val}</div>
-      <div class="desl-kpi-label">${k.label}</div>
+    <div class="obra-kpi">
+      <div class="obra-kpi-val">${k.val}</div>
+      <div class="obra-kpi-label">${k.label}</div>
     </div>
   `).join('');
 
+  applyDeslRegistoCollapseState_();
   renderDeslTable();
 }
 
@@ -1655,30 +1654,26 @@ function getFilteredDeslRows_() {
   return deslAllRows.filter(d => !deslSelectedObra || d.obra === deslSelectedObra);
 }
 
-function applyDeslGlobalFilter() {
-  const from = document.getElementById('desl-global-date-from');
-  const to = document.getElementById('desl-global-date-to');
-  globalDateFrom = (from && from.value) || '';
-  globalDateTo = (to && to.value) || '';
-  activeQuickFilter = '';
-  if (!globalDateFrom && !globalDateTo) activeQuickFilter = 'tudo';
-  syncFilterInputsUI_();
-  syncQuickFilterButtonsUI_();
-  if (DATA) {
-    buildAll();
-    if (currentSection === 'obra-detail') {
-      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
-      else renderObraNoDataState_();
-    }
+function isDeslMobileCards_() {
+  return window.innerWidth <= 600;
+}
+
+function applyDeslRegistoCollapseState_() {
+  const card = document.getElementById('desl-registo-card');
+  const btn = document.getElementById('desl-registo-toggle-btn');
+  if (card) card.classList.toggle('section-collapsed', !!deslRegistoCollapsed);
+  if (btn) {
+    btn.setAttribute('aria-expanded', deslRegistoCollapsed ? 'false' : 'true');
+    btn.innerHTML = '<i class="fa-solid ' + (deslRegistoCollapsed ? 'fa-chevron-down' : 'fa-chevron-up') + '"></i> ' +
+      (deslRegistoCollapsed ? 'Expandir' : 'Recolher');
   }
 }
 
-function syncDeslFilterInputsUI_() {
-  const from = document.getElementById('desl-global-date-from');
-  const to = document.getElementById('desl-global-date-to');
-  if (from) from.value = globalDateFrom;
-  if (to) to.value = globalDateTo;
+function toggleDeslRegistoSection() {
+  deslRegistoCollapsed = !deslRegistoCollapsed;
+  applyDeslRegistoCollapseState_();
 }
+
 function buildDeslOrigens(desl) {
   // Group: obra -> { origem -> { qtd, custo } }
   const map = {};
@@ -1752,6 +1747,7 @@ function buildDeslTimeChart(desl) { /* disabled */ }
 /* Table render */
 function renderDeslTable() {
   let rows = getFilteredDeslRows_();
+  const mobileCards = isDeslMobileCards_();
 
   rows.sort((a, b) => {
     let va = a[deslSortCol], vb = b[deslSortCol];
@@ -1768,14 +1764,28 @@ function renderDeslTable() {
   tbody.innerHTML = rows.map((d, idx) => {
     const dateParts = d.data.split('-');
     const dateDisplay = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : d.data;
+    const dateShort = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] : dateDisplay;
     const hasExtra = d.veiculo || d.motorista;
-    const rowClass = hasExtra ? 'class="desl-row-clickable"' : '';
-    const clickAttr = hasExtra ? ' onclick="deslShowPopup(event,' + idx + ')"' : '';
-    return '<tr ' + rowClass + clickAttr + '>' +
+    const rowClass = hasExtra && !mobileCards ? ' class="desl-row-clickable"' : '';
+    const clickAttr = hasExtra && !mobileCards ? ' onclick="deslShowPopup(event,' + idx + ')"' : '';
+    const infoBtn = '<button type="button" class="desl-info-btn" onclick="deslShowPopup(event,' + idx + ')" title="Ver detalhe de deslocacao" aria-label="Ver detalhe de deslocacao"><i class="fa-solid fa-circle-info"></i></button>';
+
+    if (mobileCards) {
+      return '<tr>' +
+        '<td colspan="5" class="desl-mobile-rowline">' +
+          '<span class="desl-mobile-inline">' + dateShort + '</span>' +
+          '<span class="desl-mobile-pipe">|</span>' +
+          '<span class="desl-mobile-inline">' + (d.origem || '\u2014') + '</span>' +
+          '<span class="desl-mobile-pipe">|</span>' +
+          '<span class="desl-mobile-inline desl-mobile-cost">' + fmt(d.custo) + '</span>' +
+          infoBtn +
+        '</td>' +
+      '</tr>';
+    }
+
+    return '<tr' + rowClass + clickAttr + '>' +
       '<td data-label="Data" class="td-mono">' + dateDisplay + '</td>' +
-      '<td data-label="Obra"><strong>' + (d.obra || '\u2014') + '</strong>' +
-        (hasExtra ? ' <i class="fa-solid fa-circle-info" style="font-size:9px;color:var(--info);opacity:.6;margin-left:4px" title="Clique para ver veiculo e motorista"></i>' : '') +
-      '</td>' +
+      '<td data-label="Obra"><strong>' + (d.obra || '\u2014') + '</strong>' + infoBtn + '</td>' +
       '<td data-label="Origem">' + (d.origem || '\u2014') + '</td>' +
       '<td data-label="Viagens" class="td-right td-mono">' + d.qtd + '</td>' +
       '<td data-label="Custo" class="td-right td-euro td-mono">' + fmt(d.custo) + '</td>' +
@@ -2714,17 +2724,13 @@ function syncFilterInputsUI_() {
   const topTo = document.getElementById('global-date-to');
   if (topFrom) topFrom.value = globalDateFrom;
   if (topTo) topTo.value = globalDateTo;
-  syncDeslFilterInputsUI_();
 }
 
 function syncQuickFilterButtonsUI_() {
   document.querySelectorAll('.quick-date-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.desl-quick-date-btn').forEach(b => b.classList.remove('active'));
   if (activeQuickFilter) {
     const btn = document.querySelector('.quick-date-btn[onclick*="' + activeQuickFilter + '"]');
     if (btn) btn.classList.add('active');
-    const btnDesl = document.querySelector('.desl-quick-date-btn[data-deslquick="' + activeQuickFilter + '"]');
-    if (btnDesl) btnDesl.classList.add('active');
   }
 }
 

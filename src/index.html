@@ -220,29 +220,7 @@
 
   <!-- Deslocações -->
   <div class="section" id="section-deslocacoes">
-    <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-calendar-days"></i> Filtro de Tempo
-      </div>
-      <div class="card-body">
-        <div class="desl-filter-row">
-          <div class="period-btns desl-period-btns">
-            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('hoje')" data-deslquick="hoje">Hoje</button>
-            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('semana')" data-deslquick="semana">Semana</button>
-            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('mes')" data-deslquick="mes">Mes</button>
-            <button type="button" class="period-btn desl-quick-date-btn" onclick="setQuickFilter('tudo')" data-deslquick="tudo">Tudo</button>
-          </div>
-          <div class="desl-date-inline">
-            <span class="desl-date-label">De</span>
-            <input type="date" class="desl-date-input" id="desl-global-date-from" onchange="applyDeslGlobalFilter()">
-            <span class="desl-date-label">Ate</span>
-            <input type="date" class="desl-date-input" id="desl-global-date-to" onchange="applyDeslGlobalFilter()">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="desl-kpi-grid" id="desl-kpis"></div>
+    <div class="obra-kpi-grid" id="desl-kpis"></div>
 
     <div class="card">
       <div class="card-header">
@@ -253,11 +231,16 @@
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header">
-        <i class="fa-solid fa-table-list"></i> Registo Completo
+    <div class="card section-collapsible section-collapsed" id="desl-registo-card">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <span><i class="fa-solid fa-table-list"></i> Registo Completo</span>
+          <button type="button" class="section-toggle-btn" id="desl-registo-toggle-btn" onclick="toggleDeslRegistoSection()" aria-expanded="false">
+            <i class="fa-solid fa-chevron-down"></i> Expandir
+          </button>
+        </div>
       </div>
-      <div class="card-body" style="padding:0">
+      <div class="card-body" id="desl-registo-body" style="padding:0">
         <div class="table-wrap">
           <table class="card-table">
             <thead>
