@@ -1697,6 +1697,19 @@ body.sidebar-collapsed #topbar-subbar { left: var(--sidebar-wc); }
 body.has-subbar #main-content { margin-top: calc(var(--topbar-h) + 44px); }
 body.has-subbar .section { animation-delay: 0s; }
 
+.subbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.subbar-row-main {
+  flex: 1 1 auto;
+}
+.subbar-row-range {
+  flex: 0 0 auto;
+}
+
 .subbar-label {
   font-size: 11px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: .5px;
@@ -1709,7 +1722,7 @@ body.has-subbar .section { animation-delay: 0s; }
   font-size: 12px;
 }
 .subbar-date-input:focus { outline: none; border-color: var(--accent); }
-.quick-date-btns { display: flex; gap: 4px; margin-left: 8px; }
+.quick-date-btns { display: flex; gap: 4px; margin-left: 8px; flex-wrap: wrap; }
 .quick-date-btn {
   padding: 4px 10px; border-radius: 4px;
   border: 1px solid var(--border); background: transparent;
@@ -1894,15 +1907,25 @@ body.has-subbar .section { animation-delay: 0s; }
   #topbar-subbar {
     position: static;
     left: 0; right: auto;
-    flex-wrap: wrap; height: auto;
-    padding: 8px 12px; gap: 6px;
+    flex-direction: column; height: auto;
+    padding: 8px 12px; gap: 8px;
     margin-top: var(--topbar-h);
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: stretch;
   }
-  #topbar-subbar .subbar-label:not(.subbar-main-label),
-  #topbar-subbar .subbar-date-input {
-    display: none;
+  #topbar-subbar .subbar-row {
+    width: 100%;
+  }
+  #topbar-subbar .subbar-row-main {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  #topbar-subbar .subbar-row-range {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 4px;
   }
   /* main-content only needs topbar clearance since subbar is now in-flow */
   body.has-subbar #main-content { margin-top: 0; }
@@ -1910,8 +1933,14 @@ body.has-subbar .section { animation-delay: 0s; }
   #mobile-bottom-nav { display: flex; }
   .quick-date-btns { margin-left: 0; }
   .subbar-clear { margin-left: 0; }
-  .subbar-label { font-size: 10px; }
-  .subbar-date-input { padding: 4px 6px; max-width: 130px; }
+  .subbar-label { font-size: 9px; }
+  .subbar-date-input {
+    padding: 4px 5px;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 0;
+    width: 0;
+  }
   .quick-date-btn { font-size: 10px; padding: 4px 8px; }
   #workers-toolbar {
     width: 100%;

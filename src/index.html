@@ -83,20 +83,24 @@
 
 <!-- ══════ TOPBAR SUB-BAR (Date Filter) ══════ -->
 <div id="topbar-subbar">
-  <span class="subbar-label subbar-main-label"><i class="fa-solid fa-filter" style="margin-right:4px"></i> Filtro</span>
-  <span class="subbar-label">De</span>
-  <input type="date" class="subbar-date-input" id="global-date-from" onchange="applyGlobalFilter()">
-  <span class="subbar-label">Até</span>
-  <input type="date" class="subbar-date-input" id="global-date-to" onchange="applyGlobalFilter()">
-  <div class="quick-date-btns">
-    <button class="quick-date-btn active" onclick="setQuickFilter('hoje')">Hoje</button>
-    <button class="quick-date-btn" onclick="setQuickFilter('semana')">Semana</button>
-    <button class="quick-date-btn" onclick="setQuickFilter('mes')">Mês</button>
-    <button class="quick-date-btn" onclick="setQuickFilter('tudo')">Tudo</button>
+  <div class="subbar-row subbar-row-main">
+    <span class="subbar-label subbar-main-label"><i class="fa-solid fa-filter" style="margin-right:4px"></i> Filtro</span>
+    <div class="quick-date-btns">
+      <button class="quick-date-btn active" onclick="setQuickFilter('hoje')">Hoje</button>
+      <button class="quick-date-btn" onclick="setQuickFilter('semana')">Semana</button>
+      <button class="quick-date-btn" onclick="setQuickFilter('mes')">Mês</button>
+      <button class="quick-date-btn" onclick="setQuickFilter('tudo')">Tudo</button>
+    </div>
+    <button class="subbar-clear" onclick="clearGlobalFilter()">
+      <i class="fa-solid fa-xmark" style="margin-right:3px"></i> Limpar
+    </button>
   </div>
-  <button class="subbar-clear" onclick="clearGlobalFilter()">
-    <i class="fa-solid fa-xmark" style="margin-right:3px"></i> Limpar
-  </button>
+  <div class="subbar-row subbar-row-range">
+    <span class="subbar-label">De</span>
+    <input type="date" class="subbar-date-input" id="global-date-from" onchange="applyGlobalFilter()">
+    <span class="subbar-label">Até</span>
+    <input type="date" class="subbar-date-input" id="global-date-to" onchange="applyGlobalFilter()">
+  </div>
 </div>
 
 <!-- ══════ MAIN CONTENT ══════ -->
