@@ -11,6 +11,29 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-10
 
+## 2026-03-12
+
+### `pending`
+- **Type**: feat(ui)
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`, `docs/MAPA_MENSAL_SPEC.md`, `docs/MAPA_MENSAL_TECH_PLAN.md`, `docs/OPEN_ITEMS.md`
+- **Summary**:
+  - Added first implementation of `Mapa Mensal` with dashboard summary table and printable monthly PDF-style view.
+  - Implemented monthly client-side aggregation from `DATA.registos` with agreed business rules for `F`, `FJ`, `Bxa`, `Fér` and `Dsp`.
+  - Added worker ordering/inclusion rules for zero-hour absence cases and visual highlighting for absence cells/columns.
+  - Added functional and technical specification docs for the monthly payment map.
+- **Impact**:
+  - Dashboard now supports monthly payment map review and print/export preparation without new backend endpoints.
+  - Business rules for monthly closure are documented and traceable for future iterations.
+
+### `f09ac96`
+- **Type**: feat(ui)
+- **Scope**: `src/index.html`, `src/css.html`
+- **Summary**:
+  - Reworked the global date subbar for mobile into a compact two-row layout.
+  - Kept quick filters on the first row and `De`/`Até` on the second row with tighter sizing.
+- **Impact**:
+  - Date filtering uses less vertical space on mobile while staying readable.
+
 ### `7ab59ac`
 - **Type**: feat(ui)
 - **Scope**: `src/index.html`, `src/css.html`, `src/js.html`

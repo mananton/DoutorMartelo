@@ -2,6 +2,18 @@
 
 Last reviewed: 2026-03-11
 
+## P1 - Implement Monthly Payment Map
+- Functional spec agreed in `docs/MAPA_MENSAL_SPEC.md`.
+- Build in phases:
+  - monthly backend aggregation
+  - dashboard summary table
+  - printable/exportable monthly PDF map
+- Validate business rules carefully:
+  - only workers with >= 1 valid worked hour in month
+  - F/FJ/Bxa/Fer nullify same-day hours
+  - Dps may coexist with hours when no falta exists
+  - provisional vs closed month behavior
+
 ## P1 - Validate Worker Filtering Against Real Legacy Samples
 - Run focused checks on at least 3 obras with mixed old/new rows.
 - Confirm that workers with cost-only days appear correctly in:

@@ -43,6 +43,9 @@
     <button class="nav-item" onclick="showSection('equipa')" data-section="equipa">
       <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
     </button>
+    <button class="nav-item" onclick="showSection('mapa-mensal')" data-section="mapa-mensal">
+      <i class="fa-solid fa-file-invoice-dollar"></i><span>Mapa Mensal</span>
+    </button>
     <button class="nav-item" onclick="showSection('assiduidade')" data-section="assiduidade">
       <i class="fa-solid fa-calendar-check"></i><span>Assiduidade</span>
     </button>
@@ -306,6 +309,60 @@
     <div id="equipa-popup-container"></div>
   </div>
 
+  <!-- Mapa Mensal -->
+  <div class="section" id="section-mapa-mensal">
+    <div class="card">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <i class="fa-solid fa-file-invoice-dollar"></i> Mapa Mensal
+        </div>
+        <div class="table-toolbar workers-toolbar-stack mapa-mensal-toolbar" id="mapa-mensal-toolbar">
+          <div class="obra-select-wrap mapa-mensal-select-wrap">
+            <select class="obra-select" id="mapa-mensal-month" onchange="setMapaMensalMonth(this.value)"></select>
+            <i class="fa-solid fa-chevron-down obra-select-arrow"></i>
+          </div>
+          <div class="obra-chart-group mapa-mensal-status-group" id="mapa-mensal-status-group">
+            <button type="button" class="period-btn active" id="mapa-mensal-status-provisorio" onclick="setMapaMensalStatus('provisorio')">Provisório</button>
+            <button type="button" class="period-btn" id="mapa-mensal-status-fechado" onclick="setMapaMensalStatus('fechado')">Fechado</button>
+          </div>
+          <button class="refresh-btn mapa-mensal-print-btn" onclick="printMapaMensal()">
+            <i class="fa-solid fa-print"></i> Imprimir PDF
+          </button>
+        </div>
+      </div>
+      <div class="card-body mapa-mensal-summary-meta" id="mapa-mensal-summary-meta"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-table"></i> Resumo Mensal
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap mapa-mensal-table-wrap">
+          <table class="card-table mapa-mensal-table">
+            <thead>
+              <tr>
+                <th>Trabalhador</th>
+                <th class="td-center">Dias</th>
+                <th class="td-right">Horas</th>
+                <th class="td-center">F</th>
+                <th class="td-center">FJ</th>
+                <th class="td-center">Bxa</th>
+                <th class="td-center">Fér</th>
+                <th class="td-center">Dsp</th>
+                <th class="td-right">Atrasos</th>
+              </tr>
+            </thead>
+            <tbody id="mapa-mensal-tbody"></tbody>
+            <tfoot id="mapa-mensal-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="mapa-mensal-print-view" class="mapa-mensal-print-view"></div>
+  </div>
+
   <!-- Férias -->
   <div class="section" id="section-ferias">
 
@@ -502,6 +559,9 @@
   </button>
   <button class="mobile-nav-btn" onclick="showSection('equipa')" data-mobilesec="equipa">
     <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('mapa-mensal')" data-mobilesec="mapa-mensal">
+    <i class="fa-solid fa-file-invoice-dollar"></i><span>Mapa</span>
   </button>
   <button class="mobile-nav-btn" onclick="showSection('assiduidade')" data-mobilesec="assiduidade">
     <i class="fa-solid fa-calendar-check"></i><span>Assid.</span>
