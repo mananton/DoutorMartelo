@@ -20,6 +20,7 @@ const SHEET_DESLOCACOES = "REGISTO_DESLOCACOES"; // viagens por obra (AppSheet)
 const SHEET_FERIAS      = "FERIAS";
 const SHEET_MATERIAIS_MOV = "MATERIAIS_MOV";
 const SHEET_NAO_REGISTADOS = "NAO_REGISTADOS_HIST";
+const SHEET_LEGACY_MAO_OBRA = "LEGACY_MAO_OBRA";
 const TZ               = "Europe/Lisbon";
 const NREG_HOUR        = 23;
 const NREG_MINUTE      = 45;

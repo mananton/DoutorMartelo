@@ -209,16 +209,13 @@ function isoWeekClient_(dateStr) {
 
 function buildDashboardFromRaw_(raw) {
   const registos = Array.isArray(raw.registos) ? raw.registos : [];
+  const legacyMaoObra = Array.isArray(raw.legacy_mao_obra) ? raw.legacy_mao_obra : [];
   const deslocacoes = Array.isArray(raw.deslocacoes) ? raw.deslocacoes : [];
   const viagens = Array.isArray(raw.viagens) ? raw.viagens : [];
   const materiaisMov = Array.isArray(raw.materiais_mov) ? raw.materiais_mov : [];
   const obraMap = {};
 
-  for (let i = 0; i < registos.length; i++) {
-    const r = registos[i] || {};
-    const obra = String(r.obra || '').trim();
-    if (!obra) continue;
-    const dataStr = String(r.data || '').slice(0, 10);
+  function ensureObraBucket_(obra) {
     if (!obraMap[obra]) {
       obraMap[obra] = {
         custo_total: 0, horas_total: 0, atraso_total: 0,
@@ -227,7 +224,15 @@ function buildDashboardFromRaw_(raw) {
         workerMap: {}, assidMap: {}, faseMap: {}
       };
     }
-    const o = obraMap[obra];
+    return obraMap[obra];
+  }
+
+  for (let i = 0; i < registos.length; i++) {
+    const r = registos[i] || {};
+    const obra = String(r.obra || '').trim();
+    if (!obra) continue;
+    const dataStr = String(r.data || '').slice(0, 10);
+    const o = ensureObraBucket_(obra);
     const nome = String(r.nome || '').trim();
     const fase = String(r.fase || '').trim();
     const custo = Number(r.custo) || 0;
@@ -299,6 +304,44 @@ function buildDashboardFromRaw_(raw) {
       if (nome) o.faseMap[fase].Workers.add(nome);
       if (dataStr) o.faseMap[fase].Dias.add(dataStr);
       if (falta) o.faseMap[fase].Faltas++;
+    }
+  }
+
+  for (let i = 0; i < legacyMaoObra.length; i++) {
+    const r = legacyMaoObra[i] || {};
+    const obra = String(r.obra || '').trim();
+    if (!obra) continue;
+    const dataStr = String(r.data || '').slice(0, 10);
+    const fase = String(r.fase || '').trim() || 'Sem Fase';
+    const custo = Number(r.custo) || 0;
+    const horas = Number(r.horas) || 0;
+    const o = ensureObraBucket_(obra);
+
+    o.custo_total += custo;
+    o.horas_total += horas;
+    if (dataStr) o.datas.add(dataStr);
+
+    if (dataStr) {
+      if (!o.daily[dataStr]) o.daily[dataStr] = { Custo: 0, Horas: 0, Atraso: 0, Trabalhadores: new Set(), Faltas: 0 };
+      o.daily[dataStr].Custo += custo;
+      o.daily[dataStr].Horas += horas;
+
+      const wk = isoWeekClient_(dataStr);
+      if (!o.weekly[wk]) o.weekly[wk] = { Custo: 0, Horas: 0 };
+      o.weekly[wk].Custo += custo;
+      o.weekly[wk].Horas += horas;
+
+      const mo = dataStr.slice(0, 7);
+      if (!o.monthly[mo]) o.monthly[mo] = { Custo: 0, Horas: 0 };
+      o.monthly[mo].Custo += custo;
+      o.monthly[mo].Horas += horas;
+    }
+
+    if (fase) {
+      if (!o.faseMap[fase]) o.faseMap[fase] = { Custo: 0, Horas: 0, Workers: new Set(), Dias: new Set(), Faltas: 0 };
+      o.faseMap[fase].Custo += custo;
+      o.faseMap[fase].Horas += horas;
+      if (dataStr) o.faseMap[fase].Dias.add(dataStr);
     }
   }
 
@@ -388,10 +431,12 @@ function buildDashboardFromRaw_(raw) {
     };
   });
 
-  const custoMaoObra = registos.reduce((s, r) => s + (Number(r.custo) || 0), 0);
+  const custoMaoObra = registos.reduce((s, r) => s + (Number(r.custo) || 0), 0) +
+    legacyMaoObra.reduce((s, r) => s + (Number(r.custo) || 0), 0);
   const custoDeslocacoes = deslocacoes.reduce((s, d) => s + (Number(d.custo) || 0), 0);
   const custoTotal = custoMaoObra + custoDeslocacoes + custoMateriais;
-  const horasTotal = registos.reduce((s, r) => s + (Number(r.horas) || 0), 0);
+  const horasTotal = registos.reduce((s, r) => s + (Number(r.horas) || 0), 0) +
+    legacyMaoObra.reduce((s, r) => s + (Number(r.horas) || 0), 0);
   const totalAtrasos = registos.reduce((s, r) => s + (Number(r.atraso_min) || 0), 0);
   const totalFaltas = registos.filter(r => !!r.falta).length;
   const trabUnicos = new Set(registos.map(r => r.nome)).size;
@@ -418,6 +463,7 @@ function buildDashboardFromRaw_(raw) {
     colaboradores: raw.colaboradores || [],
     diagnostics: normalizeDiagnostics_(raw.diagnostics),
     registos: registos,
+    legacy_mao_obra: legacyMaoObra,
     viagens: viagens,
     deslocacoes: deslocacoes,
     ferias: raw.ferias || [],
@@ -966,20 +1012,20 @@ function buildObraCharts(nome) {
   destroyObraCharts();
   updateObraFasePeriodLabel_();
 
-  // Aggregate mao de obra por fase from assiduidade (date-filtered)
+  // Aggregate mao de obra por fase from raw rows + legacy rows (date-filtered)
   const faseAgg = {};
-  const assid = obra.assiduidade || [];
-  const workers = obra.workers || [];
-  const workerFaseMap = {};
-  workers.forEach(w => { workerFaseMap[w['Nome (auto)']] = w.Fase || 'Sem Fase'; });
-
-  assid.forEach(w => {
-    const fase = workerFaseMap[w.nome] || 'Sem Fase';
-    Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
-      if (!dateInRange(dateStr)) return;
-      if (d.falta) return;
-      addFaseCost_(faseAgg, fase, d.custo, d.horas);
-    });
+  (DATA.registos || []).forEach(r => {
+    if (String(r.obra || '').trim() !== nome) return;
+    const dateStr = String(r.data || '').slice(0, 10);
+    if (!dateInRange(dateStr)) return;
+    if (r.falta) return;
+    addFaseCost_(faseAgg, r.fase || 'Sem Fase', r.custo, r.horas);
+  });
+  (DATA.legacy_mao_obra || []).forEach(r => {
+    if (String(r.obra || '').trim() !== nome) return;
+    const dateStr = String(r.data || '').slice(0, 10);
+    if (!dateInRange(dateStr)) return;
+    addFaseCost_(faseAgg, r.fase || 'Sem Fase', r.custo, r.horas);
   });
 
   // Aggregate materiais por fase (date-filtered)
@@ -3006,16 +3052,13 @@ function buildCompCustosChart(obraNames) {
     deslPerObra[d.obra] = (deslPerObra[d.obra] || 0) + d.custo;
   });
 
-  // Aggregate labour from assiduidade (date-filtered)
+  // Aggregate labour from obra daily totals (date-filtered)
   const labourPerObra = {};
   allObraNames.forEach(n => {
     labourPerObra[n] = 0;
-    (DATA.obras[n].assiduidade || []).forEach(w => {
-      Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
-        if (!dateInRange(dateStr)) return;
-        if (d.falta) return;
-        labourPerObra[n] += d.custo || 0;
-      });
+    (DATA.obras[n].daily || []).forEach(d => {
+      if (!dateInRange(d.DATA_str)) return;
+      labourPerObra[n] += Number(d.Custo) || 0;
     });
   });
 
@@ -3378,27 +3421,24 @@ function collectCompFasesData_(selectedObras) {
 
   selected.forEach(nome => {
     perObra[nome] = {};
-    const obra = DATA.obras[nome];
-    if (!obra) return;
-    const workerFaseMap = {};
-    (obra.workers || []).forEach(w => {
-      workerFaseMap[w['Nome (auto)']] = w.Fase || 'Sem Fase';
-    });
-
     if (compFasesMetric !== 'materiais') {
-      (obra.assiduidade || []).forEach(w => {
-        const fallbackFase = workerFaseMap[w.nome] || 'Sem Fase';
-        Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
-          if (!dateInRange(dateStr) || d.falta) return;
-          const phaseList = getDayPhaseList_(d, fallbackFase);
-          const totalCost = Number(d.custo) || 0;
-          const validPhaseList = phaseList.filter(shouldIncludeCompFase_);
-          const splitCost = validPhaseList.length ? totalCost / validPhaseList.length : 0;
-          validPhaseList.forEach(fase => {
-            if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
-            perObra[nome][fase].mao_obra += splitCost;
-          });
-        });
+      (DATA.registos || []).forEach(r => {
+        if (String(r.obra || '').trim() !== nome) return;
+        const dateStr = String(r.data || '').slice(0, 10);
+        if (!dateInRange(dateStr) || r.falta) return;
+        const fase = String(r.fase || '').trim() || 'Sem Fase';
+        if (!shouldIncludeCompFase_(fase)) return;
+        if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+        perObra[nome][fase].mao_obra += Number(r.custo) || 0;
+      });
+      (DATA.legacy_mao_obra || []).forEach(r => {
+        if (String(r.obra || '').trim() !== nome) return;
+        const dateStr = String(r.data || '').slice(0, 10);
+        if (!dateInRange(dateStr)) return;
+        const fase = String(r.fase || '').trim() || 'Sem Fase';
+        if (!shouldIncludeCompFase_(fase)) return;
+        if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+        perObra[nome][fase].mao_obra += Number(r.custo) || 0;
       });
     }
   });
@@ -3643,26 +3683,26 @@ function collectCompDiasData_(selectedObras) {
   const phaseMap = {};
 
   selected.forEach(nome => {
-    const obra = DATA && DATA.obras ? DATA.obras[nome] : null;
-    if (!obra) return;
-
     const phaseDaysByName = {};
-    const workerFaseMap = {};
-    (obra.workers || []).forEach(w => {
-      workerFaseMap[w['Nome (auto)']] = w.Fase || 'Sem Fase';
+    (DATA.registos || []).forEach(r => {
+      if (String(r.obra || '').trim() !== nome) return;
+      const dateStr = String(r.data || '').slice(0, 10);
+      if (!dateInRange(dateStr) || r.falta) return;
+      if ((Number(r.horas) || 0) <= 0 && (Number(r.custo) || 0) <= 0) return;
+      const fase = String(r.fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
+      phaseDaysByName[fase].add(dateStr);
     });
-
-    (obra.assiduidade || []).forEach(w => {
-      const fallbackFase = workerFaseMap[w.nome] || 'Sem Fase';
-      Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
-        if (!dateInRange(dateStr) || d.falta) return;
-        if ((Number(d.horas) || 0) <= 0) return;
-        const phaseList = getDayPhaseList_(d, fallbackFase).filter(shouldIncludeCompFase_);
-        phaseList.forEach(fase => {
-          if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
-          phaseDaysByName[fase].add(dateStr);
-        });
-      });
+    (DATA.legacy_mao_obra || []).forEach(r => {
+      if (String(r.obra || '').trim() !== nome) return;
+      const dateStr = String(r.data || '').slice(0, 10);
+      if (!dateInRange(dateStr)) return;
+      if ((Number(r.horas) || 0) <= 0 && (Number(r.custo) || 0) <= 0) return;
+      const fase = String(r.fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
+      phaseDaysByName[fase].add(dateStr);
     });
 
     Object.keys(phaseDaysByName).forEach(fase => {

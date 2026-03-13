@@ -156,6 +156,44 @@ function readRegistos_(sheet, colabRateMap, diagnostics) {
   return out;
 }
 
+function readLegacyMaoObra_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const colMap = getColMap_(sheet, 1);
+  const cols = {
+    data: pickCol_(colMap, ["Data"], 0),
+    obra: pickCol_(colMap, ["Obra"], 1),
+    fase: pickCol_(colMap, ["Fase de Obra", "Fase"], 2),
+    horas: pickCol_(colMap, ["Horas"], 3),
+    custoDia: pickCol_(colMap, ["Custo Dia", "Custo_Dia", "Custo Dia (EUR)", "Custo Dia (?)"], 4),
+    origem: pickCol_(colMap, ["Origem"], -1),
+    nota: pickCol_(colMap, ["Nota", "Observacao", "Observação"], -1)
+  };
+  const numCols = Math.max(sheet.getLastColumn(), 5);
+  const rows = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  const out = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const obra = String(row[cols.obra] || "").trim();
+    if (!obra) continue;
+
+    out.push({
+      data: formatDateValue_(row[cols.data], false),
+      obra: obra,
+      fase: String(row[cols.fase] || "").trim() || "Sem Fase",
+      horas: parseFloat(row[cols.horas]) || 0,
+      custo: parseFloat(row[cols.custoDia]) || 0,
+      origem: cols.origem >= 0 ? String(row[cols.origem] || "").trim() : "legacy",
+      nota: cols.nota >= 0 ? String(row[cols.nota] || "").trim() : ""
+    });
+  }
+
+  return out;
+}
+
 function getRegistosCols_(colMap) {
   return {
     dataArquivo: pickCol_(colMap, ["DATA_ARQUIVO", "Data Arquivo"], 0),

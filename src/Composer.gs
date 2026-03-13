@@ -10,6 +10,7 @@ function buildRawData_(ss) {
   const deslocSheet = ss.getSheetByName(SHEET_DESLOCACOES);
   const feriasSheet = ss.getSheetByName(SHEET_FERIAS);
   const matSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
+  const legacyMaoObraSheet = ss.getSheetByName(SHEET_LEGACY_MAO_OBRA);
 
   if (!regSheet) throw new Error("Folha nao encontrada: " + SHEET_REGISTOS);
 
@@ -35,6 +36,7 @@ function buildRawData_(ss) {
     viagens: readViagens_(viaSheet),
     deslocacoes: readDeslocacoes_(deslocSheet),
     ferias: readFerias_(feriasSheet),
-    materiais_mov: readMateriaisMov_(matSheet)
+    materiais_mov: readMateriaisMov_(matSheet),
+    legacy_mao_obra: readLegacyMaoObra_(legacyMaoObraSheet)
   };
 }

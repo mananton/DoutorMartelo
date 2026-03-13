@@ -14,6 +14,7 @@ function buildData_(ss) {
   const deslocSheet = ss.getSheetByName(SHEET_DESLOCACOES);
   const feriasSheet = ss.getSheetByName(SHEET_FERIAS);
   const matSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
+  const legacyMaoObraSheet = ss.getSheetByName(SHEET_LEGACY_MAO_OBRA);
 
   if (!regSheet) throw new Error("Folha não encontrada: " + SHEET_REGISTOS);
 
@@ -26,13 +27,10 @@ function buildData_(ss) {
   const deslocacoes = readDeslocacoes_(deslocSheet);
   const ferias = readFerias_(feriasSheet);
   const materiaisMov = readMateriaisMov_(matSheet);
+  const legacyMaoObra = readLegacyMaoObra_(legacyMaoObraSheet);
 
   const obraMap = {};
-  for (let i = 0; i < registos.length; i++) {
-    const r = registos[i] || {};
-    const obra = String(r.obra || "").trim();
-    if (!obra) continue;
-
+  function ensureObra_(obra) {
     if (!obraMap[obra]) {
       obraMap[obra] = {
         custo_total: 0, horas_total: 0, atraso_total: 0,
@@ -41,8 +39,14 @@ function buildData_(ss) {
         workerMap: {}, assidMap: {}, faseMap: {}
       };
     }
+    return obraMap[obra];
+  }
 
-    const o = obraMap[obra];
+  for (let i = 0; i < registos.length; i++) {
+    const r = registos[i] || {};
+    const obra = String(r.obra || "").trim();
+    if (!obra) continue;
+    const o = ensureObra_(obra);
     const dataStr = String(r.data || "").slice(0, 10);
     const nome = String(r.nome || "").trim();
     const fase = String(r.fase || "").trim();
@@ -127,6 +131,45 @@ function buildData_(ss) {
       if (nome) o.faseMap[fase].Workers.add(nome);
       if (dataStr) o.faseMap[fase].Dias.add(dataStr);
       if (falta) o.faseMap[fase].Faltas++;
+    }
+  }
+
+  for (let i = 0; i < legacyMaoObra.length; i++) {
+    const r = legacyMaoObra[i] || {};
+    const obra = String(r.obra || "").trim();
+    if (!obra) continue;
+
+    const o = ensureObra_(obra);
+    const dataStr = String(r.data || "").slice(0, 10);
+    const fase = String(r.fase || "").trim() || "Sem Fase";
+    const custo = parseFloat(r.custo) || 0;
+    const horas = parseFloat(r.horas) || 0;
+
+    o.custo_total += custo;
+    o.horas_total += horas;
+    if (dataStr) o.datas.add(dataStr);
+
+    if (dataStr) {
+      if (!o.daily[dataStr]) o.daily[dataStr] = { Custo: 0, Horas: 0, Atraso: 0, Trabalhadores: new Set(), Faltas: 0 };
+      o.daily[dataStr].Custo += custo;
+      o.daily[dataStr].Horas += horas;
+
+      const wk = isoWeek_(dataStr);
+      if (!o.weekly[wk]) o.weekly[wk] = { Custo: 0, Horas: 0 };
+      o.weekly[wk].Custo += custo;
+      o.weekly[wk].Horas += horas;
+
+      const mo = dataStr.slice(0, 7);
+      if (!o.monthly[mo]) o.monthly[mo] = { Custo: 0, Horas: 0 };
+      o.monthly[mo].Custo += custo;
+      o.monthly[mo].Horas += horas;
+    }
+
+    if (fase) {
+      if (!o.faseMap[fase]) o.faseMap[fase] = { Custo: 0, Horas: 0, Workers: new Set(), Dias: new Set(), Faltas: 0 };
+      o.faseMap[fase].Custo += custo;
+      o.faseMap[fase].Horas += horas;
+      if (dataStr) o.faseMap[fase].Dias.add(dataStr);
     }
   }
 
@@ -232,9 +275,11 @@ function buildData_(ss) {
   });
 
   const custoMaoObra = registos.reduce(function(s, r) { return s + (parseFloat(r.custo) || 0); }, 0);
+  const custoMaoObraLegacy = legacyMaoObra.reduce(function(s, r) { return s + (parseFloat(r.custo) || 0); }, 0);
   const custoDeslocacoes = deslocacoes.reduce(function(s, d) { return s + (parseFloat(d.custo) || 0); }, 0);
-  const custoTotal = custoMaoObra + custoDeslocacoes + custoMateriais;
-  const horasTotal = registos.reduce(function(s, r) { return s + (parseFloat(r.horas) || 0); }, 0);
+  const custoTotal = custoMaoObra + custoMaoObraLegacy + custoDeslocacoes + custoMateriais;
+  const horasTotal = registos.reduce(function(s, r) { return s + (parseFloat(r.horas) || 0); }, 0) +
+    legacyMaoObra.reduce(function(s, r) { return s + (parseFloat(r.horas) || 0); }, 0);
   const totalAtrasos = registos.reduce(function(s, r) { return s + (parseFloat(r.atraso_min) || 0); }, 0);
   const totalFaltas = registos.filter(function(r) { return !!r.falta; }).length;
   const trabUnicos = new Set(registos.map(function(r) { return r.nome; })).size;
@@ -245,7 +290,7 @@ function buildData_(ss) {
   return {
     global: {
       custo_total: custoTotal,
-      custo_mao_obra: custoMaoObra,
+      custo_mao_obra: custoMaoObra + custoMaoObraLegacy,
       custo_deslocacoes: custoDeslocacoes,
       custo_materiais: custoMateriais,
       horas_total: horasTotal,
@@ -263,7 +308,8 @@ function buildData_(ss) {
     viagens: viagens,
     deslocacoes: deslocacoes,
     ferias: ferias,
-    materiais_mov: materiaisMov
+    materiais_mov: materiaisMov,
+    legacy_mao_obra: legacyMaoObra
   };
 }
 
