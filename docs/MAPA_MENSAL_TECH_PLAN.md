@@ -1,7 +1,7 @@
 # Mapa Mensal / Pagamento - Plano Tecnico
 
-Estado: proposta tecnica inicial, ainda sem implementacao.
-Ultima revisao: 2026-03-12
+Estado: fase 1 implementada no frontend atual; validacao e eventual otimizacao backend pendentes.
+Ultima revisao: 2026-03-13
 
 ## Objetivo tecnico
 Implementar o Mapa Mensal com o menor desvio possivel da arquitetura atual:
@@ -10,9 +10,18 @@ Implementar o Mapa Mensal com o menor desvio possivel da arquitetura atual:
 - nova funcionalidade entra como secao read-only adicional
 - impressao/PDF nasce primeiro a partir de HTML imprimivel no frontend
 
+## Estado atual
+- A Fase 1 descrita abaixo ja foi executada no repositorio.
+- O calculo mensal esta hoje no frontend a partir de `DATA.registos`.
+- A secao, a tabela-resumo e a vista de impressao ja existem.
+- Este plano passa a servir como referencia para validacao, refino e decisao sobre uma futura fase 2.
+
 ## Decisao de arquitetura
 ### Fase 1 - Sem alterar o payload base
 Na primeira iteracao, o mapa mensal deve ser calculado no frontend a partir de `DATA.registos`.
+
+Estado atual:
+- implementada
 
 Razoes:
 - o projeto ja recebe os registos brutos em `raw_v2`
@@ -24,6 +33,9 @@ Razoes:
 Se houver problemas de performance ou necessidade de reutilizacao server-side:
 - criar agregador dedicado no GAS para o mapa mensal
 - manter exatamente a mesma estrutura de saida definida abaixo
+
+Estado atual:
+- ainda nao iniciada
 
 ## Encaixe no codigo atual
 ### Backend existente relevante
@@ -298,10 +310,16 @@ Nenhuma alteracao obrigatoria na fase 1.
 - construir `buildMapaMensalData_(monthKey, status)`
 - validar com `console.log` e testes reais de fevereiro
 
+Estado atual:
+- concluida
+
 ### Fase B - Tabela-resumo dashboard
 - adicionar secao
 - adicionar seletor de mes
 - renderizar tabela-resumo
+
+Estado atual:
+- concluida
 
 ### Fase C - Vista imprimivel PDF
 - montar grelha mensal completa
@@ -309,10 +327,17 @@ Nenhuma alteracao obrigatoria na fase 1.
 - totais finais
 - `window.print()` ou equivalente
 
+Estado atual:
+- concluida na primeira entrega
+
 ### Fase D - Refino opcional
 - cache por mes
 - melhor ordenacao/filtros
 - eventual agregacao server-side
+
+Estado atual:
+- parcialmente concluida no que toca a cache por mes
+- validacao funcional e decisao sobre agregacao server-side mantem-se em aberto
 
 ## Principais riscos
 - variacoes reais do campo `motivo` para mapear F/FJ/Bxa/Fer
@@ -340,3 +365,6 @@ No fim da primeira entrega, o utilizador deve conseguir:
 - ver a tabela-resumo correta
 - abrir/imprimir o mapa diario completo desse mes
 - guardar esse mapa em PDF via impressao do browser
+
+Estado atual:
+- estes pontos ja se encontram implementados no frontend atual

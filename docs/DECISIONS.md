@@ -96,6 +96,21 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - Cleaner UX and fewer accidental state changes while analyzing phases.
 
+## D-009: Data diagnostics stay internal and non-blocking
+- **Status**: accepted
+- **Date**: 2026-03-13
+- **Commit**: `pending`
+- **Decision**:
+  - Keep malformed-row diagnostics as internal support tooling only.
+  - Surface diagnostics in a dedicated `Dev` area instead of the main overview.
+  - Do not block dashboard rendering when issues are found.
+- **Rationale**:
+  - Business users should not see data-maintenance warnings in the main dashboard.
+  - The team still needs a quick way to spot and fix malformed rows in Google Sheets.
+- **Impact**:
+  - Cleaner client-facing dashboard.
+  - Faster internal diagnosis of sheet problems without changing business behavior.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

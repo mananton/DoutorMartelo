@@ -78,6 +78,34 @@ function hasValue_(value) {
   return true;
 }
 
+function isNumericLike_(value) {
+  if (typeof value === "number") return !isNaN(value);
+  const text = String(value || "").trim();
+  if (!text) return false;
+  const normalized = text
+    .replace(/\s/g, "")
+    .replace(/€/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  return /^-?\d+(?:\.\d+)?$/.test(normalized);
+}
+
+function createDataQualityDiagnostics_() {
+  return {
+    total_issues: 0,
+    summary: {},
+    samples: []
+  };
+}
+
+function pushDataQualityIssue_(diagnostics, code, detail) {
+  if (!diagnostics || !code) return;
+  diagnostics.total_issues += 1;
+  diagnostics.summary[code] = (diagnostics.summary[code] || 0) + 1;
+  if (diagnostics.samples.length >= 25) return;
+  diagnostics.samples.push(Object.assign({ code: code }, detail || {}));
+}
+
 function isIsoDateKey_(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 }
@@ -112,7 +140,7 @@ function buildColabRateMap_(colabSheet) {
   return map;
 }
 
-function readRegistos_(sheet, colabRateMap) {
+function readRegistos_(sheet, colabRateMap, diagnostics) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
@@ -122,7 +150,7 @@ function readRegistos_(sheet, colabRateMap) {
   const out = [];
 
   for (let i = 0; i < rows.length; i++) {
-    const mapped = mapRegistoRow_(rows[i], cols, colabRateMap);
+    const mapped = mapRegistoRow_(rows[i], cols, colabRateMap, diagnostics, i + 2);
     if (mapped) out.push(mapped);
   }
   return out;
@@ -148,17 +176,61 @@ function getRegistosCols_(colMap) {
   };
 }
 
-function mapRegistoRow_(row, cols, colabRateMap) {
-  const obra = String(row[cols.obra] || "").trim();
-  if (!obra) return null;
-
+function mapRegistoRow_(row, cols, colabRateMap, diagnostics, rowNumber) {
   const nome = String(row[cols.nome] || "").trim();
+  const obra = String(row[cols.obra] || "").trim();
+  const data = pickRegistoDate_(row, cols);
+  const rawHoras = row[cols.horas];
+  const rawCustoDia = row[cols.custoDia];
+
+  if (!obra) {
+    pushDataQualityIssue_(diagnostics, "registos_missing_obra", {
+      sheet: SHEET_REGISTOS,
+      row: rowNumber,
+      nome: nome,
+      data_registo_raw: formatDateValue_(row[cols.dataRegisto], false),
+      data_arquivo_raw: formatDateValue_(row[cols.dataArquivo], false)
+    });
+    return null;
+  }
+
+  if (!isIsoDateKey_(data)) {
+    pushDataQualityIssue_(diagnostics, "registos_invalid_date", {
+      sheet: SHEET_REGISTOS,
+      row: rowNumber,
+      nome: nome,
+      obra: obra,
+      resolved_date: data,
+      data_registo_raw: formatDateValue_(row[cols.dataRegisto], false),
+      data_arquivo_raw: formatDateValue_(row[cols.dataArquivo], false)
+    });
+  }
+
+  if (hasValue_(rawHoras) && !isNumericLike_(rawHoras)) {
+    pushDataQualityIssue_(diagnostics, "registos_invalid_horas", {
+      sheet: SHEET_REGISTOS,
+      row: rowNumber,
+      nome: nome,
+      obra: obra,
+      raw_value: String(rawHoras)
+    });
+  }
+
+  if (hasValue_(rawCustoDia) && !isNumericLike_(rawCustoDia)) {
+    pushDataQualityIssue_(diagnostics, "registos_invalid_custo_dia", {
+      sheet: SHEET_REGISTOS,
+      row: rowNumber,
+      nome: nome,
+      obra: obra,
+      raw_value: String(rawCustoDia)
+    });
+  }
+
   const horas = parseFloat(row[cols.horas]) || 0;
   const atrasoMin = parseFloat(row[cols.atraso]) || 0;
   const falta = toBool_(row[cols.falta]);
-  const custoDiaRaw = row[cols.custoDia];
-  const hasCustoDia = hasValue_(custoDiaRaw);
-  const custoDia = parseFloat(custoDiaRaw) || 0;
+  const hasCustoDia = hasValue_(rawCustoDia);
+  const custoDia = parseFloat(rawCustoDia) || 0;
   const rate = (colabRateMap && colabRateMap[nome] !== undefined)
     ? colabRateMap[nome]
     : (parseFloat(row[cols.eurh]) || 0);
@@ -168,7 +240,7 @@ function mapRegistoRow_(row, cols, colabRateMap) {
   const custoFinal = hasCustoDia ? custoDia : custoFormula;
 
   return {
-    data: pickRegistoDate_(row, cols),
+    data: data,
     nome: nome,
     funcao: String(row[cols.funcao] || "").trim() || "-",
     obra: obra,

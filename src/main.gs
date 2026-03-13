@@ -23,7 +23,7 @@ const SHEET_NAO_REGISTADOS = "NAO_REGISTADOS_HIST";
 const TZ               = "Europe/Lisbon";
 const NREG_HOUR        = 23;
 const NREG_MINUTE      = 45;
-const ENABLE_EMPTY_ROW_CLEANUP = false; // mudar para true para reativar limpeza automática
+const ENABLE_EMPTY_ROW_CLEANUP = true; // limpeza automática reativada
 
 // ════════════════════════════════════════════════════════════
 //  SECÇÃO 1 — DASHBOARD WEB APP
@@ -481,4 +481,3 @@ function abrirDashboard() {
 // ── Sync: Trigger automático ────────────────────────────────
 // ── Sync: Manual de todas as abas ───────────────────────────
 // ── Sync: Helpers (prefixo sync para não conflitar) ─────────
-

@@ -21,12 +21,14 @@ Last reviewed: 2026-03-11
   - Worker counters under date filters
   - KPI consistency
 
-## P1 - Data Quality Guardrails (Non-breaking)
-- Add optional diagnostics (not blocking) for malformed rows:
+## P1 - Validate Data Quality Diagnostics Against Real Sheets
+- Non-blocking diagnostics are now emitted for malformed `REGISTOS_POR_DIA` rows:
   - invalid date shape
   - missing obra
-  - non-numeric cost/hours
-- Output should be log/telemetry style only; no behavior changes unless requested.
+  - non-numeric `Horas` / `Custo Dia`
+- Next step:
+  - inspect real diagnostics output on production-like sheets
+  - decide whether any warning should later graduate into explicit correction or UI visibility
 
 ## P2 - Encoding Cleanup Pass
 - Clean visible mojibake in UI strings/comments where present.

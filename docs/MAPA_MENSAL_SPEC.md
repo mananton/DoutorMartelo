@@ -1,7 +1,7 @@
 # Mapa Mensal / Pagamento - Especificacao Funcional
 
-Estado: acordado funcionalmente, ainda nao implementado.
-Ultima revisao: 2026-03-12
+Estado: implementado no dashboard e na vista de impressao; validacao funcional com dados reais pendente.
+Ultima revisao: 2026-03-13
 
 ## Objetivo
 Definir um novo mapa mensal read-only no dashboard para apoio ao fecho de pagamento mensal.
@@ -9,6 +9,12 @@ Definir um novo mapa mensal read-only no dashboard para apoio ao fecho de pagame
 O objetivo e ter duas vistas complementares:
 - uma vista-resumo no dashboard, orientada a consulta e conferencia rapida
 - uma vista detalhada para impressao/exportacao PDF, visualmente proxima da folha usada hoje
+
+## Estado atual de implementacao
+- A primeira entrega ja existe no frontend atual.
+- A secao `Mapa Mensal` ja esta disponivel no dashboard.
+- Ja existe vista detalhada de impressao/exportacao via browser.
+- Esta especificacao passa a servir como referencia funcional para validacao e refinamento, nao como plano de arranque.
 
 ## Ambito
 - Global a empresa, nao por obra.
@@ -219,7 +225,7 @@ A implementacao deve seguir um modelo hibrido:
 - exportacao Excel
 
 ## Proximo passo recomendado
-Com esta especificacao fechada, o passo seguinte e desenhar a estrutura tecnica minima para implementacao:
-- payload mensal agregado no backend
-- nova secao read-only no dashboard
-- template HTML/CSS de impressao/exportacao PDF
+Com a primeira entrega ja implementada, o passo seguinte e:
+- validar as regras com meses reais e amostras legacy
+- corrigir divergencias entre especificacao e comportamento observado
+- decidir se o mapa mensal continua client-side ou se justifica agregacao dedicada no backend

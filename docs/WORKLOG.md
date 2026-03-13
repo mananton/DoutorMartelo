@@ -11,6 +11,20 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-10
 
+## 2026-03-13
+
+### `pending`
+- **Type**: fix
+- **Scope**: `src/main.gs`, `src/Composer.gs`, `src/Readers.gs`, `src/index.html`, `src/css.html`, `src/js.html`, `docs/*`
+- **Summary**:
+  - Aligned monthly-map docs with the feature already implemented in the dashboard.
+  - Added non-blocking data diagnostics for malformed `REGISTOS_POR_DIA` rows in `raw_v2`.
+  - Moved diagnostics out of the main overview into a dedicated `Dev` area for internal use.
+  - Re-enabled automatic empty-row cleanup via config flag.
+- **Impact**:
+  - Internal data issues can be inspected without exposing warnings to client-facing users.
+  - Operational sheet hygiene is back on for `REGISTOS_POR_DIA`.
+
 ## 2026-03-12
 
 ### `pending`

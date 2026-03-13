@@ -190,6 +190,15 @@ function normalizeDashboardPayload_(payload) {
   return payload;
 }
 
+function normalizeDiagnostics_(rawDiagnostics) {
+  const base = rawDiagnostics && typeof rawDiagnostics === 'object' ? rawDiagnostics : {};
+  return {
+    total_issues: Number(base.total_issues) || 0,
+    summary: base.summary && typeof base.summary === 'object' ? base.summary : {},
+    samples: Array.isArray(base.samples) ? base.samples : []
+  };
+}
+
 function isoWeekClient_(dateStr) {
   const d = new Date(String(dateStr) + 'T12:00:00');
   const startOfYear = new Date(d.getFullYear(), 0, 1);
@@ -407,6 +416,7 @@ function buildDashboardFromRaw_(raw) {
     obras: obras,
     obras_info: raw.obras_info || [],
     colaboradores: raw.colaboradores || [],
+    diagnostics: normalizeDiagnostics_(raw.diagnostics),
     registos: registos,
     viagens: viagens,
     deslocacoes: deslocacoes,
@@ -445,7 +455,7 @@ function showSection(id) {
 
   // Update topbar title
   document.getElementById('topbar-title').textContent =
-    sectionTitles[id] || id;
+    sectionTitles[id] || (id === 'dev' ? 'Dev' : id);
 
   // Update breadcrumb + mobile nav
   updateBreadcrumb();
@@ -485,6 +495,7 @@ function buildAll() {
   buildObrasSidebar();
   buildObraButtons();
   buildOverview();
+  buildDevSection();
   buildDeslocacoes();
   buildEquipa();
   buildMapaMensal();
@@ -1556,6 +1567,118 @@ function buildOverview() {
 
   document.getElementById('section-overview').innerHTML = html;
   animateCounters();
+}
+
+function buildDevSection() {
+  const section = document.getElementById('section-dev');
+  if (!section) return;
+
+  const diagnostics = DATA.diagnostics || normalizeDiagnostics_();
+  let html = '';
+  html += '<div class="dev-head">';
+  html += '  <div>';
+  html += '    <div class="dev-title"><i class="fa-solid fa-code"></i> Area Dev</div>';
+  html += '    <p class="dev-note">Esta area e para consulta interna. Nao aparece na Visao Geral do cliente.</p>';
+  html += '  </div>';
+  html += '</div>';
+  html += renderDataQualityPanel_(diagnostics, { sampleLimit: 25 });
+  html += renderDiagnosticsGuide_();
+  section.innerHTML = html;
+}
+
+function renderDataQualityPanel_(diagnostics, options) {
+  options = options || {};
+  const total = Number(diagnostics && diagnostics.total_issues) || 0;
+  const summary = diagnostics && diagnostics.summary ? diagnostics.summary : {};
+  const sampleLimit = Number(options.sampleLimit) || 8;
+  const samples = diagnostics && Array.isArray(diagnostics.samples) ? diagnostics.samples.slice(0, sampleLimit) : [];
+
+  if (!total) {
+    return '' +
+      '<div class="card diagnostics-card diagnostics-card-ok">' +
+        '<div class="diagnostics-head">' +
+          '<div class="diagnostics-title"><i class="fa-solid fa-shield-heart"></i> Avisos dos Dados</div>' +
+          '<div class="diagnostics-total ok">Sem avisos</div>' +
+        '</div>' +
+        '<p class="diagnostics-note">O sistema nao encontrou problemas nas linhas lidas agora.</p>' +
+      '</div>';
+  }
+
+  const summaryOrder = [
+    'registos_missing_obra',
+    'registos_invalid_date',
+    'registos_invalid_horas',
+    'registos_invalid_custo_dia'
+  ];
+
+  const summaryHtml = summaryOrder
+    .filter(code => Number(summary[code]) > 0)
+    .map(code => {
+      return '' +
+        '<div class="diagnostics-chip">' +
+          '<span class="diagnostics-chip-label">' + escapeHtml_(getDiagnosticsLabel_(code)) + '</span>' +
+          '<strong>' + Number(summary[code]) + '</strong>' +
+        '</div>';
+    })
+    .join('');
+
+  const sampleHtml = samples.length
+    ? samples.map(item => {
+        return '' +
+          '<div class="diagnostics-item">' +
+            '<div class="diagnostics-item-title">' + escapeHtml_(getDiagnosticsLabel_(item.code)) + '</div>' +
+            '<div class="diagnostics-item-meta">' + escapeHtml_(formatDiagnosticsSample_(item)) + '</div>' +
+          '</div>';
+      }).join('')
+    : '<div class="diagnostics-empty">Ainda nao existem exemplos guardados para mostrar.</div>';
+
+  return '' +
+    '<div class="card diagnostics-card">' +
+      '<div class="diagnostics-head">' +
+        '<div class="diagnostics-title"><i class="fa-solid fa-triangle-exclamation"></i> Avisos dos Dados</div>' +
+        '<div class="diagnostics-total">' + total + ' aviso(s)</div>' +
+      '</div>' +
+      '<p class="diagnostics-note">Isto nao bloqueia o dashboard. Serve para te mostrar linhas estranhas que vale a pena rever.</p>' +
+      '<div class="diagnostics-chip-row">' + summaryHtml + '</div>' +
+      '<div class="diagnostics-list">' + sampleHtml + '</div>' +
+    '</div>';
+}
+
+function getDiagnosticsLabel_(code) {
+  const labels = {
+    registos_missing_obra: 'Linha sem obra',
+    registos_invalid_date: 'Data estranha',
+    registos_invalid_horas: 'Horas mal escritas',
+    registos_invalid_custo_dia: 'Custo Dia mal escrito'
+  };
+  return labels[code] || 'Aviso';
+}
+
+function formatDiagnosticsSample_(item) {
+  if (!item || typeof item !== 'object') return 'Sem detalhe.';
+
+  const parts = [];
+  if (item.row) parts.push('Linha ' + item.row);
+  if (item.nome) parts.push('Nome: ' + item.nome);
+  if (item.obra) parts.push('Obra: ' + item.obra);
+
+  const dateValue = item.resolved_date || item.data_registo_raw || item.data_arquivo_raw || '';
+  if (dateValue) parts.push('Data: ' + String(dateValue));
+
+  if (item.raw_value) parts.push('Valor: ' + String(item.raw_value));
+  return parts.join(' | ') || 'Sem detalhe.';
+}
+
+function renderDiagnosticsGuide_() {
+  return '' +
+    '<div class="card dev-guide-card">' +
+      '<div class="dev-guide-title"><i class="fa-solid fa-list-check"></i> Como encontrar isto na Google Sheet</div>' +
+      '<div class="dev-guide-step">1. Abre a sheet <strong>REGISTOS_POR_DIA</strong>.</div>' +
+      '<div class="dev-guide-step">2. Vai ate a linha indicada no aviso. Exemplo: "Linha 363" quer dizer a linha 363 da sheet.</div>' +
+      '<div class="dev-guide-step">3. Se o aviso disser "Linha sem obra", olha para a coluna <strong>Obra</strong>.</div>' +
+      '<div class="dev-guide-step">4. Se a linha estiver incompleta e nao fizer falta, apaga-a. Se fizer falta, preenche a obra correta.</div>' +
+      '<div class="dev-guide-step">5. Atualiza o dashboard e confirma se o aviso desapareceu.</div>' +
+    '</div>';
 }
 
 function animateCounters() {

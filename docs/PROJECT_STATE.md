@@ -25,7 +25,7 @@ Last updated: 2026-03-11
 ## 3. Runtime Data Flow
 1. `doGet()` serves `index`.
 2. Frontend calls `getDashboardData({ mode: 'raw_v2' })`.
-3. Backend returns raw payload (`buildRawData_`).
+3. Backend returns raw payload (`buildRawData_`) with non-blocking data-quality diagnostics metadata.
 4. Frontend normalizes via `buildDashboardFromRaw_`.
 5. If parsing/loading fails, frontend retries with `mode: 'legacy'`.
 
@@ -64,8 +64,9 @@ Last updated: 2026-03-11
   - full register table driven only by the selected obra + active period.
 
 ## 6. Operational Notes
-- `ENABLE_EMPTY_ROW_CLEANUP` is currently `false` in `src/main.gs` (temporary deactivation).
+- `ENABLE_EMPTY_ROW_CLEANUP` is currently `true` in `src/main.gs`.
 - `.clasp.json` uses `rootDir: "src"` and manifest must exist at `src/appsscript.json`.
+- `raw_v2` now emits diagnostics metadata for malformed `REGISTOS_POR_DIA` rows (invalid date shape, missing obra, invalid numeric fields) without changing existing behavior.
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
 - Do not alter Supabase sync structure unless explicitly requested.
 
