@@ -21,8 +21,8 @@ var SYNC_SHEET_CONFIG = {
         endpoint: "/api/sync/registos",
         headerRow: 1,
         mapper: function (row) {
-            return {
-                id_registo: row["ID_Registo"],
+            var sourceId = String(row["ID_Registo"] || "").trim();
+            var item = {
                 data_registo: syncFormatDate_(row["DATA_REGISTO"]),
                 nome: row["Nome"],
                 funcao: row["Função"],
@@ -36,14 +36,16 @@ var SYNC_SHEET_CONFIG = {
                 observacao: row["Observação"] || null,
                 dispensado: syncToBool_(row["Dispensado"])
             };
+            if (sourceId) item.id_registo = sourceId;
+            return item;
         }
     },
     "REGISTO_DESLOCACOES": {
         endpoint: "/api/sync/deslocacoes",
         headerRow: 1,
         mapper: function (row) {
-            return {
-                id_viagem: row["ID_Viagem"],
+            var sourceId = String(row["ID_Viagem"] || "").trim();
+            var item = {
                 data: syncFormatDate_(row["Data"]),
                 obra_destino: row["Obra_Destino"],
                 destino: row["Destino"],
@@ -53,11 +55,16 @@ var SYNC_SHEET_CONFIG = {
                 quantidade_viagens: Number(row["Quantidade_Viagens"] || 1),
                 custo_total: Number(row["Custo_Total"] || 0)
             };
+            if (sourceId) item.id_viagem = sourceId;
+            return item;
         }
     },
     "MATERIAIS_CAD": {
         endpoint: "/api/sync/materiais-cad",
         headerRow: 1,
+        dedupeKey: function (item) {
+            return syncNormalizeKeyPart_(item.material);
+        },
         mapper: function (row) {
             return {
                 material: row["Material"],
@@ -163,6 +170,9 @@ var SYNC_SHEET_CONFIG = {
     "STOCK_ATUAL": {
         endpoint: "/api/sync/stock-atual",
         headerRow: 1,
+        dedupeKey: function (item) {
+            return syncNormalizeKeyPart_(item.material);
+        },
         mapper: function (row) {
             return {
                 material: row["Material"],
@@ -232,7 +242,7 @@ function syncAll() {
         }
     }
 
-    SpreadsheetApp.getUi().alert("Sync finished\n\n" + results.join("\n"));
+    syncNotify_("Sync finished\n\n" + results.join("\n"));
 }
 
 function retryPendingSupabaseSync_() {
@@ -265,7 +275,7 @@ function retryPendingSupabaseSync_() {
 
         var job = pending[name] || {};
         job.retry_count = Number(job.retry_count || 0) + 1;
-        job.last_error = (result && result.error) || "Unknown retry error";
+        job.last_error = getSyncErrorMessage_(result) || "Unknown retry error";
         job.last_attempt_at = new Date().toISOString();
 
         if (job.retry_count >= SYNC_MAX_AUTO_RETRIES) {
@@ -304,6 +314,7 @@ function syncShowStatus() {
     pendingNames.forEach(function (name) {
         var job = pending[name];
         parts.push("- " + name + " | retries used: " + Number(job.retry_count || 0) + "/" + SYNC_MAX_AUTO_RETRIES);
+        parts.push("  last error: " + String(job.last_error || "-"));
     });
 
     parts.push("");
@@ -313,12 +324,12 @@ function syncShowStatus() {
         parts.push("- " + name + " | last error: " + String(job.last_error || "-"));
     });
 
-    SpreadsheetApp.getUi().alert(parts.join("\n"));
+    syncNotify_(parts.join("\n"));
 }
 
 function syncClearFailures() {
     saveSyncJobs_(SYNC_FAILED_JOBS_KEY, {});
-    SpreadsheetApp.getUi().alert("Sync failures cleared.");
+    syncNotify_("Sync failures cleared.");
 }
 
 function syncSheetToSupabase_(sheet, options) {
@@ -336,18 +347,19 @@ function syncSheetToSupabase_(sheet, options) {
 
     var result = syncSendToBackend_(config.endpoint, mapped);
     if (!result || result.error) {
+        var errorMessage = getSyncErrorMessage_(result);
         if (options.queueOnFailure) {
-            queuePendingSyncJob_(name, config, mapped.length, result && result.error);
+            queuePendingSyncJob_(name, config, mapped.length, errorMessage);
             return {
                 status: "queued",
                 rows: mapped.length,
-                error: result && result.error ? result.error : "Sync failed"
+                error: errorMessage || "Sync failed"
             };
         }
         return {
             status: "error",
             rows: mapped.length,
-            error: result && result.error ? result.error : "Sync failed"
+            error: errorMessage || "Sync failed"
         };
     }
 
@@ -372,7 +384,29 @@ function buildSyncRowsForSheet_(sheet, config) {
             Logger.log("Sync map error " + sheet.getName() + " row " + (i + config.headerRow + 1) + ": " + err);
         }
     }
-    return mapped;
+    return dedupeSyncRows_(mapped, config);
+}
+
+function dedupeSyncRows_(rows, config) {
+    if (!config || typeof config.dedupeKey !== "function") return rows;
+
+    var out = [];
+    var indexByKey = {};
+    for (var i = 0; i < rows.length; i++) {
+        var item = rows[i];
+        var key = String(config.dedupeKey(item) || "").trim();
+        if (!key) {
+            out.push(item);
+            continue;
+        }
+        if (Object.prototype.hasOwnProperty.call(indexByKey, key)) {
+            out[indexByKey[key]] = item;
+        } else {
+            indexByKey[key] = out.length;
+            out.push(item);
+        }
+    }
+    return out;
 }
 
 function queuePendingSyncJob_(name, config, rowCount, errorMessage) {
@@ -389,6 +423,19 @@ function queuePendingSyncJob_(name, config, rowCount, errorMessage) {
     };
     saveSyncJobs_(SYNC_PENDING_JOBS_KEY, pending);
     ensureSyncRetryTrigger_();
+}
+
+function getSyncErrorMessage_(result) {
+    if (!result) return "Sync failed";
+
+    var parts = [];
+    if (result.error) parts.push(String(result.error));
+    if (result.body) {
+        var bodyText = String(result.body).replace(/\s+/g, " ").trim();
+        if (bodyText.length > 180) bodyText = bodyText.slice(0, 177) + "...";
+        parts.push(bodyText);
+    }
+    return parts.join(" | ") || "Sync failed";
 }
 
 function clearPendingSyncJob_(name) {
@@ -543,4 +590,19 @@ function syncToBool_(val) {
     }
     if (typeof val === "number") return val !== 0;
     return false;
+}
+
+function syncNotify_(message) {
+    try {
+        SpreadsheetApp.getUi().alert(message);
+    } catch (err) {
+        Logger.log(String(message || ""));
+    }
+}
+
+function syncNormalizeKeyPart_(val) {
+    return String(val || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
 }
