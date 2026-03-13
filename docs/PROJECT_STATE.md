@@ -71,6 +71,7 @@ Last updated: 2026-03-11
   - included in overview, obra detail, and comparative cost/phase charts,
   - excluded from worker/team/attendance/monthly worker views.
 - Supabase sync now keeps immediate send as the first attempt and stores failed sheets for automatic retry every 10 minutes (up to 6 retries).
+- `LEGACY_MAO_OBRA` is now also included in the active Supabase sync flow via `src/Sync.gs`.
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
 - Do not alter Supabase sync structure unless explicitly requested.
 

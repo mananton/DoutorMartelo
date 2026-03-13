@@ -13,6 +13,15 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-13
 
+### `6db46a3`
+- **Type**: feat
+- **Scope**: `src/Sync.gs`
+- **Summary**:
+  - Added Supabase sync support for the `LEGACY_MAO_OBRA` sheet.
+  - Introduced a stable `source_key` so old labour-history rows can be resent without creating duplicate identities.
+- **Impact**:
+  - Old labour-history data can now be stored in Supabase separately from operational worker records.
+
 ### `375217b`
 - **Type**: feat
 - **Scope**: `src/main.gs`, `src/Composer.gs`, `src/Readers.gs`, `src/Aggregators.gs`, `src/js.html`
