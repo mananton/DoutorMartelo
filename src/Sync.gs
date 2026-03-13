@@ -59,6 +59,26 @@ var SYNC_SHEET_CONFIG = {
             return item;
         }
     },
+    "LEGACY_MAO_OBRA": {
+        endpoint: "/api/sync/legacy-mao-obra",
+        headerRow: 1,
+        dedupeKey: function (item) {
+            return item.source_key;
+        },
+        mapper: function (row) {
+            var sourceKey = syncBuildLegacyMaoObraKey_(row);
+            return {
+                source_key: sourceKey,
+                data: syncFormatDate_(row["Data"]),
+                obra: row["Obra"],
+                fase: row["Fase de Obra"] || row["Fase"] || null,
+                horas: Number(row["Horas"] || 0),
+                custo_dia: Number(row["Custo Dia"] || row["Custo_Dia"] || 0),
+                origem: row["Origem"] || "legacy",
+                nota: row["Nota"] || row["Observacao"] || row["Observação"] || null
+            };
+        }
+    },
     "MATERIAIS_CAD": {
         endpoint: "/api/sync/materiais-cad",
         headerRow: 1,
@@ -537,6 +557,7 @@ function getSyncSheetRows_(sheet, headerRow) {
         for (var k = 0; k < headers.length; k++) {
             if (headers[k]) obj[headers[k]] = row[k];
         }
+        obj.__sheet_row_num = i + 1;
         rows.push(obj);
     }
     return rows;
@@ -605,4 +626,19 @@ function syncNormalizeKeyPart_(val) {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, " ");
+}
+
+function syncBuildLegacyMaoObraKey_(row) {
+    var manualId = String((row && (row["ID_Legacy"] || row["ID LEGACY"])) || "").trim();
+    if (manualId) return "legacy-id|" + manualId;
+
+    return [
+        "legacy-row",
+        syncFormatDate_(row && row["Data"]),
+        syncNormalizeKeyPart_(row && row["Obra"]),
+        syncNormalizeKeyPart_(row && (row["Fase de Obra"] || row["Fase"])),
+        String(Number((row && row["Horas"]) || 0)),
+        String(Number((row && (row["Custo Dia"] || row["Custo_Dia"])) || 0)),
+        String((row && row.__sheet_row_num) || "")
+    ].join("|");
 }
