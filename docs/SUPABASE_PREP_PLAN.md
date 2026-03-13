@@ -40,6 +40,7 @@ Resultado esperado:
   - esta folha serve para isto
   - estes campos sao essenciais
   - estes problemas existem hoje
+  - estes dados antigos entram como historico separado e nao como detalhe de trabalhadores
 
 ## Fase 2 - Escolher a primeira parte a mudar no futuro
 Objetivo:
@@ -66,6 +67,7 @@ Tarefas:
 - decidir que folha iria para que tabela
 - decidir nomes simples e estaveis
 - definir o que precisa de continuar igual para o dashboard nao notar a diferenca
+- separar desde logo os dados operacionais dos dados historicos antigos
 
 Regra importante:
 - o dashboard, no futuro, deve receber os dados com formato o mais parecido possivel com o atual
@@ -75,6 +77,10 @@ Resultado esperado:
   - folha atual
   - futura tabela
   - campos principais
+
+Nota pratica:
+- `REGISTOS_POR_DIA` continua a ser a fonte operacional principal
+- `LEGACY_MAO_OBRA` deve ser tratada como historico antigo para custos e horas
 
 ## Fase 4 - Preparar um teste pequeno
 Objetivo:

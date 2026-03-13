@@ -126,6 +126,21 @@ Format: short ADR-style records with rationale and impact.
   - Future migration stays safer for operations.
   - Dashboard freshness improves without forcing an early change in the input workflow.
 
+## D-011: Keep old labour history separate from operational worker records
+- **Status**: accepted
+- **Date**: 2026-03-13
+- **Commit**: `375217b`
+- **Decision**:
+  - Store old manually imported labour history in a dedicated sheet: `LEGACY_MAO_OBRA`.
+  - Include that sheet only in labour cost and hours calculations.
+  - Do not use that sheet for team, attendance, or monthly worker views.
+- **Rationale**:
+  - Old imported rows preserve useful cost history, but many do not have reliable worker-level detail.
+  - Mixing those rows into worker views would distort attendance and team analysis.
+- **Impact**:
+  - Historical labour cost and hours remain visible in overview, obra detail, and comparative charts.
+  - Team-facing views stay based only on operational records from `REGISTOS_POR_DIA`.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

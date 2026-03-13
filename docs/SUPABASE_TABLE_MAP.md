@@ -23,6 +23,7 @@ Nota:
 | `REGISTO_DESLOCACOES` | `deslocacoes` | `id_viagem`, `data`, `obra_destino`, `destino`, `veiculo`, `motorista`, `origem`, `quantidade_viagens`, `custo_total` |
 | `FERIAS` | `ferias_plafao` | `nome`, `data_admissao`, `dias_total`, `ano_ref_inicio`, `ano_ref_fim`, `dias_usados`, `dias_disponiveis` |
 | `MATERIAIS_MOV` | `materiais_mov` | `id_mov`, `data`, `tipo`, `obra`, `fase`, `fornecedor`, `nif`, `nr_documento`, `material`, `unidade`, `quantidade`, `custo_unit`, `custo_total`, `iva` |
+| `LEGACY_MAO_OBRA` | `legacy_mao_obra` | `data`, `obra`, `fase`, `horas`, `custo_dia`, `origem`, `nota` |
 
 ## Folhas que podem entrar depois
 
@@ -31,6 +32,42 @@ Nota:
 | `VIAGENS_DIARIAS` | `viagens_diarias` | `data`, `dia_sem`, `v_padrao`, `v_real`, `v_efetivas`, `viatura`, `obra`, `custo_via`, `custo_dia` |
 | `NAO_REGISTADOS_HIST` | `nao_registados_hist` | `data_ref`, `nome`, `funcao` |
 | `MATRIZ_ROTAS` | `matriz_rotas` | `origem`, `destino`, `custo_euro` |
+
+## Regra especial para `LEGACY_MAO_OBRA`
+
+Esta futura tabela deve ser tratada como historico antigo resumido de mao de obra.
+
+Isto quer dizer:
+- entra em custos e horas
+- pode entrar em comparativas por obra e por fase
+- nao deve alimentar equipa, assiduidade ou mapa mensal
+
+## Proposta simples para a futura tabela `legacy_mao_obra`
+
+Campos recomendados:
+- `id`
+- `data`
+- `obra`
+- `fase`
+- `horas`
+- `custo_dia`
+- `origem`
+- `nota`
+- `created_at`
+
+Leitura pratica:
+- `id` = identificador tecnico da linha
+- `data` = dia do custo antigo
+- `obra` = nome/local da obra
+- `fase` = fase da obra nesse custo antigo
+- `horas` = horas antigas conhecidas
+- `custo_dia` = valor desse registo antigo
+- `origem` = de onde veio a importacao
+- `nota` = campo livre para contexto
+
+Regra importante:
+- esta tabela existe para preservar historico de custo
+- nao para reconstruir detalhe por trabalhador
 
 ## Leitura pratica deste mapa
 

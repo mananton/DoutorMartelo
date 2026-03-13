@@ -36,6 +36,11 @@ Estas sao as folhas que alimentam diretamente o dashboard atual:
 - `MATERIAIS_MOV`
   - alimenta custos e tabelas de materiais
 
+- `LEGACY_MAO_OBRA`
+  - guarda historico antigo de mao de obra importado manualmente
+  - entra nos custos e horas
+  - nao entra em equipa, assiduidade ou mapa mensal
+
 ### Importantes, mas menos centrais para uma primeira passagem
 - `VIAGENS_DIARIAS`
   - entra em alguns totais e leituras auxiliares
@@ -86,6 +91,7 @@ Hoje o dashboard recebe um pacote de dados com blocos como:
 - `obras_info`
 - `colaboradores`
 - `registos`
+- `legacy_mao_obra`
 - `deslocacoes`
 - `ferias`
 - `materiais_mov`
@@ -131,3 +137,11 @@ Quando quiseres avançar, o passo mais util sera criar um documento ainda mais c
 - campos principais
 
 Esse sera o primeiro desenho serio antes de qualquer migracao.
+
+## Nota pratica sobre historico antigo
+
+Se o dashboard um dia passar a ler do Supabase, a folha `LEGACY_MAO_OBRA` tambem precisa de existir nesse novo desenho.
+
+Mas a regra deve continuar a ser simples:
+- usar esse historico antigo apenas para custos e horas
+- nao tentar transforma-lo em registos detalhados de trabalhadores

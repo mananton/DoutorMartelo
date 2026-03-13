@@ -67,6 +67,9 @@ Last updated: 2026-03-11
 - `ENABLE_EMPTY_ROW_CLEANUP` is currently `true` in `src/main.gs`.
 - `.clasp.json` uses `rootDir: "src"` and manifest must exist at `src/appsscript.json`.
 - `raw_v2` now emits diagnostics metadata for malformed `REGISTOS_POR_DIA` rows (invalid date shape, missing obra, invalid numeric fields) without changing existing behavior.
+- `LEGACY_MAO_OBRA` is now treated as old labour-history input for costs/hours only:
+  - included in overview, obra detail, and comparative cost/phase charts,
+  - excluded from worker/team/attendance/monthly worker views.
 - Supabase sync now keeps immediate send as the first attempt and stores failed sheets for automatic retry every 10 minutes (up to 6 retries).
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
 - Do not alter Supabase sync structure unless explicitly requested.

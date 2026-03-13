@@ -13,6 +13,16 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-13
 
+### `375217b`
+- **Type**: feat
+- **Scope**: `src/main.gs`, `src/Composer.gs`, `src/Readers.gs`, `src/Aggregators.gs`, `src/js.html`
+- **Summary**:
+  - Added support for `LEGACY_MAO_OBRA` as a separate source of old labour history.
+  - Included legacy labour cost/hours in overview, obra detail, and comparative charts.
+  - Kept legacy labour rows out of team and attendance logic.
+- **Impact**:
+  - Old manually imported labour history now contributes to business cost totals without corrupting worker-level views.
+
 ### `pending`
 - **Type**: fix
 - **Scope**: `src/main.gs`, `src/Composer.gs`, `src/Readers.gs`, `src/index.html`, `src/css.html`, `src/js.html`, `docs/*`
