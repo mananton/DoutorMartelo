@@ -459,6 +459,9 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("⟳ Sync")
     .addItem("Sincronizar tudo", "syncAll")
+    .addItem("Tentar pendentes agora", "syncRetryPendingNow")
+    .addItem("Ver estado da sync", "syncShowStatus")
+    .addItem("Limpar falhas da sync", "syncClearFailures")
     .addToUi();
 }
 
