@@ -111,6 +111,21 @@ Format: short ADR-style records with rationale and impact.
   - Cleaner client-facing dashboard.
   - Faster internal diagnosis of sheet problems without changing business behavior.
 
+## D-010: Future Supabase sync should be near-real-time with retry safety
+- **Status**: accepted
+- **Date**: 2026-03-13
+- **Commit**: `pending`
+- **Decision**:
+  - Keep AppSheet and manual Google Sheet editing as the input path in the first migration stage.
+  - When Supabase is introduced, prefer automatic near-real-time sync after each change.
+  - If sync fails, the operational flow must continue and the system should allow a later retry.
+- **Rationale**:
+  - The team needs the dashboard to stay fresh without changing how people register data.
+  - Immediate sync is useful, but it must not become a fragile point that blocks the day-to-day operation.
+- **Impact**:
+  - Future migration stays safer for operations.
+  - Dashboard freshness improves without forcing an early change in the input workflow.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.
