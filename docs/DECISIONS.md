@@ -141,6 +141,25 @@ Format: short ADR-style records with rationale and impact.
   - Historical labour cost and hours remain visible in overview, obra detail, and comparative charts.
   - Team-facing views stay based only on operational records from `REGISTOS_POR_DIA`.
 
+## D-012: Separate material catalog, invoice lines, stock movements, and old material cost history
+- **Status**: accepted
+- **Date**: 2026-03-16
+- **Commit**: `pending`
+- **Decision**:
+  - Keep `MATERIAIS_CAD` as the official catalog of internal material items.
+  - Keep `FATURAS_ITENS` as the real purchase-line sheet, including discounts and invoice detail.
+  - Keep `MATERIAIS_MOV` as the movement ledger for stock/consumption behavior, not as the original purchase register.
+  - Treat `LEGACY_MATERIAIS` as old material cost history only, separate from current stock logic.
+  - Do not introduce category/subcategory yet; keep the first cleanup focused on item identity and cost behavior.
+- **Rationale**:
+  - Old invoice imports contain many different supplier names for the same item and also mix materials, services, rentals, and transport.
+  - Current stock control and obra cost control need a cleaner split between catalog, purchase lines, and real stock movements.
+  - Historical imported material rows are useful for obra/fase cost totals, but not reliable enough for current stock balances.
+- **Impact**:
+  - Future material cleanup can map supplier wording to a stable internal item without losing original invoice text.
+  - Old material history can remain visible in cost views without polluting stock calculations.
+  - The next implementation step should prioritize `MATERIAIS_ALIAS`, simplified `MATERIAIS_CAD`, and a lean `LEGACY_MATERIAIS` flow.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

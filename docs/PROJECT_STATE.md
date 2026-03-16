@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-03-11
+Last updated: 2026-03-16
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
@@ -70,6 +70,11 @@ Last updated: 2026-03-11
 - `LEGACY_MAO_OBRA` is now treated as old labour-history input for costs/hours only:
   - included in overview, obra detail, and comparative cost/phase charts,
   - excluded from worker/team/attendance/monthly worker views.
+- A parallel spreadsheet redesign is now defined for materials/cost control:
+  - `MATERIAIS_CAD` stays as the official item catalog,
+  - `FATURAS_ITENS` stays as invoice-line detail,
+  - `MATERIAIS_MOV` stays as movement ledger,
+  - `LEGACY_MATERIAIS` is reserved for old material cost history only.
 - Supabase sync now keeps immediate send as the first attempt and stores failed sheets for automatic retry every 10 minutes (up to 6 retries).
 - `LEGACY_MAO_OBRA` is now also included in the active Supabase sync flow via `src/Sync.gs`.
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
@@ -79,3 +84,4 @@ Last updated: 2026-03-11
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
 - Legacy rows with inconsistent naming can still reduce per-worker detail accuracy.
 - Material naming variance can still fragment search results (e.g., synonyms/typos).
+- `LEGACY_MATERIAIS` exists as a spreadsheet structure decision only; it is not yet wired into dashboard code or Supabase sync.
