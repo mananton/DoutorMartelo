@@ -194,6 +194,61 @@ function readLegacyMaoObra_(sheet) {
   return out;
 }
 
+function readLegacyMateriais_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const colMap = getColMap_(sheet, 1);
+  const cols = {
+    data: pickCol_(colMap, ["Data"], 0),
+    obra: pickCol_(colMap, ["Obra"], 1),
+    fase: pickCol_(colMap, ["Fase de Obra", "Fase"], 2),
+    material: pickCol_(colMap, ["Material"], 3),
+    quantidade: pickCol_(colMap, ["Quantidade"], 4),
+    custoUnit: pickCol_(colMap, ["Custo_Unit", "Custo Unit", "Custo Unitario", "Custo Unitário"], 5),
+    custoSemIva: pickCol_(colMap, ["Custo_Total Sem IVA", "Custo Total Sem IVA", "Custo_Total_Sem_IVA"], 6),
+    iva: pickCol_(colMap, ["IVA"], 7),
+    custoComIva: pickCol_(colMap, ["Custo_Total Com IVA", "Custo Total Com IVA", "Custo_Total_Com_IVA"], 8)
+  };
+  const numCols = Math.max(sheet.getLastColumn(), 9);
+  const rows = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  const out = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const obra = String(row[cols.obra] || "").trim();
+    const material = String(row[cols.material] || "").trim();
+    if (!obra || !material) continue;
+
+    const custoComIva = parseFloat(row[cols.custoComIva]) || 0;
+    const custoSemIva = parseFloat(row[cols.custoSemIva]) || 0;
+    const custo = custoComIva || custoSemIva || 0;
+    const quantidade = parseFloat(row[cols.quantidade]) || 0;
+
+    out.push({
+      data: formatDateValue_(row[cols.data], false),
+      obra: obra,
+      fase: String(row[cols.fase] || "").trim() || "Sem Fase",
+      material: material,
+      unidade: "",
+      quantidade: quantidade,
+      custo_unit: parseFloat(row[cols.custoUnit]) || 0,
+      custo_total_sem_iva: custoSemIva,
+      iva: parseFloat(row[cols.iva]) || 0,
+      custo_total_com_iva: custoComIva || custo,
+      custo_total: custo,
+      source: "legacy_materiais",
+
+      // aliases usados pela agregacao atual
+      qtd: quantidade,
+      custo: custo
+    });
+  }
+
+  return out;
+}
+
 function getRegistosCols_(colMap) {
   return {
     dataArquivo: pickCol_(colMap, ["DATA_ARQUIVO", "Data Arquivo"], 0),

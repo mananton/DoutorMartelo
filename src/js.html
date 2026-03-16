@@ -91,6 +91,7 @@ let mapaMensalCache = {};
 
 /* ── MATERIAIS GLOBALS ─────────────────────────────────── */
 let matMovAll = [];
+let legacyMatAll = [];
 let legacyFallbackAttempted = false;
 
 /* ── FORMATTERS ─────────────────────────────────────────── */
@@ -164,6 +165,7 @@ function onDataLoaded(jsonStr) {
     mapaMensalCache = {};
     if (DATA.error) { onDataError(DATA.error); return; }
     matMovAll = DATA.materiais_mov || [];
+    legacyMatAll = DATA.legacy_materiais || [];
     buildAll();
     setQuickFilter('hoje');
     hideOverlay();
@@ -210,6 +212,7 @@ function isoWeekClient_(dateStr) {
 function buildDashboardFromRaw_(raw) {
   const registos = Array.isArray(raw.registos) ? raw.registos : [];
   const legacyMaoObra = Array.isArray(raw.legacy_mao_obra) ? raw.legacy_mao_obra : [];
+  const legacyMateriais = Array.isArray(raw.legacy_materiais) ? raw.legacy_materiais : [];
   const deslocacoes = Array.isArray(raw.deslocacoes) ? raw.deslocacoes : [];
   const viagens = Array.isArray(raw.viagens) ? raw.viagens : [];
   const materiaisMov = Array.isArray(raw.materiais_mov) ? raw.materiais_mov : [];
@@ -376,6 +379,23 @@ function buildDashboardFromRaw_(raw) {
     matPorObraFase[obra][fase].qtd += qtd;
   }
 
+  for (let i = 0; i < legacyMateriais.length; i++) {
+    const m = legacyMateriais[i] || {};
+    const obra = String(m.obra || '').trim();
+    if (!obra) continue;
+    const fase = String(m.fase || '-').trim() || '-';
+    const custo = Number(m.custo) || 0;
+    const qtd = Number(m.qtd) || 0;
+    custoMateriais += custo;
+    if (!matPorObra[obra]) matPorObra[obra] = { custo: 0, qtd: 0 };
+    matPorObra[obra].custo += custo;
+    matPorObra[obra].qtd += qtd;
+    if (!matPorObraFase[obra]) matPorObraFase[obra] = {};
+    if (!matPorObraFase[obra][fase]) matPorObraFase[obra][fase] = { custo: 0, qtd: 0 };
+    matPorObraFase[obra][fase].custo += custo;
+    matPorObraFase[obra][fase].qtd += qtd;
+  }
+
   const obras = {};
   Object.keys(obraMap).sort().forEach(nome => {
     const o = obraMap[nome];
@@ -464,6 +484,7 @@ function buildDashboardFromRaw_(raw) {
     diagnostics: normalizeDiagnostics_(raw.diagnostics),
     registos: registos,
     legacy_mao_obra: legacyMaoObra,
+    legacy_materiais: legacyMateriais,
     viagens: viagens,
     deslocacoes: deslocacoes,
     ferias: raw.ferias || [],
@@ -659,12 +680,7 @@ function obraHasDataInCurrentFilter_(nome) {
   );
   if (hasDeslocacoes) return true;
 
-  const hasMateriais = (matMovAll || []).some(m =>
-    m.obra === nome &&
-    m.tipo &&
-    String(m.tipo).toUpperCase() === 'CONSUMO' &&
-    dateInRange(m.data)
-  );
+  const hasMateriais = filterAllMateriaisByDate().some(m => m.obra === nome);
   return hasMateriais;
 }
 
@@ -1030,7 +1046,7 @@ function buildObraCharts(nome) {
 
   // Aggregate materiais por fase (date-filtered)
   const matFaseAgg = {};
-  filterMateriaisByDate().forEach(m => {
+  filterAllMateriaisByDate().forEach(m => {
     if (m.obra !== nome) return;
     const fase = String(m.fase || '').trim() || 'Sem Fase';
     addFaseCost_(matFaseAgg, fase, matCost(m), 0);
@@ -1444,11 +1460,7 @@ function buildObraMateriais(nome) {
   const materialFilter = String(searchInput && searchInput.value || '').trim().toLowerCase();
 
   // Filtrar CONSUMO da obra, respeitando filtro de datas global
-  const rows = matMovAll.filter(m =>
-    m.tipo && m.tipo.toUpperCase() === 'CONSUMO' &&
-    m.obra === nome &&
-    dateInRange(m.data)
-  );
+  const rows = filterAllMateriaisByDate().filter(m => m.obra === nome);
 
   if (!rows.length) {
     card.style.display = 'none';
@@ -3444,7 +3456,7 @@ function collectCompFasesData_(selectedObras) {
   });
 
   if (compFasesMetric !== 'mao_obra') {
-    filterMateriaisByDate().forEach(m => {
+    filterAllMateriaisByDate().forEach(m => {
       if (!selectedSet.has(m.obra)) return;
       const fase = String(m.fase || '').trim() || 'Sem Fase';
       if (!shouldIncludeCompFase_(fase)) return;
@@ -4247,6 +4259,12 @@ function filterMateriaisByDate() {
     m.tipo && m.tipo.toUpperCase() === 'CONSUMO' && dateInRange(m.data)
   );
 }
+function filterLegacyMateriaisByDate() {
+  return legacyMatAll.filter(m => dateInRange(m.data));
+}
+function filterAllMateriaisByDate() {
+  return filterMateriaisByDate().concat(filterLegacyMateriaisByDate());
+}
 function matCost(m) {
   const raw = (m && m.custo_total_com_iva != null && m.custo_total_com_iva !== '')
     ? m.custo_total_com_iva
@@ -4255,10 +4273,10 @@ function matCost(m) {
   return isNaN(n) ? 0 : n;
 }
 function sumMateriaisGlobal() {
-  return filterMateriaisByDate().reduce((s, m) => s + matCost(m), 0);
+  return filterAllMateriaisByDate().reduce((s, m) => s + matCost(m), 0);
 }
 function sumMateriaisByObra(nome) {
-  return filterMateriaisByDate()
+  return filterAllMateriaisByDate()
     .filter(m => m.obra === nome)
     .reduce((s, m) => s + matCost(m), 0);
 }

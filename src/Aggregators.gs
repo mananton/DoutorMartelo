@@ -15,6 +15,7 @@ function buildData_(ss) {
   const feriasSheet = ss.getSheetByName(SHEET_FERIAS);
   const matSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
   const legacyMaoObraSheet = ss.getSheetByName(SHEET_LEGACY_MAO_OBRA);
+  const legacyMateriaisSheet = getLegacyMateriaisSheet_(ss);
 
   if (!regSheet) throw new Error("Folha não encontrada: " + SHEET_REGISTOS);
 
@@ -28,6 +29,7 @@ function buildData_(ss) {
   const ferias = readFerias_(feriasSheet);
   const materiaisMov = readMateriaisMov_(matSheet);
   const legacyMaoObra = readLegacyMaoObra_(legacyMaoObraSheet);
+  const legacyMateriais = readLegacyMateriais_(legacyMateriaisSheet);
 
   const obraMap = {};
   function ensureObra_(obra) {
@@ -209,6 +211,27 @@ function buildData_(ss) {
     matPorObraFase[obra][fase].qtd += qtd;
   }
 
+  for (let i = 0; i < (legacyMateriais || []).length; i++) {
+    const m = legacyMateriais[i] || {};
+    const obra = String(m.obra || "").trim();
+    if (!obra) continue;
+
+    const fase = String(m.fase || "\u2014").trim() || "\u2014";
+    const custo = parseFloat(m.custo) || 0;
+    const qtd = parseFloat(m.qtd) || 0;
+
+    custoMateriais += custo;
+
+    if (!matPorObra[obra]) matPorObra[obra] = { custo: 0, qtd: 0 };
+    matPorObra[obra].custo += custo;
+    matPorObra[obra].qtd += qtd;
+
+    if (!matPorObraFase[obra]) matPorObraFase[obra] = {};
+    if (!matPorObraFase[obra][fase]) matPorObraFase[obra][fase] = { custo: 0, qtd: 0 };
+    matPorObraFase[obra][fase].custo += custo;
+    matPorObraFase[obra][fase].qtd += qtd;
+  }
+
   const obras = {};
   Object.keys(obraMap).sort().forEach(function(nome) {
     const o = obraMap[nome];
@@ -309,7 +332,8 @@ function buildData_(ss) {
     deslocacoes: deslocacoes,
     ferias: ferias,
     materiais_mov: materiaisMov,
-    legacy_mao_obra: legacyMaoObra
+    legacy_mao_obra: legacyMaoObra,
+    legacy_materiais: legacyMateriais
   };
 }
 

@@ -21,6 +21,8 @@ const SHEET_FERIAS      = "FERIAS";
 const SHEET_MATERIAIS_MOV = "MATERIAIS_MOV";
 const SHEET_NAO_REGISTADOS = "NAO_REGISTADOS_HIST";
 const SHEET_LEGACY_MAO_OBRA = "LEGACY_MAO_OBRA";
+const SHEET_LEGACY_MATERIAIS = "MATERIAIS_LEGACY";
+const SHEET_LEGACY_MATERIAIS_ALT = "LEGACY_MATERIAIS";
 const TZ               = "Europe/Lisbon";
 const NREG_HOUR        = 23;
 const NREG_MINUTE      = 45;
@@ -52,6 +54,12 @@ function getDashboardData(options) {
   } catch (err) {
     return JSON.stringify({ error: err.message });
   }
+}
+
+function getLegacyMateriaisSheet_(ss) {
+  if (!ss) return null;
+  return ss.getSheetByName(SHEET_LEGACY_MATERIAIS) ||
+    ss.getSheetByName(SHEET_LEGACY_MATERIAIS_ALT);
 }
 
 // SECTION 3 - LIMPEZA AUTOMATICA DE LINHAS VAZIAS
