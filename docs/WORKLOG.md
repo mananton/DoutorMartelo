@@ -173,3 +173,30 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - expected effect
 ```
+
+## 2026-03-17
+
+### `uncommitted`
+- **Type**: refactor / automation
+- **Scope**: `src/main.gs`, spreadsheet operating model for materials
+- **Summary**:
+  - Reworked the materials registration flow around a single `MATERIAIS_CAD` sheet and removed code dependency on `MATERIAIS_ALIAS`.
+  - Added custom `MATERIAIS_CAD` processing:
+    - exact supplier + original-description reuse,
+    - similarity-based reuse/review,
+    - `Natureza`-based ID generation,
+    - automatic `Item_Oficial` suggestion,
+    - `Estado_Cadastro` coloring.
+  - Added `FATURAS_ITENS` hydration from:
+    - `FATURAS` via `ID_Fatura`,
+    - `MATERIAIS_CAD` via `Fornecedor + Descricao_Original`.
+  - Changed `FATURAS_ITENS` automation to edit only owned columns so invoice total formulas do not get wiped.
+  - Extended material movement synchronization:
+    - create movement when invoice line becomes valid,
+    - update generated movement when the invoice line changes,
+    - remove generated movement when the invoice line is deleted or becomes invalid.
+  - Changed movement generation to use net unit cost (discount-aware).
+- **Impact**:
+  - Materials workflow is closer to a usable day-to-day Google Sheets process.
+  - `STOCK_ATUAL` can now depend on generated ledger rows instead of manual duplicate entry.
+  - The current main risk is not architecture but spreadsheet behavior validation on real rows.

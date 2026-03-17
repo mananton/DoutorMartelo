@@ -156,9 +156,73 @@ Format: short ADR-style records with rationale and impact.
   - Current stock control and obra cost control need a cleaner split between catalog, purchase lines, and real stock movements.
   - Historical imported material rows are useful for obra/fase cost totals, but not reliable enough for current stock balances.
 - **Impact**:
-  - Future material cleanup can map supplier wording to a stable internal item without losing original invoice text.
-  - Old material history can remain visible in cost views without polluting stock calculations.
-  - The next implementation step should prioritize `MATERIAIS_ALIAS`, simplified `MATERIAIS_CAD`, and a lean `LEGACY_MATERIAIS` flow.
+- Future material cleanup can map supplier wording to a stable internal item without losing original invoice text.
+- Old material history can remain visible in cost views without polluting stock calculations.
+- The next implementation step should prioritize `MATERIAIS_ALIAS`, simplified `MATERIAIS_CAD`, and a lean `LEGACY_MATERIAIS` flow.
+
+## D-013: Collapse material catalog and alias mapping into a single `MATERIAIS_CAD` sheet
+- **Status**: accepted
+- **Date**: 2026-03-17
+- **Commit**: `pending`
+- **Decision**:
+  - Use a single spreadsheet sheet for material identity and supplier wording: `MATERIAIS_CAD`.
+  - Sheet structure is now:
+    - `ID_Item`
+    - `Fornecedor`
+    - `Descricao_Original`
+    - `Item_Oficial`
+    - `Natureza`
+    - `Unidade`
+    - `Observacoes`
+    - `Estado_Cadastro`
+  - Remove dependency on a separate `MATERIAIS_ALIAS` sheet.
+  - Allow repeated `ID_Item` across rows when multiple supplier/original descriptions map to the same internal item.
+  - `Natureza` now drives ID prefixing:
+    - `MATERIAL` -> `MAT-xxxxxx`
+    - `SERVICO` -> `SER-xxxxxx`
+    - `ALUGUER` -> `ALQ-xxxxxx`
+    - `TRANSPORTE` -> `TRN-xxxxxx`
+- **Rationale**:
+  - The two-sheet approach was adding maintenance friction for a small team working directly in Google Sheets.
+  - The business need is practical mapping of supplier wording to internal items, not strict master-data normalization at this stage.
+- **Impact**:
+  - Material registration is now simpler for manual operation.
+  - GAS must handle exact-match reuse, similarity review, and automatic item suggestion inside one sheet.
+
+## D-014: `FATURAS_ITENS` is the purchase-line source; `MATERIAIS_MOV` is generated/maintained from it
+- **Status**: accepted
+- **Date**: 2026-03-17
+- **Commit**: `pending`
+- **Decision**:
+  - Treat `FATURAS_ITENS` as the source of truth for purchase lines.
+  - Treat `MATERIAIS_MOV` as generated/maintained ledger rows for purchase-driven `ENTRADA` / direct `CONSUMO`.
+  - Manual edits in `MATERIAIS_MOV` should be reserved for:
+    - stock consumption after storage,
+    - returns,
+    - adjustments,
+    - transfers.
+  - When a `FATURAS_ITENS` row changes and already has a generated movement, the generated row must be updated, not duplicated.
+  - When a `FATURAS_ITENS` row stops being valid for movement generation, the generated movement must be removed.
+- **Rationale**:
+  - Re-entering invoice data again in `MATERIAIS_MOV` creates duplication and drift.
+  - Stock and cost calculations need generated rows to stay synchronized with invoice-line changes.
+- **Impact**:
+  - `STOCK_ATUAL` reliability depends directly on consistent synchronization from `FATURAS_ITENS` to `MATERIAIS_MOV`.
+  - Future agents must preserve the `[SRC_FIT:FIT-xxxxxx]` linkage marker logic.
+
+## D-015: Use net unit cost in movement generation
+- **Status**: accepted
+- **Date**: 2026-03-17
+- **Commit**: `pending`
+- **Decision**:
+  - When generating `MATERIAIS_MOV` from `FATURAS_ITENS`, write `Custo_Unit` as the net unit cost.
+  - Priority:
+    - `Custo_Total Sem IVA / Quantidade`, when available.
+    - Otherwise calculate from `Custo_Unit` applying `Desconto 1` and `Desconto 2`.
+- **Rationale**:
+  - Gross invoice unit price produces incorrect average stock cost.
+- **Impact**:
+  - `STOCK_ATUAL.Custo_Medio_Atual` should be computed from `MATERIAIS_MOV.Custo_Unit` and now reflects discounts for newly generated movements.
 
 ## Standing Constraints
 - Do not rename global sheet constants.

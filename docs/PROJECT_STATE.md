@@ -79,9 +79,58 @@ Last updated: 2026-03-16
 - `LEGACY_MAO_OBRA` is now also included in the active Supabase sync flow via `src/Sync.gs`.
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
 - Do not alter Supabase sync structure unless explicitly requested.
+- Materials flow has changed in the spreadsheet model:
+  - `MATERIAIS_CAD` is now a single working sheet with both identity and supplier wording:
+    - `ID_Item`
+    - `Fornecedor`
+    - `Descricao_Original`
+    - `Item_Oficial`
+    - `Natureza`
+    - `Unidade`
+    - `Observacoes`
+    - `Estado_Cadastro`
+  - `MATERIAIS_ALIAS` no longer exists in the workbook and code should not depend on it.
+  - `Natureza` current dropdown values:
+    - `MATERIAL`
+    - `SERVICO`
+    - `ALUGUER`
+    - `TRANSPORTE`
+  - `ID_Item` is now generated in GAS from `Natureza`, not by the generic ID helper path.
+- `FATURAS_ITENS` current operating model:
+  - Manual starting point:
+    - `ID_Fatura`
+    - `Descricao_Original`
+    - quantity/cost/discount/IVA/destination/obra/fase as needed
+  - Automatic fill:
+    - from `FATURAS`: supplier, NIF, invoice doc, invoice date
+    - from `MATERIAIS_CAD`: `ID_Item`, `Item_Oficial`, `Unidade`
+    - `Sugestao_Alias` is now only used when the item is not found in catalog
+  - Important implementation detail:
+    - GAS was updated to avoid rewriting the full row because that wiped user formulas in total columns
+- `MATERIAIS_MOV` current intended use:
+  - auto-generated for purchase-driven `STOCK` / direct `CONSUMO` coming from `FATURAS_ITENS`
+  - manual only for later stock consumption, returns, adjustments, and transfers
+  - generated rows are linked back to `FATURAS_ITENS` via `[SRC_FIT:FIT-xxxxxx]` in `Observacoes`
+  - generated rows should now be created, updated, and removed automatically from invoice-line edits
+- `STOCK_ATUAL` current expectation:
+  - should depend on `MATERIAIS_MOV`, not `FATURAS_ITENS`, for stock quantities and average-cost logic
+  - `Item_Oficial` and `Unidade` should be read from `MATERIAIS_CAD`
+  - `Custo_Medio_Atual` should use net movement cost (discount-aware)
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
 - Legacy rows with inconsistent naming can still reduce per-worker detail accuracy.
 - Material naming variance can still fragment search results (e.g., synonyms/typos).
 - `LEGACY_MATERIAIS` exists as a spreadsheet structure decision only; it is not yet wired into dashboard code or Supabase sync.
+- Current material automation is mid-rollout and should be treated as active but still under validation on real spreadsheet edits.
+- Watch for Apps Script trigger behavior differences between:
+  - manual cell edit,
+  - pasted ranges,
+  - row deletions,
+  - formula recalculation.
+- If materials behavior looks inconsistent, inspect `src/main.gs` first:
+  - `processMateriaisCadRow_`
+  - `hydrateFaturasItensFromFaturas_`
+  - `hydrateFaturasItensFromCatalog_`
+  - `gerarMovimentosMateriais_`
+  - `reconcileGeneratedMateriaisMovRows_`

@@ -42,3 +42,44 @@ Expected output format:
 - Obra buttons are now filter-aware (only obras with data in active period are shown).
 - Deslocacoes page is transitioning to Obra-like flow: period controls -> KPIs -> obra selector -> register table.
 - Verify empty-state handling before deploy (`Sem obras...`, `Sem deslocacoes...`).
+
+## Current Material Workflow Snapshot
+- Spreadsheet model changed recently and is important:
+  - `MATERIAIS_CAD` is now a single working sheet with:
+    - `ID_Item`
+    - `Fornecedor`
+    - `Descricao_Original`
+    - `Item_Oficial`
+    - `Natureza`
+    - `Unidade`
+    - `Observacoes`
+    - `Estado_Cadastro`
+  - `MATERIAIS_ALIAS` was removed from the workbook.
+- `FATURAS_ITENS` is now the source sheet for purchase lines.
+- `MATERIAIS_MOV` is expected to be auto-maintained from `FATURAS_ITENS` for purchase-driven rows.
+- `STOCK_ATUAL` should read its identity fields from `MATERIAIS_CAD` and its stock/cost behavior from `MATERIAIS_MOV`.
+
+## Current Material Automation Hotspots
+- Read `src/main.gs` carefully before changing materials logic.
+- Functions to inspect first:
+  - `processMateriaisCadRow_`
+  - `hydrateFaturasItensFromFaturas_`
+  - `hydrateFaturasItensFromCatalog_`
+  - `hydrateMateriaisMovFromCatalog_`
+  - `gerarMovimentosMateriais_`
+  - `reconcileGeneratedMateriaisMovRows_`
+- Generated movement rows are linked by `[SRC_FIT:FIT-xxxxxx]` in `MATERIAIS_MOV.Observacoes`.
+- Recent changes were made specifically to:
+  - stop wiping formulas in `FATURAS_ITENS`,
+  - use net unit cost in movement generation,
+  - update generated movements when invoice lines change,
+  - remove generated movements when invoice lines become invalid.
+
+## Current Material Validation Tasks
+- Confirm `FATURAS_ITENS` formula columns survive normal edit/paste flows.
+- Confirm generated movement rows are:
+  - created,
+  - updated,
+  - removed
+  in sync with `FATURAS_ITENS`.
+- Confirm `STOCK_ATUAL.Custo_Medio_Atual` uses movement rows that already reflect discounts.
