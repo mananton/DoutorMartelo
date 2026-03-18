@@ -313,7 +313,7 @@ Format: short ADR-style records with rationale and impact.
 ## D-021: Materials backoffice should prefer assisted operational forms over raw sheet-like editing
 - **Status**: accepted
 - **Date**: 2026-03-18
-- **Commit**: `pending`
+- **Commit**: `c9a078e`
 - **Decision**:
   - Treat the new materials backoffice as a guided operational layer, not as a direct spreadsheet clone.
   - Prefer assisted selection for `ID_Item`, visible downstream impact previews, and explicit sync status cards.

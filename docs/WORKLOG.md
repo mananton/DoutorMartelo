@@ -289,7 +289,7 @@ Purpose: chronological, commit-based project history for fast handoff.
   - After backend restart, `FATURAS`, `MATERIAIS_CAD`, `AFETACOES_OBRA`, and related lists now reopen with real existing data.
   - The new app no longer appears empty after restarting the FastAPI server.
 
-### `uncommitted`
+### `c9a078e`
 - **Type**: feat(ui) / ops
 - **Scope**: `frontend/`, `backend/app/adapters/google_sheets/live.py`, `backend/tests/test_api.py`, docs
 - **Summary**:
