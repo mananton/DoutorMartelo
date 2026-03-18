@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from backend.app.adapters.google_sheets.live import LiveGoogleSheetsAdapter
 from backend.app.adapters.google_sheets.memory import MemoryGoogleSheetsAdapter
+from backend.app.adapters.supabase.live import LiveSupabaseAdapter
 from backend.app.adapters.supabase.memory import MemorySupabaseAdapter
+from backend.app.config import Settings
 from backend.app.services.materials import MaterialsService
 from backend.app.services.state import RuntimeState
 from backend.app.services.sync import SyncService
@@ -11,11 +14,22 @@ from backend.app.services.sync import SyncService
 
 class ServiceContainer:
     def __init__(self) -> None:
+        self.settings = Settings.from_env()
         self.state = RuntimeState()
-        self.google_sheets = MemoryGoogleSheetsAdapter(self.state)
-        self.supabase = MemorySupabaseAdapter(self.state)
+        self.google_sheets = self._build_google_adapter()
+        self.supabase = self._build_supabase_adapter()
         self.materials = MaterialsService(self.state, self.google_sheets, self.supabase)
         self.sync = SyncService(self.state, self.supabase)
+
+    def _build_google_adapter(self):
+        if self.settings.has_google_sheets:
+            return LiveGoogleSheetsAdapter(self.settings)
+        return MemoryGoogleSheetsAdapter(self.state)
+
+    def _build_supabase_adapter(self):
+        if self.settings.has_supabase:
+            return LiveSupabaseAdapter(self.settings)
+        return MemorySupabaseAdapter(self.state)
 
 
 def get_container(request: Request) -> ServiceContainer:

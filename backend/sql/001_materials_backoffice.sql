@@ -1,0 +1,123 @@
+create table if not exists public.faturas (
+  id_fatura text primary key,
+  fornecedor text not null,
+  nif text not null,
+  nr_documento text not null,
+  data_fatura date not null,
+  valor_sem_iva numeric default 0,
+  iva numeric default 0,
+  valor_com_iva numeric default 0,
+  observacoes text,
+  estado text,
+  sheet_row_num integer,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.faturas_itens (
+  id_item_fatura text primary key,
+  id_fatura text references public.faturas(id_fatura) on delete cascade,
+  fornecedor text,
+  nif text,
+  nr_documento text,
+  data_fatura date,
+  descricao_original text not null,
+  id_item text,
+  item_oficial text,
+  unidade text,
+  quantidade numeric default 0,
+  custo_unit numeric default 0,
+  desconto_1 numeric default 0,
+  desconto_2 numeric default 0,
+  custo_total_sem_iva numeric default 0,
+  iva numeric default 0,
+  custo_total_com_iva numeric default 0,
+  destino text,
+  obra text,
+  fase text,
+  observacoes text,
+  estado_mapeamento text,
+  sugestao_alias text,
+  sheet_row_num integer,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.materiais_cad (
+  id_item text not null,
+  fornecedor text not null,
+  descricao_original text not null,
+  item_oficial text not null,
+  natureza text not null,
+  unidade text not null,
+  observacoes text,
+  estado_cadastro text,
+  sheet_row_num integer,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  primary key (id_item, fornecedor, descricao_original)
+);
+
+create table if not exists public.afetacoes_obra (
+  id_afetacao text primary key,
+  origem text not null,
+  source_id text,
+  data date not null,
+  id_item text not null,
+  item_oficial text,
+  natureza text,
+  quantidade numeric default 0,
+  unidade text,
+  custo_unit numeric default 0,
+  custo_total numeric default 0,
+  custo_total_sem_iva numeric default 0,
+  iva numeric default 0,
+  custo_total_com_iva numeric default 0,
+  obra text not null,
+  fase text not null,
+  fornecedor text,
+  nif text,
+  nr_documento text,
+  processar boolean default false,
+  estado text,
+  observacoes text,
+  sheet_row_num integer,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.materiais_mov (
+  id_mov text primary key,
+  data date not null,
+  tipo text not null,
+  id_item text not null,
+  item_oficial text,
+  material text,
+  unidade text,
+  quantidade numeric default 0,
+  custo_unit numeric default 0,
+  custo_total_sem_iva numeric default 0,
+  iva numeric default 0,
+  custo_total_com_iva numeric default 0,
+  custo_total numeric default 0,
+  obra text,
+  fase text,
+  fornecedor text,
+  nif text,
+  nr_documento text,
+  observacoes text,
+  sheet_row_num integer,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.stock_atual (
+  id_item text primary key,
+  item_oficial text,
+  material text,
+  unidade text,
+  stock_atual numeric default 0,
+  custo_medio_atual numeric default 0,
+  sheet_row_num integer,
+  updated_at timestamptz default now()
+);
