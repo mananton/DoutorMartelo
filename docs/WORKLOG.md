@@ -302,7 +302,7 @@ Purpose: chronological, commit-based project history for fast handoff.
   - Sync status is easier to read operationally without inspecting raw payloads.
   - `FATURAS_ITENS` roundtrip fidelity between app and Google Sheets is improved.
 
-### `uncommitted`
+### `fd114e8`
 - **Type**: feat(ui) / diagnostics
 - **Scope**: `backend/app/api/*`, `backend/app/services/materials.py`, `frontend/`, docs
 - **Summary**:
