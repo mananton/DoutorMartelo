@@ -1,8 +1,9 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 import { api } from "../lib/api";
+import type { WorkOption } from "../lib/workOptions";
 
 type ItemFormState = {
   descricao_original: string;
@@ -124,13 +125,13 @@ export function FaturaDetailPage() {
   const [form, setForm] = useState<ItemFormState>(INITIAL_FORM);
   const [formMessage, setFormMessage] = useState<string>("");
   const [catalogMessage, setCatalogMessage] = useState<string>("");
-
   const detail = useQuery({
     queryKey: ["fatura", idFatura],
     queryFn: () => api.getFatura(idFatura),
     enabled: !!idFatura,
   });
   const catalogQuery = useQuery({ queryKey: ["catalogo"], queryFn: api.listCatalog });
+  const workOptionsQuery = useQuery({ queryKey: ["work-options"], queryFn: api.getWorkOptions });
   const preview = useMutation({ mutationFn: (payload: Record<string, unknown>) => api.previewItems(idFatura, payload) });
   const createCatalog = useMutation({
     mutationFn: api.createCatalog,
@@ -167,8 +168,18 @@ export function FaturaDetailPage() {
   });
 
   const fornecedorAtual = String((detail.data?.fatura as Record<string, unknown> | undefined)?.fornecedor ?? "");
+  const workOptions = ((workOptionsQuery.data?.obras as WorkOption[] | undefined) ?? []);
   const searchTerm = useDeferredValue(form.id_item || form.item_oficial || form.descricao_original);
   const selectedCatalog = (catalogQuery.data ?? []).find((item) => String(item.id_item ?? "") === form.id_item);
+  const availableFases = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workOptions.flatMap((item) => item.fases ?? []),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "pt-PT")),
+    [workOptions],
+  );
   const suggestions = ((catalogQuery.data as CatalogItem[] | undefined) ?? [])
     .map((item) => ({
       item,
@@ -193,7 +204,6 @@ export function FaturaDetailPage() {
   const previewImpacts = ((preview.data?.impacts as ImpactItem[] | undefined) ?? localImpacts);
   const canQuickCreate = Boolean(fornecedorAtual && form.descricao_original && form.item_oficial && form.natureza && form.unidade);
   const needsCatalogCreation = !form.id_item && Boolean(form.item_oficial && form.natureza && form.unidade);
-
   useEffect(() => {
     if (!selectedCatalog || !form.id_item) return;
     if (
@@ -241,6 +251,18 @@ export function FaturaDetailPage() {
       natureza: String(item.natureza ?? ""),
       unidade: String(item.unidade ?? ""),
     }));
+  }
+
+  function handleObraChange(value: string) {
+    setFormMessage("");
+    setCatalogMessage("");
+    setForm((current) => {
+      return {
+        ...current,
+        obra: value,
+        fase: current.fase,
+      };
+    });
   }
 
   function runPreview() {
@@ -403,13 +425,58 @@ export function FaturaDetailPage() {
             </label>
             <label>
               Obra
-              <input name="obra" value={form.obra} onChange={(event) => updateField("obra", event.target.value)} disabled={form.destino === "STOCK"} />
+              {workOptions.length ? (
+                <select
+                  name="obra"
+                  value={form.obra}
+                  onChange={(event) => handleObraChange(event.target.value)}
+                  disabled={form.destino === "STOCK"}
+                >
+                  <option value="">Selecione</option>
+                  {workOptions.map((item) => (
+                    <option key={String(item.obra)} value={String(item.obra)}>
+                      {String(item.obra)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  name="obra"
+                  value={form.obra}
+                  onChange={(event) => updateField("obra", event.target.value)}
+                  disabled={form.destino === "STOCK"}
+                />
+              )}
             </label>
             <label>
               Fase
-              <input name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino === "STOCK"} />
+              {availableFases.length ? (
+                <select
+                  name="fase"
+                  value={form.fase}
+                  onChange={(event) => updateField("fase", event.target.value)}
+                  disabled={form.destino === "STOCK"}
+                >
+                  <option value="">Selecione</option>
+                  {availableFases.map((fase) => (
+                    <option key={fase} value={fase}>
+                      {fase}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  name="fase"
+                  value={form.fase}
+                  onChange={(event) => updateField("fase", event.target.value)}
+                  disabled={form.destino === "STOCK"}
+                />
+              )}
             </label>
           </div>
+          {form.destino === "STOCK" ? <div className="field-hint">Para selecionar `Obra` e `Fase`, muda primeiro o `Destino` para `CONSUMO`.</div> : null}
+          {form.destino !== "STOCK" && workOptions.length ? <div className="field-hint">O campo `Obra` mostra todas as obras carregadas da Google Sheet.</div> : null}
+          {form.destino !== "STOCK" && availableFases.length ? <div className="field-hint">O campo `Fase` mostra todas as fases carregadas da Google Sheet.</div> : null}
 
           <div className="assistant-block">
             <div className="assistant-head">

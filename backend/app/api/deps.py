@@ -91,6 +91,15 @@ class ServiceContainer:
             "entities": entities,
         }
 
+    def work_options(self) -> dict[str, Any]:
+        try:
+            obras = self.google_sheets.load_work_options()
+        except Exception:
+            obras = MemoryGoogleSheetsAdapter(self.state).load_work_options()
+        return {
+            "obras": obras,
+        }
+
 
 def get_container(request: Request) -> ServiceContainer:
     return request.app.state.container

@@ -48,6 +48,7 @@ export const api = {
   createItems: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}/itens`, { method: "POST", body: JSON.stringify(payload) }),
   listCatalog: () => request<JsonRecord[]>("/api/materiais-cad"),
   createCatalog: (payload: JsonRecord) => request<JsonRecord>("/api/materiais-cad", { method: "POST", body: JSON.stringify(payload) }),
+  getWorkOptions: () => request<JsonRecord>("/api/options/obras-fases"),
   listAfetacoes: () => request<JsonRecord[]>("/api/afetacoes"),
   createAfetacao: (payload: JsonRecord) => request<JsonRecord>("/api/afetacoes", { method: "POST", body: JSON.stringify(payload) }),
   processAfetacao: (id: string) => request<JsonRecord>(`/api/afetacoes/${id}/processar`, { method: "POST" }),

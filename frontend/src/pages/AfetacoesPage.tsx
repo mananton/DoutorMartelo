@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
+import type { WorkOption } from "../lib/workOptions";
 
 type AfetacaoFormState = {
   data: string;
@@ -75,8 +76,19 @@ export function AfetacoesPage() {
 
   const afetacoesQuery = useQuery({ queryKey: ["afetacoes"], queryFn: api.listAfetacoes });
   const catalogQuery = useQuery({ queryKey: ["catalogo"], queryFn: api.listCatalog });
+  const workOptionsQuery = useQuery({ queryKey: ["work-options"], queryFn: api.getWorkOptions });
 
   const selectedCatalog = ((catalogQuery.data as CatalogItem[] | undefined) ?? []).find((item) => String(item.id_item ?? "") === form.id_item);
+  const workOptions = ((workOptionsQuery.data?.obras as WorkOption[] | undefined) ?? []);
+  const availableFases = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workOptions.flatMap((item) => item.fases ?? []),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "pt-PT")),
+    [workOptions],
+  );
   const deferredSearch = useDeferredValue(form.id_item);
   const suggestions = ((catalogQuery.data as CatalogItem[] | undefined) ?? [])
     .map((item) => ({ item, score: scoreCatalogItem(item, deferredSearch) }))
@@ -213,13 +225,47 @@ export function AfetacoesPage() {
             </label>
             <label>
               Obra
-              <input name="obra" required value={form.obra} onChange={(event) => updateField("obra", event.target.value)} />
+              {workOptions.length ? (
+                <select
+                  name="obra"
+                  required
+                  value={form.obra}
+                  onChange={(event) => updateField("obra", event.target.value)}
+                >
+                  <option value="">Selecione</option>
+                  {workOptions.map((item) => (
+                    <option key={String(item.obra)} value={String(item.obra)}>
+                      {String(item.obra)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input name="obra" required value={form.obra} onChange={(event) => updateField("obra", event.target.value)} />
+              )}
             </label>
             <label>
               Fase
-              <input name="fase" required value={form.fase} onChange={(event) => updateField("fase", event.target.value)} />
+              {availableFases.length ? (
+                <select
+                  name="fase"
+                  required
+                  value={form.fase}
+                  onChange={(event) => updateField("fase", event.target.value)}
+                >
+                  <option value="">Selecione</option>
+                  {availableFases.map((fase) => (
+                    <option key={fase} value={fase}>
+                      {fase}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input name="fase" required value={form.fase} onChange={(event) => updateField("fase", event.target.value)} />
+              )}
             </label>
           </div>
+          {workOptions.length ? <div className="field-hint">O campo `Obra` sugere todas as obras carregadas da Google Sheet.</div> : null}
+          {availableFases.length ? <div className="field-hint">O campo `Fase` sugere todas as fases carregadas da Google Sheet.</div> : null}
 
           <label>
             Observacoes

@@ -181,6 +181,60 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(diagnostics.json()["source"], "google_sheets")
         self.assertEqual(len(diagnostics.json()["entities"]), 5)
 
+    def test_work_options_endpoint_returns_obras_and_fases(self) -> None:
+        fatura = self.client.post(
+            "/api/faturas",
+            json={
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "nr_documento": "FT 2026/004",
+                "data_fatura": "2026-03-18",
+            },
+        ).json()
+        self.client.post(
+            f"/api/faturas/{fatura['id_fatura']}/itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Prego 30",
+                        "quantidade": 20,
+                        "custo_unit": 0.15,
+                        "iva": 23,
+                        "destino": "CONSUMO",
+                        "obra": "Obra Ativa A",
+                        "fase": "Estrutura",
+                        "id_item": self.catalog["id_item"],
+                    }
+                ]
+            },
+        )
+        self.client.post(
+            f"/api/faturas/{fatura['id_fatura']}/itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Prego 30",
+                        "quantidade": 5,
+                        "custo_unit": 0.15,
+                        "iva": 23,
+                        "destino": "CONSUMO",
+                        "obra": "Obra Ativa B",
+                        "fase": "Acabamentos",
+                        "id_item": self.catalog["id_item"],
+                    }
+                ]
+            },
+        )
+
+        response = self.client.get("/api/options/obras-fases")
+        self.assertEqual(response.status_code, 200)
+        obras = response.json()["obras"]
+        by_obra = {entry["obra"]: entry for entry in obras}
+        self.assertIn("Obra Ativa A", by_obra)
+        self.assertIn("Obra Ativa B", by_obra)
+        self.assertIn("Estrutura", by_obra["Obra Ativa A"]["fases"])
+        self.assertIn("Acabamentos", by_obra["Obra Ativa B"]["fases"])
+
 
 if __name__ == "__main__":
     unittest.main()

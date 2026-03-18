@@ -39,6 +39,79 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             snapshot[entity] = parsed
         return snapshot
 
+    def load_work_options(self) -> list[dict[str, Any]]:
+        obras_headers = self._read_header_at_row("OBRAS", 3)
+        obras_rows = self._read_rows("OBRAS", obras_headers, start_row=4)
+
+        active_obras: dict[str, dict[str, Any]] = {}
+        for _, row in obras_rows:
+            obra = _read_text(row, ["Local_ID", "Local"])
+            if not obra:
+                continue
+            active_obras[obra] = {
+                "obra": obra,
+                "ativa": True,
+                "fases": set(),
+            }
+
+        global_fases = self._load_global_work_phases()
+        if global_fases:
+            for payload in active_obras.values():
+                payload["fases"].update(global_fases)
+        else:
+            phase_sources = [
+                ("OBRAS_DIMENSOES", 1),
+                ("MEDICOES_FASE", 1),
+                ("REGISTOS_POR_DIA", 1),
+                ("LEGACY_MAO_OBRA", 1),
+                ("FATURAS_ITENS", 1),
+                ("AFETACOES_OBRA", 1),
+                ("MATERIAIS_MOV", 1),
+            ]
+
+            for sheet_name, header_row in phase_sources:
+                try:
+                    headers = self._read_header_at_row(sheet_name, header_row)
+                    rows = self._read_rows(sheet_name, headers, start_row=header_row + 1)
+                except Exception:
+                    continue
+                for _, row in rows:
+                    obra = _read_text(row, ["Obra", "Local_ID", "Local", "Obra_ID"])
+                    fase = _read_text(row, ["Fase de Obra", "Fase"])
+                    if not obra or not fase:
+                        continue
+                    active_obras.setdefault(obra, {"obra": obra, "ativa": False, "fases": set()})
+                    active_obras[obra]["fases"].add(fase)
+
+        return [
+            {
+                "obra": obra,
+                "ativa": bool(payload["ativa"]),
+                "fases": sorted(payload["fases"]),
+            }
+            for obra, payload in sorted(
+                active_obras.items(),
+                key=lambda item: (not bool(item[1]["ativa"]), str(item[0]).lower()),
+            )
+        ]
+
+    def _load_global_work_phases(self) -> set[str]:
+        for header_row, start_row in ((1, 2), (2, 3)):
+            try:
+                headers = self._read_header_at_row("FASES_DE_OBRA", header_row)
+                rows = self._read_rows("FASES_DE_OBRA", headers, start_row=start_row)
+            except Exception:
+                continue
+            phases = {
+                fase
+                for _, row in rows
+                for fase in [_read_text(row, ["Fases de obra", "Fases de Obra", "Descricao", "Descrição"])]
+                if fase
+            }
+            if phases:
+                return phases
+        return set()
+
     def _build_service(self):
         from google.oauth2.service_account import Credentials
         from googleapiclient.discovery import build
@@ -93,21 +166,24 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             ).execute()
 
     def _read_header(self, sheet_name: str) -> list[str]:
+        return self._read_header_at_row(sheet_name, 1)
+
+    def _read_header_at_row(self, sheet_name: str, row_num: int) -> list[str]:
         result = self.service.spreadsheets().values().get(
             spreadsheetId=self.settings.google_spreadsheet_id,
-            range=f"{sheet_name}!1:1",
+            range=f"{sheet_name}!{row_num}:{row_num}",
         ).execute()
         rows = result.get("values", [[]])
         return rows[0]
 
-    def _read_rows(self, sheet_name: str, headers: list[str]) -> list[tuple[int, dict[str, Any]]]:
+    def _read_rows(self, sheet_name: str, headers: list[str], *, start_row: int = 2) -> list[tuple[int, dict[str, Any]]]:
         result = self.service.spreadsheets().values().get(
             spreadsheetId=self.settings.google_spreadsheet_id,
-            range=f"{sheet_name}!A2:ZZ",
+            range=f"{sheet_name}!A{start_row}:ZZ",
         ).execute()
         rows = result.get("values", [])
         parsed: list[tuple[int, dict[str, Any]]] = []
-        for offset, row in enumerate(rows, start=2):
+        for offset, row in enumerate(rows, start=start_row):
             data = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
             parsed.append((offset, data))
         return parsed

@@ -16,3 +16,6 @@ class GoogleSheetsAdapter(Protocol):
 
     def load_snapshot(self) -> dict[str, list[dict[str, Any]]]:
         ...
+
+    def load_work_options(self) -> list[dict[str, Any]]:
+        ...

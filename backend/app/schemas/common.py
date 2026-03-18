@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ApiModel(BaseModel):
@@ -44,3 +44,12 @@ class StockSnapshot(ApiModel):
     stock_atual: float = 0
     custo_medio_atual: float = 0
 
+
+class WorkOption(ApiModel):
+    obra: str
+    ativa: bool = True
+    fases: list[str] = Field(default_factory=list)
+
+
+class WorkOptionsResponse(ApiModel):
+    obras: list[WorkOption]
