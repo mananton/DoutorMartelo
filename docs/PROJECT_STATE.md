@@ -18,6 +18,9 @@ Last updated: 2026-03-18
   - `src/index.html`: structure/markup.
   - `src/css.html`: styles.
   - `src/js.html`: client logic, rendering, charting, filtering.
+- New migration scaffolding now exists in parallel:
+  - `backend/`: FastAPI materials backoffice + sync target skeleton
+  - `frontend/`: React + Vite materials backoffice skeleton
 - HTML includes:
   - `<?!= include('css'); ?>` in `<head>`
   - `<?!= include('js'); ?>` before `</body>`
@@ -134,6 +137,12 @@ Last updated: 2026-03-18
     - `AFETACOES_OBRA`
   - preferred architecture is app -> backend -> Google Sheets + Supabase, not app -> Sheets triggers only
   - detailed plan is tracked in `docs/MATERIALS_BACKOFFICE_PLAN.md`
+  - first operational MVP spec is now tracked in `docs/MATERIALS_BACKOFFICE_SPEC.md`
+- Fase 0 implementation progress:
+  - `src/Sync.gs` now includes sync entries for `FATURAS_ITENS` and `AFETACOES_OBRA`
+  - `MATERIAIS_CAD` and `STOCK_ATUAL` sync mappers were aligned to the current spreadsheet model
+  - FastAPI sync endpoints now exist under `backend/app/api/routers/sync.py`
+  - local dev adapters are in-memory only; real Google Sheets / Supabase credentials are not wired yet
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).

@@ -83,15 +83,26 @@ var SYNC_SHEET_CONFIG = {
         endpoint: "/api/sync/materiais-cad",
         headerRow: 1,
         dedupeKey: function (item) {
-            return syncNormalizeKeyPart_(item.material);
+            return item.source_key;
         },
         mapper: function (row) {
             return {
-                material: row["Material"],
-                categoria: row["Categoria"] || null,
-                unidade: row["Unidade"],
-                fornecedor: row["Fornecedor"] || null,
-                nif: row["NIF"] ? String(row["NIF"]).replace(/\.0$/, "") : null
+                source_key: syncBuildCompositeKey_([
+                    "cad",
+                    syncReadString_(row, ["ID_Item", "ID Item"]),
+                    syncReadString_(row, ["Fornecedor"]),
+                    syncReadString_(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]),
+                    String(row.__sheet_row_num || "")
+                ]),
+                id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
+                fornecedor: syncReadString_(row, ["Fornecedor"]) || null,
+                descricao_original: syncReadString_(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]) || null,
+                item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial"]) || null,
+                natureza: syncReadString_(row, ["Natureza"]) || null,
+                unidade: syncReadString_(row, ["Unidade"]) || null,
+                observacoes: syncReadString_(row, ["Observacoes", "Observação", "Observacao"]) || null,
+                estado_cadastro: syncReadString_(row, ["Estado_Cadastro", "Estado Cadastro"]) || null,
+                sheet_row_num: Number(row.__sheet_row_num || 0)
             };
         }
     },
@@ -187,17 +198,99 @@ var SYNC_SHEET_CONFIG = {
             };
         }
     },
+    "FATURAS_ITENS": {
+        endpoint: "/api/sync/faturas-itens",
+        headerRow: 1,
+        dedupeKey: function (item) {
+            return item.id_item_fatura || item.source_key;
+        },
+        mapper: function (row) {
+            return {
+                source_key: syncBuildCompositeKey_([
+                    "fit",
+                    syncReadString_(row, ["ID_Item_Fatura", "ID Item Fatura"]),
+                    String(row.__sheet_row_num || "")
+                ]),
+                id_item_fatura: syncReadString_(row, ["ID_Item_Fatura", "ID Item Fatura"]) || null,
+                id_fatura: syncReadString_(row, ["ID_Fatura", "ID Fatura"]) || null,
+                fornecedor: syncReadString_(row, ["Fornecedor"]) || null,
+                nif: syncReadNormalizedNif_(syncReadCell_(row, ["NIF"])),
+                nr_documento: syncReadString_(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]) || null,
+                data_fatura: syncFormatDate_(syncReadCell_(row, ["Data Fatura", "Data"])),
+                descricao_original: syncReadString_(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]) || null,
+                id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
+                item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial"]) || null,
+                unidade: syncReadString_(row, ["Unidade"]) || null,
+                quantidade: syncReadNumber_(row, ["Quantidade"]),
+                custo_unit: syncReadNumber_(row, ["Custo_Unit", "Custo Unit"]),
+                desconto_1: syncReadNumber_(row, ["Desconto 1", "Desconto_1"]),
+                desconto_2: syncReadNumber_(row, ["Desconto 2", "Desconto_2"]),
+                custo_total_sem_iva: syncReadNumber_(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+                iva: syncReadNumber_(row, ["IVA"]),
+                custo_total_com_iva: syncReadNumber_(row, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+                destino: syncReadString_(row, ["Destino"]) || null,
+                obra: syncReadString_(row, ["Obra"]) || null,
+                fase: syncReadString_(row, ["Fase"]) || null,
+                observacoes: syncReadString_(row, ["Observacoes", "Observação", "Observacao"]) || null,
+                estado_mapeamento: syncReadString_(row, ["Estado_Mapeamento", "Estado Mapeamento"]) || null,
+                sugestao_alias: syncReadString_(row, ["Sugestao_Alias", "Sugestão_Alias", "Sugestao Alias"]) || null,
+                sheet_row_num: Number(row.__sheet_row_num || 0)
+            };
+        }
+    },
+    "AFETACOES_OBRA": {
+        endpoint: "/api/sync/afetacoes-obra",
+        headerRow: 1,
+        dedupeKey: function (item) {
+            return item.id_afetacao || item.source_key;
+        },
+        mapper: function (row) {
+            return {
+                source_key: syncBuildCompositeKey_([
+                    "afo",
+                    syncReadString_(row, ["ID_Afetacao", "ID Afetacao"]),
+                    String(row.__sheet_row_num || "")
+                ]),
+                id_afetacao: syncReadString_(row, ["ID_Afetacao", "ID Afetacao"]) || null,
+                origem: syncReadString_(row, ["Origem"]) || null,
+                source_id: syncReadString_(row, ["Source_ID", "Source ID", "ID_Source", "ID Source"]) || null,
+                data: syncFormatDate_(syncReadCell_(row, ["Data"])),
+                id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
+                item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial"]) || null,
+                natureza: syncReadString_(row, ["Natureza"]) || null,
+                quantidade: syncReadNumber_(row, ["Quantidade"]),
+                unidade: syncReadString_(row, ["Unidade"]) || null,
+                custo_unit: syncReadNumber_(row, ["Custo_Unit", "Custo Unit"]),
+                custo_total: syncReadNumber_(row, ["Custo_Total", "Custo Total"]),
+                custo_total_sem_iva: syncReadNumber_(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+                iva: syncReadNumber_(row, ["IVA"]),
+                custo_total_com_iva: syncReadNumber_(row, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+                obra: syncReadString_(row, ["Obra"]) || null,
+                fase: syncReadString_(row, ["Fase"]) || null,
+                fornecedor: syncReadString_(row, ["Fornecedor"]) || null,
+                nif: syncReadNormalizedNif_(syncReadCell_(row, ["NIF"])),
+                nr_documento: syncReadString_(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]) || null,
+                processar: syncToBool_(syncReadCell_(row, ["Processar", "Confirmar", "Gerar_Movimento", "Gerar Movimento"])),
+                estado: syncReadString_(row, ["Estado"]) || null,
+                observacoes: syncReadString_(row, ["Observacoes", "Observação", "Observacao", "Obs"]) || null,
+                sheet_row_num: Number(row.__sheet_row_num || 0)
+            };
+        }
+    },
     "STOCK_ATUAL": {
         endpoint: "/api/sync/stock-atual",
         headerRow: 1,
         dedupeKey: function (item) {
-            return syncNormalizeKeyPart_(item.material);
+            return item.id_item || syncNormalizeKeyPart_(item.item_oficial || item.material);
         },
         mapper: function (row) {
             return {
-                material: row["Material"],
-                unidade: row["Unidade"],
-                stock_atual: Number(row["Stock Atual"] || 0)
+                id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
+                item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial", "Material"]) || null,
+                material: syncReadString_(row, ["Material", "Item_Oficial", "Item Oficial"]) || null,
+                unidade: syncReadString_(row, ["Unidade"]) || null,
+                stock_atual: syncReadNumber_(row, ["Stock Atual", "Stock_Atual"]),
+                custo_medio_atual: syncReadNumber_(row, ["Custo_Medio_Atual", "Custo Medio Atual"])
             };
         }
     },
@@ -213,6 +306,46 @@ var SYNC_SHEET_CONFIG = {
         }
     }
 };
+
+function syncReadCell_(row, aliases) {
+    aliases = aliases || [];
+    for (var i = 0; i < aliases.length; i++) {
+        var key = aliases[i];
+        if (!key) continue;
+        if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
+    }
+    return null;
+}
+
+function syncReadString_(row, aliases) {
+    var value = syncReadCell_(row, aliases);
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+}
+
+function syncReadNumber_(row, aliases) {
+    var value = syncReadCell_(row, aliases);
+    if (typeof value === "number") return value;
+    var text = String(value || "").trim();
+    if (!text) return 0;
+    var normalized = text
+        .replace(/\s/g, "")
+        .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+        .replace(",", ".");
+    var parsed = Number(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+}
+
+function syncReadNormalizedNif_(value) {
+    if (value === null || value === undefined || value === "") return null;
+    return String(value).replace(/\.0$/, "").trim() || null;
+}
+
+function syncBuildCompositeKey_(parts) {
+    return (parts || []).map(function (part) {
+        return syncNormalizeKeyPart_(part);
+    }).join("|");
+}
 
 function getSyncConfig_() {
     var props = PropertiesService.getScriptProperties();

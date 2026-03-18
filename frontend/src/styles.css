@@ -1,0 +1,167 @@
+:root {
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --line: #d7e0f2;
+  --text: #16306b;
+  --muted: #5b6f9e;
+  --primary: #1e40af;
+  --secondary: #3b82f6;
+  --accent: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Fira Sans", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 22rem),
+    linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.nav {
+  border-right: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 1.25rem;
+}
+
+.nav h1 {
+  margin: 0 0 1rem;
+  font-family: "Fira Code", monospace;
+  font-size: 1rem;
+}
+
+.nav a {
+  display: block;
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.45rem;
+  border-radius: 0.9rem;
+  color: var(--muted);
+}
+
+.nav a.active {
+  background: var(--primary);
+  color: white;
+}
+
+.main {
+  padding: 1.5rem;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(22, 48, 107, 0.06);
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.form input,
+.form select,
+.form textarea {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.btn {
+  border: 0;
+  border-radius: 0.9rem;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn.secondary {
+  background: rgba(30, 64, 175, 0.08);
+  color: var(--primary);
+}
+
+.list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.list-row {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  background: white;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: "Fira Code", monospace;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .grid.two {
+    grid-template-columns: 1fr;
+  }
+}

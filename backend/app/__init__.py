@@ -1,0 +1,2 @@
+"""Materials backoffice backend package."""
+

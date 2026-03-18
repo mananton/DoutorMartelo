@@ -216,3 +216,48 @@ Purpose: chronological, commit-based project history for fast handoff.
     - instead of relying on Google Sheets + GAS triggers alone for the richer materials flow
 - **Impact**:
   - The project now has a documented direction for reducing trigger-driven instability in the materials workflow without abandoning Google Sheets as an always-populated business record.
+
+### `uncommitted`
+- **Type**: docs / product-backend specification
+- **Scope**: `docs/MATERIALS_BACKOFFICE_SPEC.md`, `docs/MATERIALS_BACKOFFICE_PLAN.md`, `docs/PROJECT_STATE.md`, `docs/DECISIONS.md`, `docs/OPEN_ITEMS.md`
+- **Summary**:
+  - Expanded the materials backoffice plan into an operational MVP specification.
+  - Defined the first app screens:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - `AFETACOES_OBRA`
+    - `Sincronizacao`
+  - Defined generated-vs-editable rules, minimum backend responsibilities, endpoint set, and recommended write order:
+    - backend validates
+    - backend writes Google Sheets
+    - backend mirrors to Supabase with retry visibility
+- **Impact**:
+  - The migration path is now concrete enough to start backend and screen implementation without improvising entity boundaries or input behavior.
+
+### `uncommitted`
+- **Type**: feat / scaffold
+- **Scope**: `src/Sync.gs`, `backend/`, `frontend/`, `.gitignore`, docs
+- **Summary**:
+  - Added Fase 0 sync coverage for `FATURAS_ITENS` and `AFETACOES_OBRA` in `src/Sync.gs`.
+  - Aligned `MATERIAIS_CAD` and `STOCK_ATUAL` sync mappers to the current spreadsheet model.
+  - Created a new `backend/` FastAPI skeleton with:
+    - sync endpoints
+    - invoice endpoints
+    - catalog endpoints
+    - afetacao endpoints
+    - stock endpoint
+    - in-memory adapters for Sheets and Supabase
+  - Created a new `frontend/` React + Vite skeleton with first routes:
+    - `/faturas`
+    - `/faturas/:id`
+    - `/catalogo`
+    - `/afetacoes`
+    - `/sync`
+  - Added backend tests covering:
+    - direct invoice consumption generation
+    - stock entry + manual afetacao processing
+    - sync retry behavior
+- **Impact**:
+  - The project now has a working local base for the future materials backoffice without touching the current GAS dashboard runtime.
+  - The remaining gap is real adapter wiring and production-like validation against actual Google Sheets and Supabase environments.

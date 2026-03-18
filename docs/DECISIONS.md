@@ -251,8 +251,33 @@ Format: short ADR-style records with rationale and impact.
 - **Rationale**:
   - The business prefers operational simplicity and stable day-to-day registration over historical-cost reconstruction.
 - **Impact**:
-  - Late-entered stock consumptions use the current average cost when registered.
-  - Historical costing stays operationally consistent, with the known tradeoff that it is not a backdated average-cost engine.
+- Late-entered stock consumptions use the current average cost when registered.
+- Historical costing stays operationally consistent, with the known tradeoff that it is not a backdated average-cost engine.
+
+## D-018: Keep AppSheet for labour/displacements and move materials input to a dedicated backend-controlled app
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `pending`
+- **Decision**:
+  - Keep `AppSheet` as the short-term operational channel for:
+    - labour
+    - displacements
+  - Introduce a dedicated materials backoffice app for:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - `AFETACOES_OBRA`
+  - The new app should talk to a backend that writes accepted business results to:
+    - Google Sheets
+    - Supabase
+  - Do not rely on Google Sheets + GAS triggers alone for the richer materials flow.
+- **Rationale**:
+  - The unstable part of the current operation is the materials/invoices/stock workflow, not labour or displacement input.
+  - A UI-only layer on top of Sheets would improve form experience but would not remove the trigger-timing fragility already observed.
+  - Google Sheets must stay fully populated, but business logic needs a more controlled execution boundary.
+- **Impact**:
+  - Future implementation should prioritize a small materials backoffice plus backend adapters over further trigger-heavy spreadsheet automation.
+  - AppSheet scope stays narrower in the short term, reducing migration risk.
 
 ## Standing Constraints
 - Do not rename global sheet constants.

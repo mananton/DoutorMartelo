@@ -226,3 +226,13 @@ Recommended future split:
   - obra/fase attributions
 
 This is the safest path because it attacks the unstable materials flow first while preserving the rest of the operational system.
+
+## Operational Follow-up
+The plan above is now expanded into an MVP execution spec in:
+- `docs/MATERIALS_BACKOFFICE_SPEC.md`
+
+That spec defines:
+- first screens
+- generated-vs-editable rules
+- minimum backend endpoints
+- write order to Google Sheets and Supabase

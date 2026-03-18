@@ -14,6 +14,17 @@ Last reviewed: 2026-03-18
   - displacement input
 - Reference plan:
   - `docs/MATERIALS_BACKOFFICE_PLAN.md`
+  - `docs/MATERIALS_BACKOFFICE_SPEC.md`
+- Current implementation follow-up:
+  - wire real backend persistence adapters for Google Sheets and Supabase
+  - validate full manual sync of:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - `AFETACOES_OBRA`
+    - `MATERIAIS_MOV`
+    - `STOCK_ATUAL`
+  - install frontend dependencies and validate the React app against the FastAPI service
 
 ## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
 - Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.

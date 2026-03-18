@@ -11,6 +11,8 @@ Please read these files first, in order:
 3) docs/WORKLOG.md
 4) docs/OPEN_ITEMS.md
 5) docs/REGRAS_DE_NEGOCIO.md
+6) docs/MATERIALS_BACKOFFICE_SPEC.md
+7) inspect `backend/` and `frontend/` if the session relates to the new materials backoffice
 
 Hard constraints:
 - Do NOT rename global constants (SHEET_REGISTOS, etc.).
