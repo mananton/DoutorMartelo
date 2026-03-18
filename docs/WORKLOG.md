@@ -288,3 +288,16 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - After backend restart, `FATURAS`, `MATERIAIS_CAD`, `AFETACOES_OBRA`, and related lists now reopen with real existing data.
   - The new app no longer appears empty after restarting the FastAPI server.
+
+### `uncommitted`
+- **Type**: feat(ui) / ops
+- **Scope**: `frontend/`, `backend/app/adapters/google_sheets/live.py`, `backend/tests/test_api.py`, docs
+- **Summary**:
+  - Improved `FATURAS_ITENS` with guided catalog selection, quick catalog creation, and readable impact preview.
+  - Improved `AFETACOES_OBRA` with guided item lookup, stock snapshot context, and clearer stock-cost error feedback.
+  - Changed `Sincronizacao` from raw JSON output to card-based operational status with explicit reload/retry actions.
+  - Fixed Google Sheets serialization for `FATURAS_ITENS.Natureza` to better align stored sheet rows with app/runtime data.
+- **Impact**:
+  - Day-to-day registration now needs less manual lookup and gives earlier warning/context before save.
+  - Sync status is easier to read operationally without inspecting raw payloads.
+  - `FATURAS_ITENS` roundtrip fidelity between app and Google Sheets is improved.

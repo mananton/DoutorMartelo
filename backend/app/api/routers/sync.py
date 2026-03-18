@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from backend.app.api.deps import ServiceContainer, get_container
 from backend.app.schemas.common import BulkRowsRequest, BulkSyncResponse
-from backend.app.schemas.sync import SyncStatusResponse
+from backend.app.schemas.sync import ReloadStateResponse, SyncStatusResponse
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -21,6 +21,11 @@ def get_status(container: ServiceContainer = Depends(get_container)) -> SyncStat
 @router.post("/sync/retry", response_model=SyncStatusResponse)
 def retry_pending(container: ServiceContainer = Depends(get_container)) -> SyncStatusResponse:
     return container.sync.retry_pending()
+
+
+@router.post("/sync/reload", response_model=ReloadStateResponse)
+def reload_from_sheets(container: ServiceContainer = Depends(get_container)) -> ReloadStateResponse:
+    return ReloadStateResponse.model_validate(container.reload_from_sheets())
 
 
 @router.post("/sync/colaboradores", response_model=BulkSyncResponse)
@@ -71,4 +76,3 @@ def sync_materiais_mov(payload: BulkRowsRequest, container: ServiceContainer = D
 @router.post("/sync/stock-atual", response_model=BulkSyncResponse)
 def sync_stock(payload: BulkRowsRequest, container: ServiceContainer = Depends(get_container)) -> BulkSyncResponse:
     return _ingest("stock_atual", payload, container)
-

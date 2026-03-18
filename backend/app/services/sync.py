@@ -8,6 +8,14 @@ from backend.app.schemas.common import BulkSyncResponse
 from backend.app.schemas.sync import SyncStatusResponse
 from backend.app.services.state import RuntimeState
 
+CORE_SYNC_ENTITIES = [
+    "faturas",
+    "faturas_itens",
+    "materiais_cad",
+    "afetacoes_obra",
+    "materiais_mov",
+]
+
 
 class SyncService:
     def __init__(self, state: RuntimeState, supabase: SupabaseAdapter) -> None:
@@ -42,5 +50,24 @@ class SyncService:
         return self.status()
 
     def status(self) -> SyncStatusResponse:
-        jobs = [job for _, job in sorted(self.state.sync_jobs.items())]
+        jobs_by_entity = dict(self.state.sync_jobs)
+        jobs = []
+        for entity in CORE_SYNC_ENTITIES:
+            jobs.append(
+                jobs_by_entity.get(
+                    entity,
+                    {
+                        "entity": entity,
+                        "pending_retry": False,
+                        "last_error": None,
+                        "last_attempt_at": None,
+                        "last_success_at": None,
+                        "last_upserted": 0,
+                    },
+                )
+            )
+
+        for entity, job in sorted(jobs_by_entity.items()):
+            if entity not in CORE_SYNC_ENTITIES:
+                jobs.append(job)
         return SyncStatusResponse(jobs=jobs)

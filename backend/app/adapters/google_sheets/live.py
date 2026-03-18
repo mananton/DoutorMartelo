@@ -359,6 +359,7 @@ def _fit_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "ID_Item": record.get("id_item", ""),
         "Item_Oficial": record.get("item_oficial", ""),
         "Unidade": record.get("unidade", ""),
+        "Natureza": record.get("natureza", ""),
         "Quantidade": record["quantidade"],
         "Custo_Unit": record["custo_unit"],
         "Desconto 1": record.get("desconto_1", 0),

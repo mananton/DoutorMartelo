@@ -248,3 +248,8 @@ That spec defines:
   - `MATERIAIS_MOV`
   is now working end-to-end.
 - The FastAPI backend now hydrates startup runtime state from Google Sheets so the app reopens with existing data after restart.
+- Operators can now manually trigger `Recarregar do Sheets` from the app to refresh runtime state without restarting the backend.
+- Current guided-input coverage now includes:
+  - `FATURAS_ITENS` assisted item lookup + quick catalog creation + impact preview
+  - `AFETACOES_OBRA` assisted item lookup + stock snapshot preview
+- `Sincronizacao` is now moving from debug output toward an operator-facing control screen with per-entity status cards.

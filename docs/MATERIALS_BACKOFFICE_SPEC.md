@@ -686,6 +686,20 @@ This is the safest order for the current business constraint:
   - live Supabase mirror
 - The backend now hydrates its startup state from Google Sheets for the core materials entities.
 - Current next focus should move from infrastructure wiring to:
-  - UX refinement
-  - guided item selection/matching
-  - clearer operational error messages
+  - deeper catalog maintenance refinements
+  - more read-only technical visibility for stock and movement follow-up
+  - continued validation of real sheet edits against guided backoffice flows
+
+## 21. Current UX Slice Delivered
+- `FATURAS_ITENS`
+  - guided catalog suggestions
+  - quick catalog creation from the invoice-line screen
+  - readable impact preview before save
+- `AFETACOES_OBRA`
+  - guided item selection
+  - live stock snapshot lookup before save
+  - clearer messaging when stock cost is missing
+- `SINCRONIZACAO`
+  - explicit `Recarregar do Sheets`
+  - per-entity status cards
+  - base visibility even when the current backend session has no sync activity yet

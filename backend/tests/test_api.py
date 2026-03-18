@@ -124,12 +124,23 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertTrue(response.json()["pending_retry"])
 
         status = self.client.get("/api/sync/status").json()
-        self.assertTrue(status["jobs"][0]["pending_retry"])
+        faturas_itens_job = next(job for job in status["jobs"] if job["entity"] == "faturas_itens")
+        self.assertTrue(faturas_itens_job["pending_retry"])
 
         container.supabase.fail_entities.clear()
         retry = self.client.post("/api/sync/retry")
         self.assertEqual(retry.status_code, 200)
-        self.assertFalse(retry.json()["jobs"][0]["pending_retry"])
+        retried_job = next(job for job in retry.json()["jobs"] if job["entity"] == "faturas_itens")
+        self.assertFalse(retried_job["pending_retry"])
+
+    def test_sync_status_includes_core_entities_even_without_activity(self) -> None:
+        status = self.client.get("/api/sync/status")
+        self.assertEqual(status.status_code, 200)
+        entities = [job["entity"] for job in status.json()["jobs"]]
+        self.assertEqual(
+            entities,
+            ["faturas", "faturas_itens", "materiais_cad", "afetacoes_obra", "materiais_mov"],
+        )
 
 
 if __name__ == "__main__":

@@ -58,7 +58,10 @@ class RuntimeState:
             self.pending_sync_payloads[entity] = payload
         self.sync_jobs[entity] = job
 
-    def hydrate_from_snapshot(self, snapshot: dict[str, list[dict[str, Any]]]) -> None:
+    def hydrate_from_snapshot(self, snapshot: dict[str, list[dict[str, Any]]], *, preserve_sync_state: bool = False) -> None:
+        previous_sync_jobs = dict(self.sync_jobs)
+        previous_pending_sync_payloads = dict(self.pending_sync_payloads)
+        previous_synced_rows = dict(self.synced_rows)
         self.faturas = {
             record["id_fatura"]: record
             for record in snapshot.get("faturas", [])
@@ -85,9 +88,14 @@ class RuntimeState:
             if record.get("id_mov")
         }
 
-        self.sync_jobs.clear()
-        self.pending_sync_payloads.clear()
-        self.synced_rows.clear()
+        if preserve_sync_state:
+            self.sync_jobs = previous_sync_jobs
+            self.pending_sync_payloads = previous_pending_sync_payloads
+            self.synced_rows = previous_synced_rows
+        else:
+            self.sync_jobs.clear()
+            self.pending_sync_payloads.clear()
+            self.synced_rows.clear()
         self.google_write_log.clear()
         self.supabase_write_log.clear()
         self.counters = defaultdict(int)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import Request
 
 from backend.app.adapters.google_sheets.live import LiveGoogleSheetsAdapter
@@ -39,6 +41,19 @@ class ServiceContainer:
             return
         if snapshot:
             self.state.hydrate_from_snapshot(snapshot)
+
+    def reload_from_sheets(self) -> dict[str, object]:
+        snapshot = self.google_sheets.load_snapshot()
+        self.state.hydrate_from_snapshot(snapshot, preserve_sync_state=True)
+        return {
+            "source": "google_sheets",
+            "faturas": len(self.state.faturas),
+            "faturas_itens": len(self.state.fatura_items),
+            "materiais_cad": len(self.state.catalog),
+            "afetacoes_obra": len(self.state.afetacoes),
+            "materiais_mov": len(self.state.movimentos),
+            "reloaded_at": datetime.now(UTC),
+        }
 
 
 def get_container(request: Request) -> ServiceContainer:

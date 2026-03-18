@@ -143,6 +143,212 @@ textarea {
   background: white;
 }
 
+.row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  background: rgba(245, 158, 11, 0.14);
+  color: #9a6700;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tag-success {
+  background: rgba(34, 197, 94, 0.14);
+  color: #166534;
+}
+
+.tag-danger {
+  background: rgba(220, 38, 38, 0.14);
+  color: #991b1b;
+}
+
+.detail-stack {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.detail-card {
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  padding: 0.8rem 0.9rem;
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.detail-label {
+  margin-bottom: 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-summary-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.summary-card {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.summary-card.accent {
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.summary-title {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-main {
+  margin-top: 0.35rem;
+  font-weight: 600;
+}
+
+.assistant-block {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+  background: rgba(248, 250, 252, 0.7);
+}
+
+.assistant-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.suggestion-card {
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  padding: 0.85rem 0.95rem;
+  background: white;
+  text-align: left;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.suggestion-card:hover,
+.suggestion-card:focus-visible {
+  border-color: rgba(30, 64, 175, 0.45);
+  box-shadow: 0 8px 22px rgba(30, 64, 175, 0.08);
+  transform: translateY(-1px);
+}
+
+.suggestion-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.12);
+}
+
+.empty-note,
+.field-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.quick-create-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.quick-create-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.impact-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.impact-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: white;
+  padding: 0.85rem 0.95rem;
+}
+
+.impact-entity {
+  font-family: "Fira Code", monospace;
+  font-size: 0.82rem;
+  color: var(--primary);
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.status-note {
+  border-radius: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  background: rgba(30, 64, 175, 0.08);
+  color: var(--text);
+}
+
+.status-note.warning {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+
+.sync-job-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.sync-job-card {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #fff;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.sync-meta {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .muted {
   color: var(--muted);
 }
@@ -163,5 +369,21 @@ textarea {
 
   .grid.two {
     grid-template-columns: 1fr;
+  }
+
+  .form-grid,
+  .form-summary-grid,
+  .impact-row,
+  .sync-job-grid,
+  .sync-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-head,
+  .quick-create-row,
+  .form-actions,
+  .row-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

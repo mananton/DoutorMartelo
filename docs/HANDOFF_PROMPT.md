@@ -68,6 +68,15 @@ Expected output format:
   - write to Google Sheets first
   - mirror to Supabase second
   - keep pending-retry visibility in the app if the mirror fails
+- `FATURAS_ITENS` now includes:
+  - guided catalog suggestions
+  - quick catalog creation inside the invoice-line flow
+  - readable impact preview before save
+- `AFETACOES_OBRA` now includes:
+  - guided `ID_Item` selection
+  - stock snapshot and average-cost context before save
+  - clearer stock-cost error feedback
+- `Sincronizacao` now exposes card-based operational status instead of raw JSON
 
 ## Current Material Automation Hotspots
 - Read `src/main.gs` carefully before changing materials logic.

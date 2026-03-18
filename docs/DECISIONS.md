@@ -307,8 +307,23 @@ Format: short ADR-style records with rationale and impact.
   - A backend that restarts empty is too fragile for operational use.
   - Google Sheets is currently the real business record and therefore the safest hydration source.
 - **Impact**:
-  - The app reopens with existing data after backend restart.
-  - New IDs continue from the current sheet state instead of restarting numbering.
+- The app reopens with existing data after backend restart.
+- New IDs continue from the current sheet state instead of restarting numbering.
+
+## D-021: Materials backoffice should prefer assisted operational forms over raw sheet-like editing
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `pending`
+- **Decision**:
+  - Treat the new materials backoffice as a guided operational layer, not as a direct spreadsheet clone.
+  - Prefer assisted selection for `ID_Item`, visible downstream impact previews, and explicit sync status cards.
+  - Expose stock snapshot context before saving manual `AFETACOES_OBRA` stock outputs.
+- **Rationale**:
+  - The operational pain point is not data visibility alone; it is preventing mapping errors and hidden business-rule failures during registration.
+  - Raw JSON or free-text-only forms create unnecessary ambiguity for office users.
+- **Impact**:
+  - `FATURAS_ITENS` and `AFETACOES_OBRA` now prioritize assisted selection and readable consequences before save.
+  - `Sincronizacao` becomes an operational screen instead of a debugging-only screen.
 
 ## Standing Constraints
 - Do not rename global sheet constants.

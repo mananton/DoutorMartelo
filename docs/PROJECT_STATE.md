@@ -158,6 +158,10 @@ Last updated: 2026-03-18
     - `MATERIAIS_MOV`
   - list pages in the new app no longer start empty after backend restart
   - manual `AFETACOES_OBRA` stock rows are now processed on save in the new app; the temporary UI checkbox/process button was removed
+  - the new app now exposes a manual `Recarregar do Sheets` action instead of forcing backend restart when operators need to rehydrate runtime state from Google Sheets
+  - `Sincronizacao` now shows the core entity jobs even before any sync attempt happens in the current backend session
+  - `FATURAS_ITENS` now has guided item selection from catalog, quick-create of catalog items, and a readable impact preview before save
+  - `AFETACOES_OBRA` now has guided `ID_Item` lookup, live stock snapshot lookup, and clearer business-error messaging for stock-cost issues
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
@@ -166,6 +170,7 @@ Last updated: 2026-03-18
 - `LEGACY_MATERIAIS` exists as a spreadsheet structure decision only; it is not yet wired into dashboard code or Supabase sync.
 - Current material automation is mid-rollout and should be treated as active but still under validation on real spreadsheet edits.
 - The new materials backoffice still uses Google Sheets as the operational source of truth; startup hydration currently comes from Sheets, not from Supabase.
+- Manual changes made directly in Google Sheets after backend startup still require explicit reload to appear in the app runtime state.
 - Watch for Apps Script trigger behavior differences between:
   - manual cell edit,
   - pasted ranges,
