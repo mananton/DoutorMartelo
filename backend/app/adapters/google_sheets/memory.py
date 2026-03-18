@@ -11,3 +11,5 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
     def write_batches(self, batches: list[WriteBatch]) -> None:
         self.state.google_write_log.extend(batches)
 
+    def load_snapshot(self) -> dict[str, list[dict[str, object]]]:
+        return {}

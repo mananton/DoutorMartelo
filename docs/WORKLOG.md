@@ -261,3 +261,30 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - The project now has a working local base for the future materials backoffice without touching the current GAS dashboard runtime.
   - The remaining gap is real adapter wiring and production-like validation against actual Google Sheets and Supabase environments.
+
+### `e4d4d74`
+- **Type**: fix
+- **Scope**: `backend/`, `frontend/`, sync/schema validation
+- **Summary**:
+  - Wired and validated real Google Sheets and Supabase adapters for the materials backoffice.
+  - Added `backend/.env.example` and `backend/scripts/check_integrations.py` for credential setup and live integration checks.
+  - Added CORS support to the backend and surfaced visible success/error feedback in main frontend forms.
+  - Simplified `AFETACOES_OBRA` in the frontend:
+    - removed the temporary manual `Processar` checkbox/button from the UI
+    - process stock outputs on `Guardar`
+  - Added `backend/sql/002_align_materials_backoffice_schema.sql` to align Supabase with the backend payload shape.
+  - Stabilized Supabase mirror behavior so Google Sheets writes remain primary and retry-safe when the mirror fails.
+- **Impact**:
+  - The materials backoffice MVP can now operate against the live Google Sheet + Supabase environment.
+  - Core sync visibility is now usable in the `Sincronizacao` screen instead of failing silently.
+
+### `uncommitted`
+- **Type**: feat
+- **Scope**: `backend/app/adapters/google_sheets/*`, `backend/app/api/deps.py`, `backend/app/services/*`
+- **Summary**:
+  - Added startup hydration of the materials backoffice runtime state from Google Sheets.
+  - Seeded runtime counters from hydrated IDs so new records continue existing numbering instead of restarting from zero.
+  - Filtered internal sheet metadata such as `sheet_row_num` out of API response-model validation.
+- **Impact**:
+  - After backend restart, `FATURAS`, `MATERIAIS_CAD`, `AFETACOES_OBRA`, and related lists now reopen with real existing data.
+  - The new app no longer appears empty after restarting the FastAPI server.

@@ -16,15 +16,21 @@ Last reviewed: 2026-03-18
   - `docs/MATERIALS_BACKOFFICE_PLAN.md`
   - `docs/MATERIALS_BACKOFFICE_SPEC.md`
 - Current implementation follow-up:
-  - wire real backend persistence adapters for Google Sheets and Supabase
-  - validate full manual sync of:
-    - `FATURAS`
+  - improve screen UX and guided input for:
     - `FATURAS_ITENS`
     - `MATERIAIS_CAD`
     - `AFETACOES_OBRA`
+  - keep validating real writes and sync retries against production-like sheets
+  - decide when to expose read-only technical views for:
     - `MATERIAIS_MOV`
     - `STOCK_ATUAL`
-  - install frontend dependencies and validate the React app against the FastAPI service
+
+## P1 - Harden Materials Backoffice Runtime Hydration
+- The backend now hydrates startup state from Google Sheets.
+- Next step:
+  - validate more edge cases from existing real rows
+  - decide whether any entities should later hydrate from Supabase instead of Sheets
+  - add safer diagnostics when a row loads but cannot be parsed into the runtime model
 
 ## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
 - Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.

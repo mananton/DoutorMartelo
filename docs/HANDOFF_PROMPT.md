@@ -63,6 +63,11 @@ Expected output format:
   - from `FATURAS_ITENS` for stock-entry rows
   - from `AFETACOES_OBRA` for obra/fase consumption rows
 - `STOCK_ATUAL` should read its identity fields from `MATERIAIS_CAD` and its stock/cost behavior from `MATERIAIS_MOV`.
+- The new materials backoffice backend now hydrates its startup runtime state from Google Sheets for the materials core entities.
+- The new materials backoffice sync is currently Sheets-first:
+  - write to Google Sheets first
+  - mirror to Supabase second
+  - keep pending-retry visibility in the app if the mirror fails
 
 ## Current Material Automation Hotspots
 - Read `src/main.gs` carefully before changing materials logic.
@@ -89,3 +94,4 @@ Expected output format:
   - removed
   in sync with `FATURAS_ITENS`.
 - Confirm `STOCK_ATUAL.Custo_Medio_Atual` uses movement rows that already reflect discounts.
+- If the new materials backoffice restarts, confirm list pages still load existing data from Google Sheets hydration.

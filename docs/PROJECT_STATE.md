@@ -142,7 +142,22 @@ Last updated: 2026-03-18
   - `src/Sync.gs` now includes sync entries for `FATURAS_ITENS` and `AFETACOES_OBRA`
   - `MATERIAIS_CAD` and `STOCK_ATUAL` sync mappers were aligned to the current spreadsheet model
   - FastAPI sync endpoints now exist under `backend/app/api/routers/sync.py`
-  - local dev adapters are in-memory only; real Google Sheets / Supabase credentials are not wired yet
+  - real Google Sheets and Supabase adapters are now wired and validated against the live environment
+  - `backend/scripts/check_integrations.py` validates:
+    - Google Sheets auth + target workbook access
+    - required core sheets
+    - Supabase auth + required core tables
+  - Supabase schema alignment for the materials backoffice is currently represented by:
+    - `backend/sql/001_materials_backoffice.sql`
+    - `backend/sql/002_align_materials_backoffice_schema.sql`
+  - the materials backoffice backend now hydrates runtime state from Google Sheets on startup for:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - `AFETACOES_OBRA`
+    - `MATERIAIS_MOV`
+  - list pages in the new app no longer start empty after backend restart
+  - manual `AFETACOES_OBRA` stock rows are now processed on save in the new app; the temporary UI checkbox/process button was removed
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
@@ -150,6 +165,7 @@ Last updated: 2026-03-18
 - Material naming variance can still fragment search results (e.g., synonyms/typos).
 - `LEGACY_MATERIAIS` exists as a spreadsheet structure decision only; it is not yet wired into dashboard code or Supabase sync.
 - Current material automation is mid-rollout and should be treated as active but still under validation on real spreadsheet edits.
+- The new materials backoffice still uses Google Sheets as the operational source of truth; startup hydration currently comes from Sheets, not from Supabase.
 - Watch for Apps Script trigger behavior differences between:
   - manual cell edit,
   - pasted ranges,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import re
 from typing import Any
 
 from backend.app.adapters.google_sheets.base import WriteBatch
@@ -56,3 +57,64 @@ class RuntimeState:
         elif payload is not None:
             self.pending_sync_payloads[entity] = payload
         self.sync_jobs[entity] = job
+
+    def hydrate_from_snapshot(self, snapshot: dict[str, list[dict[str, Any]]]) -> None:
+        self.faturas = {
+            record["id_fatura"]: record
+            for record in snapshot.get("faturas", [])
+            if record.get("id_fatura")
+        }
+        self.fatura_items = {
+            record["id_item_fatura"]: record
+            for record in snapshot.get("faturas_itens", [])
+            if record.get("id_item_fatura")
+        }
+        self.catalog = {
+            record["id_item"]: record
+            for record in snapshot.get("materiais_cad", [])
+            if record.get("id_item")
+        }
+        self.afetacoes = {
+            record["id_afetacao"]: record
+            for record in snapshot.get("afetacoes_obra", [])
+            if record.get("id_afetacao")
+        }
+        self.movimentos = {
+            record["id_mov"]: record
+            for record in snapshot.get("materiais_mov", [])
+            if record.get("id_mov")
+        }
+
+        self.sync_jobs.clear()
+        self.pending_sync_payloads.clear()
+        self.synced_rows.clear()
+        self.google_write_log.clear()
+        self.supabase_write_log.clear()
+        self.counters = defaultdict(int)
+        self.sequence = 0
+
+        for identifier in self.faturas:
+            self._seed_counter(identifier)
+        for identifier in self.fatura_items:
+            self._seed_counter(identifier)
+        for identifier in self.catalog:
+            self._seed_counter(identifier)
+        for identifier in self.afetacoes:
+            self._seed_counter(identifier)
+        for identifier in self.movimentos:
+            self._seed_counter(identifier)
+
+        for movement in self.movimentos.values():
+            try:
+                self.sequence = max(self.sequence, int(movement.get("sequence") or 0))
+            except (TypeError, ValueError):
+                continue
+        if self.sequence == 0 and self.movimentos:
+            self.sequence = len(self.movimentos)
+
+    def _seed_counter(self, identifier: str) -> None:
+        match = re.match(r"^([A-Z]+)-(\d+)$", str(identifier or "").strip())
+        if not match:
+            return
+        prefix, number = match.groups()
+        self.counters[prefix] = max(self.counters[prefix], int(number))

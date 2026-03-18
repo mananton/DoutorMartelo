@@ -18,6 +18,7 @@ class ServiceContainer:
         self.state = RuntimeState()
         self.google_sheets = self._build_google_adapter()
         self.supabase = self._build_supabase_adapter()
+        self._hydrate_runtime_state()
         self.materials = MaterialsService(self.state, self.google_sheets, self.supabase)
         self.sync = SyncService(self.state, self.supabase)
 
@@ -30,6 +31,14 @@ class ServiceContainer:
         if self.settings.has_supabase:
             return LiveSupabaseAdapter(self.settings)
         return MemorySupabaseAdapter(self.state)
+
+    def _hydrate_runtime_state(self) -> None:
+        try:
+            snapshot = self.google_sheets.load_snapshot()
+        except Exception:
+            return
+        if snapshot:
+            self.state.hydrate_from_snapshot(snapshot)
 
 
 def get_container(request: Request) -> ServiceContainer:

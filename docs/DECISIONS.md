@@ -279,6 +279,37 @@ Format: short ADR-style records with rationale and impact.
   - Future implementation should prioritize a small materials backoffice plus backend adapters over further trigger-heavy spreadsheet automation.
   - AppSheet scope stays narrower in the short term, reducing migration risk.
 
+## D-019: Phase 0 materials sync is Sheets-first with live mirror validation
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `e4d4d74`
+- **Decision**:
+  - Treat Google Sheets as the operational source of truth for the materials backoffice Phase 0.
+  - Write accepted business records to Google Sheets first.
+  - Mirror to Supabase immediately after, but do not fail the main operation when the mirror fails.
+  - Surface pending retry state in the app instead of failing silently.
+- **Rationale**:
+  - The business requirement is that Google Sheets remains always populated.
+  - Supabase is important, but not at the cost of breaking day-to-day registration.
+- **Impact**:
+  - Backoffice writes now remain operational even when Supabase is temporarily unavailable or misaligned.
+  - Sync diagnostics become a first-class operational concern.
+
+## D-020: Materials backoffice runtime hydrates from Google Sheets at startup
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `pending`
+- **Decision**:
+  - On backend startup, hydrate runtime state from the live Google Sheet for the materials core entities.
+  - Seed runtime counters from hydrated IDs.
+  - Keep internal sheet metadata out of API response models.
+- **Rationale**:
+  - A backend that restarts empty is too fragile for operational use.
+  - Google Sheets is currently the real business record and therefore the safest hydration source.
+- **Impact**:
+  - The app reopens with existing data after backend restart.
+  - New IDs continue from the current sheet state instead of restarting numbering.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

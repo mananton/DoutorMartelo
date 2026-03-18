@@ -1,6 +1,6 @@
 # Materials Backoffice MVP Spec
 
-Status: proposed  
+Status: MVP in active implementation  
 Last updated: 2026-03-18
 
 Related:
@@ -677,3 +677,15 @@ This is the safest order for the current business constraint:
 - Google Sheets remains fully populated
 - Supabase receives mirrored structured data
 - `MATERIAIS_MOV` is no longer an operational input surface
+
+## 20. Current MVP State
+- The first working slice is already running locally with:
+  - FastAPI backend
+  - React + Vite frontend
+  - live Google Sheets adapter
+  - live Supabase mirror
+- The backend now hydrates its startup state from Google Sheets for the core materials entities.
+- Current next focus should move from infrastructure wiring to:
+  - UX refinement
+  - guided item selection/matching
+  - clearer operational error messages

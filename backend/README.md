@@ -44,6 +44,17 @@ This checks:
 - Supabase authentication
 - presence of the required core tables
 
+## Startup hydration behavior
+
+When live Google Sheets credentials are configured, the backend now hydrates startup runtime state from the core materials sheets:
+- `FATURAS`
+- `FATURAS_ITENS`
+- `MATERIAIS_CAD`
+- `AFETACOES_OBRA`
+- `MATERIAIS_MOV`
+
+This means the new materials backoffice does not restart empty anymore. New IDs are also seeded from the existing sheet state.
+
 ### 4. Run the backend
 
 ```powershell

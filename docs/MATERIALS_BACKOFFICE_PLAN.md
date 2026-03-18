@@ -1,6 +1,6 @@
 # Materials Backoffice Plan
 
-Status: planned  
+Status: active transition plan  
 Last updated: 2026-03-18
 
 ## Objective
@@ -236,3 +236,15 @@ That spec defines:
 - generated-vs-editable rules
 - minimum backend endpoints
 - write order to Google Sheets and Supabase
+
+## Current Implementation Snapshot
+- Phase 0 is now operational in parallel with the GAS dashboard.
+- Live adapters to Google Sheets and Supabase are validated.
+- Core sync for:
+  - `FATURAS`
+  - `FATURAS_ITENS`
+  - `MATERIAIS_CAD`
+  - `AFETACOES_OBRA`
+  - `MATERIAIS_MOV`
+  is now working end-to-end.
+- The FastAPI backend now hydrates startup runtime state from Google Sheets so the app reopens with existing data after restart.

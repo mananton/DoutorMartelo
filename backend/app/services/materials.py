@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
+from pydantic import BaseModel
 
 from backend.app.adapters.google_sheets.base import GoogleSheetsAdapter, WriteBatch
 from backend.app.adapters.supabase.base import SupabaseAdapter, SupabaseAdapterError
@@ -34,12 +35,12 @@ class MaterialsService:
         self.supabase = supabase
 
     def list_faturas(self) -> list[FaturaRecord]:
-        return [FaturaRecord.model_validate(item) for item in self.state.faturas.values()]
+        return [self._to_model(FaturaRecord, item) for item in self.state.faturas.values()]
 
     def get_fatura(self, id_fatura: str) -> FaturaDetail:
         fatura = self._require_fatura(id_fatura)
-        items = [FaturaItemRecord.model_validate(item) for item in self.state.fatura_items.values() if item["id_fatura"] == id_fatura]
-        return FaturaDetail(fatura=FaturaRecord.model_validate(fatura), items=items)
+        items = [self._to_model(FaturaItemRecord, item) for item in self.state.fatura_items.values() if item["id_fatura"] == id_fatura]
+        return FaturaDetail(fatura=self._to_model(FaturaRecord, fatura), items=items)
 
     def create_fatura(self, payload: FaturaCreate) -> FaturaRecord:
         now = self._now()
@@ -59,7 +60,7 @@ class MaterialsService:
         }
         self._persist({"faturas": [entity]})
         self.state.faturas[entity["id_fatura"]] = entity
-        return FaturaRecord.model_validate(entity)
+        return self._to_model(FaturaRecord, entity)
 
     def patch_fatura(self, id_fatura: str, payload: FaturaUpdate) -> FaturaRecord:
         current = deepcopy(self._require_fatura(id_fatura))
@@ -68,7 +69,7 @@ class MaterialsService:
         current["updated_at"] = self._now()
         self._persist({"faturas": [current]})
         self.state.faturas[id_fatura] = current
-        return FaturaRecord.model_validate(current)
+        return self._to_model(FaturaRecord, current)
 
     def preview_fatura_items(self, id_fatura: str, items: list[FaturaItemCreate]) -> FaturaItemsResponse:
         self._require_fatura(id_fatura)
@@ -130,7 +131,7 @@ class MaterialsService:
             self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
         for movimento in generated_movimentos:
             self.state.movimentos[movimento["id_mov"]] = movimento
-        return FaturaItemsResponse(items=[FaturaItemRecord.model_validate(item) for item in created_items], impacts=impacts)
+        return FaturaItemsResponse(items=[self._to_model(FaturaItemRecord, item) for item in created_items], impacts=impacts)
 
     def update_fatura_item(self, id_fatura: str, item_id: str, payload: dict[str, Any]) -> FaturaItemRecord:
         current = self.state.fatura_items.get(item_id)
@@ -143,7 +144,7 @@ class MaterialsService:
         updated["updated_at"] = self._now()
         self._persist({"faturas_itens": [updated]})
         self.state.fatura_items[item_id] = updated
-        return FaturaItemRecord.model_validate(updated)
+        return self._to_model(FaturaItemRecord, updated)
 
     def delete_fatura_item(self, id_fatura: str, item_id: str) -> None:
         current = self.state.fatura_items.get(item_id)
@@ -158,7 +159,7 @@ class MaterialsService:
                 self.state.afetacoes.pop(afet_id, None)
 
     def list_catalog(self) -> list[CatalogEntryRecord]:
-        return [CatalogEntryRecord.model_validate(item) for item in self.state.catalog.values()]
+        return [self._to_model(CatalogEntryRecord, item) for item in self.state.catalog.values()]
 
     def create_catalog_entry(self, payload: CatalogEntryCreate) -> CatalogEntryRecord:
         now = self._now()
@@ -176,7 +177,7 @@ class MaterialsService:
         }
         self._persist({"materiais_cad": [record]})
         self.state.catalog[record["id_item"]] = record
-        return CatalogEntryRecord.model_validate(record)
+        return self._to_model(CatalogEntryRecord, record)
 
     def patch_catalog_entry(self, id_item: str, payload: CatalogEntryUpdate) -> CatalogEntryRecord:
         current = deepcopy(self._require_catalog(id_item))
@@ -185,10 +186,10 @@ class MaterialsService:
         current["updated_at"] = self._now()
         self._persist({"materiais_cad": [current]})
         self.state.catalog[id_item] = current
-        return CatalogEntryRecord.model_validate(current)
+        return self._to_model(CatalogEntryRecord, current)
 
     def list_afetacoes(self) -> list[AfetacaoRecord]:
-        return [AfetacaoRecord.model_validate(item) for item in self.state.afetacoes.values()]
+        return [self._to_model(AfetacaoRecord, item) for item in self.state.afetacoes.values()]
 
     def create_afetacao(self, payload: AfetacaoCreate) -> AfetacaoRecord:
         catalog = self._require_catalog(payload.id_item)
@@ -231,7 +232,7 @@ class MaterialsService:
         self.state.afetacoes[record["id_afetacao"]] = record
         if processed:
             self.state.movimentos[processed["movimento"]["id_mov"]] = processed["movimento"]
-        return AfetacaoRecord.model_validate(record)
+        return self._to_model(AfetacaoRecord, record)
 
     def patch_afetacao(self, id_afetacao: str, payload: AfetacaoUpdate) -> AfetacaoRecord:
         current = deepcopy(self.state.afetacoes.get(id_afetacao) or {})
@@ -242,7 +243,7 @@ class MaterialsService:
         current["updated_at"] = self._now()
         self._persist({"afetacoes_obra": [current]})
         self.state.afetacoes[id_afetacao] = current
-        return AfetacaoRecord.model_validate(current)
+        return self._to_model(AfetacaoRecord, current)
 
     def process_afetacao(self, id_afetacao: str) -> AfetacaoRecord:
         current = deepcopy(self.state.afetacoes.get(id_afetacao) or {})
@@ -252,7 +253,7 @@ class MaterialsService:
         self._persist({"afetacoes_obra": [processed["afetacao"]], "materiais_mov": [processed["movimento"]]})
         self.state.afetacoes[id_afetacao] = processed["afetacao"]
         self.state.movimentos[processed["movimento"]["id_mov"]] = processed["movimento"]
-        return AfetacaoRecord.model_validate(processed["afetacao"])
+        return self._to_model(AfetacaoRecord, processed["afetacao"])
 
     def get_stock_snapshot(self, id_item: str) -> StockSnapshot:
         catalog = self._require_catalog(id_item)
@@ -456,3 +457,7 @@ class MaterialsService:
 
     def _now(self) -> datetime:
         return datetime.now(UTC)
+
+    def _to_model(self, model_cls: type[BaseModel], payload: dict[str, Any]) -> BaseModel:
+        allowed = model_cls.model_fields.keys()
+        return model_cls.model_validate({key: value for key, value in payload.items() if key in allowed})

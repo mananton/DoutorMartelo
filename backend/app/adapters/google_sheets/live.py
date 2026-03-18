@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, date, datetime
+import re
 from typing import Any
 
 from backend.app.adapters.google_sheets.base import GoogleSheetsAdapter, WriteBatch
@@ -22,6 +24,20 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             if not batch.records:
                 continue
             self._upsert_batch(batch)
+
+    def load_snapshot(self) -> dict[str, list[dict[str, Any]]]:
+        snapshot: dict[str, list[dict[str, Any]]] = {}
+        for entity, config in SHEET_READ_CONFIG.items():
+            headers = self._read_header(config["sheet_name"])
+            rows = self._read_rows(config["sheet_name"], headers)
+            parser: RowParser = config["parser"]
+            parsed = []
+            for row_num, row in rows:
+                record = parser(row, row_num)
+                if record:
+                    parsed.append(record)
+            snapshot[entity] = parsed
+        return snapshot
 
     def _build_service(self):
         from google.oauth2.service_account import Credentials
@@ -95,6 +111,225 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             data = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
             parsed.append((offset, data))
         return parsed
+
+
+RowParser = Callable[[dict[str, Any], int], dict[str, Any] | None]
+
+
+def _normalize_key(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    normalized = normalized.replace("º", "o").replace("°", "o")
+    normalized = normalized.replace("âº", "o").replace("â", "")
+    normalized = normalized.replace("/", "").replace("_", "").replace("-", "").replace(" ", "")
+    return normalized
+
+
+def _pick_value(row: dict[str, Any], aliases: list[str]) -> Any:
+    alias_keys = {_normalize_key(alias) for alias in aliases}
+    for key, value in row.items():
+        if _normalize_key(key) in alias_keys:
+            return value
+    return None
+
+
+def _read_text(row: dict[str, Any], aliases: list[str]) -> str | None:
+    value = _pick_value(row, aliases)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _read_float(row: dict[str, Any], aliases: list[str]) -> float | None:
+    value = _pick_value(row, aliases)
+    if value in (None, ""):
+        return None
+    text = str(value).strip().replace(".", "").replace(",", ".") if isinstance(value, str) and "," in str(value) and "." in str(value) else str(value).strip().replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _read_bool(row: dict[str, Any], aliases: list[str]) -> bool:
+    value = _pick_value(row, aliases)
+    text = str(value or "").strip().lower()
+    return text in {"true", "1", "yes", "sim", "x", "verdadeiro"}
+
+
+def _read_date(row: dict[str, Any], aliases: list[str]) -> date | None:
+    value = _pick_value(row, aliases)
+    if value in (None, ""):
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    text = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _read_timestamp(row_num: int) -> datetime:
+    return datetime.now(UTC)
+
+
+def _extract_source_marker(observacoes: str | None, marker: str) -> str | None:
+    if not observacoes:
+        return None
+    match = re.search(rf"\[{marker}:([^\]]+)\]", observacoes)
+    return match.group(1) if match else None
+
+
+def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    id_fatura = _read_text(row, ["ID_Fatura", "ID Fatura"])
+    if not id_fatura:
+        return None
+    now = _read_timestamp(row_num)
+    return {
+        "id_fatura": id_fatura,
+        "fornecedor": _read_text(row, ["Fornecedor"]) or "",
+        "nif": _read_text(row, ["NIF"]) or "",
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]) or "",
+        "data_fatura": _read_date(row, ["Data Fatura", "Data"]) or date.today(),
+        "valor_sem_iva": _read_float(row, ["Valor Total Sem IVA", "Custo_Total Sem IVA"]) or 0.0,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "valor_com_iva": _read_float(row, ["Valor Total Com IVA", "Custo_Total Com IVA"]) or 0.0,
+        "observacoes": _read_text(row, ["Observacoes", "Observações"]),
+        "estado": _read_text(row, ["Estado"]) or "ATIVA",
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _parse_fit(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    item_id = _read_text(row, ["ID_Item_Fatura", "ID Item Fatura"])
+    if not item_id:
+        return None
+    now = _read_timestamp(row_num)
+    return {
+        "id_item_fatura": item_id,
+        "id_fatura": _read_text(row, ["ID_Fatura", "ID Fatura"]) or "",
+        "fornecedor": _read_text(row, ["Fornecedor"]),
+        "nif": _read_text(row, ["NIF"]),
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]),
+        "data_fatura": _read_date(row, ["Data Fatura", "Data"]),
+        "descricao_original": _read_text(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]) or "",
+        "id_item": _read_text(row, ["ID_Item", "ID Item"]),
+        "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]),
+        "unidade": _read_text(row, ["Unidade"]),
+        "natureza": _read_text(row, ["Natureza"]),
+        "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
+        "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
+        "desconto_1": _read_float(row, ["Desconto 1", "Desconto_1"]) or 0.0,
+        "desconto_2": _read_float(row, ["Desconto 2", "Desconto_2"]) or 0.0,
+        "custo_total_sem_iva": _read_float(row, ["Custo_Total Sem IVA", "Valor Total Sem IVA"]) or 0.0,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "custo_total_com_iva": _read_float(row, ["Custo_Total Com IVA", "Valor Total Com IVA"]) or 0.0,
+        "destino": _read_text(row, ["Destino"]) or "CONSUMO",
+        "obra": _read_text(row, ["Obra"]),
+        "fase": _read_text(row, ["Fase"]),
+        "observacoes": _read_text(row, ["Observacoes", "Observações"]),
+        "estado_mapeamento": _read_text(row, ["Estado_Mapeamento", "Estado Mapeamento"]) or "GUARDADO",
+        "sugestao_alias": _read_text(row, ["Sugestao_Alias", "Sugestao Alias"]),
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _parse_catalog(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    id_item = _read_text(row, ["ID_Item", "ID Item"])
+    if not id_item:
+        return None
+    now = _read_timestamp(row_num)
+    return {
+        "id_item": id_item,
+        "fornecedor": _read_text(row, ["Fornecedor"]) or "",
+        "descricao_original": _read_text(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]) or "",
+        "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]) or "",
+        "natureza": _read_text(row, ["Natureza"]) or "MATERIAL",
+        "unidade": _read_text(row, ["Unidade"]) or "",
+        "observacoes": _read_text(row, ["Observacoes", "Observações"]),
+        "estado_cadastro": _read_text(row, ["Estado_Cadastro", "Estado Cadastro"]) or "ATIVO",
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _parse_afetacao(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    id_afetacao = _read_text(row, ["ID_Afetacao", "ID Afetacao"])
+    if not id_afetacao:
+        return None
+    now = _read_timestamp(row_num)
+    return {
+        "id_afetacao": id_afetacao,
+        "origem": _read_text(row, ["Origem"]) or "STOCK",
+        "source_id": _read_text(row, ["Source_ID", "Source ID"]),
+        "data": _read_date(row, ["Data"]) or date.today(),
+        "id_item": _read_text(row, ["ID_Item", "ID Item"]) or "",
+        "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]),
+        "natureza": _read_text(row, ["Natureza"]),
+        "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
+        "unidade": _read_text(row, ["Unidade"]),
+        "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
+        "custo_total": _read_float(row, ["Custo_Total", "Custo Total"]) or 0.0,
+        "custo_total_sem_iva": _read_float(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]) or 0.0,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "custo_total_com_iva": _read_float(row, ["Custo_Total Com IVA", "Custo Total Com IVA"]) or 0.0,
+        "obra": _read_text(row, ["Obra"]) or "",
+        "fase": _read_text(row, ["Fase"]) or "",
+        "fornecedor": _read_text(row, ["Fornecedor"]),
+        "nif": _read_text(row, ["NIF"]),
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]),
+        "processar": _read_bool(row, ["Processar"]),
+        "estado": _read_text(row, ["Estado"]) or "RASCUNHO",
+        "observacoes": _read_text(row, ["Observacoes", "Observações"]),
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _parse_mov(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    id_mov = _read_text(row, ["ID_Mov", "ID Mov"])
+    if not id_mov:
+        return None
+    observacoes = _read_text(row, ["Observacoes", "Observações"])
+    now = _read_timestamp(row_num)
+    source_afo = _extract_source_marker(observacoes, "SRC_AFO")
+    source_fit = _extract_source_marker(observacoes, "SRC_FIT")
+    source_type = "AFO" if source_afo else "FIT"
+    source_id = source_afo or source_fit or id_mov
+    return {
+        "id_mov": id_mov,
+        "tipo": _read_text(row, ["Tipo"]) or "CONSUMO",
+        "data": _read_date(row, ["Data"]) or date.today(),
+        "id_item": _read_text(row, ["ID_Item", "ID Item"]) or "",
+        "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial", "Material"]) or "",
+        "unidade": _read_text(row, ["Unidade"]),
+        "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
+        "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
+        "custo_total_sem_iva": _read_float(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]) or 0.0,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "custo_total_com_iva": _read_float(row, ["Custo_Total Com IVA", "Custo Total Com IVA"]) or 0.0,
+        "obra": _read_text(row, ["Obra"]),
+        "fase": _read_text(row, ["Fase"]),
+        "fornecedor": _read_text(row, ["Fornecedor"]),
+        "nif": _read_text(row, ["NIF"]),
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]),
+        "observacoes": observacoes,
+        "source_type": source_type,
+        "source_id": source_id,
+        "sequence": row_num - 1,
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
 
 
 def _fatura_serializer(record: dict[str, Any]) -> dict[str, Any]:
@@ -211,3 +446,10 @@ SHEET_WRITE_CONFIG: dict[str, dict[str, Any]] = {
     "materiais_mov": {"sheet_name": "MATERIAIS_MOV", "id_field": "ID_Mov", "serializer": _mov_serializer},
 }
 
+SHEET_READ_CONFIG: dict[str, dict[str, Any]] = {
+    "faturas": {"sheet_name": "FATURAS", "parser": _parse_fatura},
+    "faturas_itens": {"sheet_name": "FATURAS_ITENS", "parser": _parse_fit},
+    "materiais_cad": {"sheet_name": "MATERIAIS_CAD", "parser": _parse_catalog},
+    "afetacoes_obra": {"sheet_name": "AFETACOES_OBRA", "parser": _parse_afetacao},
+    "materiais_mov": {"sheet_name": "MATERIAIS_MOV", "parser": _parse_mov},
+}
