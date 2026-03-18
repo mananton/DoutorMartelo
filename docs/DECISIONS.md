@@ -325,6 +325,22 @@ Format: short ADR-style records with rationale and impact.
   - `FATURAS_ITENS` and `AFETACOES_OBRA` now prioritize assisted selection and readable consequences before save.
   - `Sincronizacao` becomes an operational screen instead of a debugging-only screen.
 
+## D-022: Work selectors in the materials backoffice should follow the workbook master lists
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `b57c4b9`
+- **Decision**:
+  - Source `Obra` options in the new materials app from `OBRAS.Local_ID`.
+  - Source `Fase` options from the global `FASES_DE_OBRA` list.
+  - Expose those options through a backend endpoint instead of deriving them only from transactional material rows.
+  - Keep `Adicionar Linha` aligned with business rules by only enabling obra/fase selection for `Destino = CONSUMO`.
+- **Rationale**:
+  - The workbook already has master lists for obras and phases, so the UI should not wait for historical material rows to "discover" them.
+  - Operators need stable suggestions that match the spreadsheet naming actually used in the business.
+- **Impact**:
+  - `Adicionar Linha` and `AFETACOES_OBRA` now show predictable selectors instead of empty or inconsistent free-text fields.
+  - The work selector source is now explicit and easier to maintain when workbook structure changes.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

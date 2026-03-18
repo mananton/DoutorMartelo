@@ -18,10 +18,14 @@ Last reviewed: 2026-03-18
 - Current implementation follow-up:
   - improve screen UX and guided input for:
     - `MATERIAIS_CAD`
+    - clearer save/edit workflow for existing records
   - keep validating real writes and sync retries against production-like sheets
   - latest delivered UX improvements:
     - `FATURAS_ITENS` now supports guided catalog selection, quick catalog creation, and readable impact preview
     - `AFETACOES_OBRA` now supports guided item selection with stock/cost context before save
+    - `Adicionar Linha` and `AFETACOES_OBRA` now support sheet-driven `Obra` / `Fase` selectors sourced from:
+      - `OBRAS.Local_ID`
+      - `FASES_DE_OBRA`
     - `Sincronizacao` now shows operational status cards instead of raw JSON
     - read-only technical view now exists for `STOCK_ATUAL` and `MATERIAIS_MOV`
 
@@ -33,6 +37,7 @@ Last reviewed: 2026-03-18
   - add safer diagnostics when a row loads but cannot be parsed into the runtime model
   - decide whether to expose a more explicit per-screen refresh indicator after `Recarregar do Sheets`
   - review whether diagnostics should later compare selected business fields and not only ID presence
+  - decide later whether `Fase` should remain a global list or become explicitly constrained per obra in the new app
 
 ## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
 - Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.

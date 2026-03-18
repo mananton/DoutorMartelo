@@ -59,6 +59,9 @@ Expected output format:
   - `MATERIAIS_ALIAS` was removed from the workbook.
 - `FATURAS_ITENS` is now the source sheet for purchase lines.
 - `AFETACOES_OBRA` is now the operational bridge for obra/fase attribution.
+- `Obra` selectors in the new materials backoffice now come from `OBRAS.Local_ID`.
+- `Fase` selectors in the new materials backoffice now come from the global `FASES_DE_OBRA` sheet list.
+- `Adicionar Linha` only enables `Obra` / `Fase` when `Destino = CONSUMO`.
 - `MATERIAIS_MOV` is expected to be auto-maintained:
   - from `FATURAS_ITENS` for stock-entry rows
   - from `AFETACOES_OBRA` for obra/fase consumption rows
@@ -83,6 +86,7 @@ Expected output format:
 - `Sincronizacao` now also supports a manual divergence diagnostic:
   - compares runtime IDs with fresh Google Sheets IDs
   - reports missing IDs on either side for the core material entities
+- `/api/options/obras-fases` is now the backend endpoint that feeds the guided obra/fase selectors in the React app.
 
 ## Current Material Automation Hotspots
 - Read `src/main.gs` carefully before changing materials logic.

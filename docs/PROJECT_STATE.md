@@ -166,6 +166,11 @@ Last updated: 2026-03-18
     - `STOCK_ATUAL`
     - `MATERIAIS_MOV`
   - `Sincronizacao` now includes a manual divergence diagnostic comparing runtime IDs vs current Google Sheets IDs for the core material entities
+  - the materials backoffice now exposes sheet-driven work selectors through `/api/options/obras-fases`
+  - `Obra` options now come from `OBRAS.Local_ID`
+  - `Fase` options now come from the global `FASES_DE_OBRA` list
+  - `Adicionar Linha` and `AFETACOES_OBRA` now show guided selectors for `Obra` / `Fase`
+  - `Adicionar Linha` only enables `Obra` / `Fase` when `Destino = CONSUMO`, keeping `STOCK` rows free of unnecessary obra/fase attribution
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).

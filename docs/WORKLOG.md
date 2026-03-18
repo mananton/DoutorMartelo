@@ -314,3 +314,15 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - Operators now have a non-destructive place to inspect current stock and movement consequences.
   - Divergence suspicion can now be checked explicitly instead of relying on visual guessing.
+
+### `b57c4b9`
+- **Type**: feat(ui) / integration
+- **Scope**: `backend/app/adapters/google_sheets/*`, `backend/app/api/*`, `frontend/`, `backend/tests/test_api.py`
+- **Summary**:
+  - Added `/api/options/obras-fases` to expose sheet-driven work selectors to the new materials app.
+  - Loaded `Obra` options from `OBRAS.Local_ID` and `Fase` options from the global `FASES_DE_OBRA` list.
+  - Updated `Adicionar Linha` and `Afetacoes` to use visible selectors fed by those options instead of raw free-text-only entry.
+  - Kept `Adicionar Linha` aligned with business rules by only enabling `Obra` / `Fase` when `Destino = CONSUMO`.
+- **Impact**:
+  - Operators now get consistent obra/fase suggestions straight from the workbook instead of guessing names manually.
+  - The new materials UI now reflects the existing Sheets operating model more closely.
