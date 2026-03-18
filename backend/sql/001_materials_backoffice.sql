@@ -25,6 +25,7 @@ create table if not exists public.faturas_itens (
   id_item text,
   item_oficial text,
   unidade text,
+  natureza text,
   quantidade numeric default 0,
   custo_unit numeric default 0,
   desconto_1 numeric default 0,
@@ -106,6 +107,9 @@ create table if not exists public.materiais_mov (
   nif text,
   nr_documento text,
   observacoes text,
+  source_type text,
+  source_id text,
+  sequence bigint,
   sheet_row_num integer,
   created_at timestamptz default now(),
   updated_at timestamptz default now()

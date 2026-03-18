@@ -1,13 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { api } from "../lib/api";
 
 export function CatalogoPage() {
   const queryClient = useQueryClient();
+  const [formMessage, setFormMessage] = useState<string>("");
   const { data } = useQuery({ queryKey: ["catalogo"], queryFn: api.listCatalog });
   const createMutation = useMutation({
     mutationFn: api.createCatalog,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["catalogo"] })
+    onSuccess: () => {
+      setFormMessage("Item oficial guardado com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["catalogo"] });
+    },
+    onError: (error) => {
+      setFormMessage(error instanceof Error ? error.message : "Falha ao guardar item oficial.");
+    },
   });
 
   return (
@@ -18,6 +26,7 @@ export function CatalogoPage() {
           className="form"
           onSubmit={(event) => {
             event.preventDefault();
+            setFormMessage("");
             const form = new FormData(event.currentTarget);
             createMutation.mutate({
               fornecedor: form.get("fornecedor"),
@@ -40,7 +49,10 @@ export function CatalogoPage() {
             </select>
           </label>
           <label>Unidade<input name="unidade" required /></label>
-          <button className="btn primary" type="submit">Guardar</button>
+          {formMessage ? <div className="muted">{formMessage}</div> : null}
+          <button className="btn primary" type="submit" disabled={createMutation.isPending}>
+            {createMutation.isPending ? "A guardar..." : "Guardar"}
+          </button>
         </form>
       </section>
       <section className="panel">
@@ -58,4 +70,3 @@ export function CatalogoPage() {
     </div>
   );
 }
-

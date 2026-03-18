@@ -1,17 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { api } from "../lib/api";
 
 export function AfetacoesPage() {
   const queryClient = useQueryClient();
+  const [formMessage, setFormMessage] = useState<string>("");
   const { data } = useQuery({ queryKey: ["afetacoes"], queryFn: api.listAfetacoes });
   const createMutation = useMutation({
     mutationFn: api.createAfetacao,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["afetacoes"] })
-  });
-  const processMutation = useMutation({
-    mutationFn: (id: string) => api.processAfetacao(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["afetacoes"] })
+    onSuccess: () => {
+      setFormMessage("Afetacao guardada com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["afetacoes"] });
+    },
+    onError: (error) => {
+      setFormMessage(error instanceof Error ? error.message : "Falha ao guardar afetacao.");
+    },
   });
 
   return (
@@ -22,6 +26,7 @@ export function AfetacoesPage() {
           className="form"
           onSubmit={(event) => {
             event.preventDefault();
+            setFormMessage("");
             const form = new FormData(event.currentTarget);
             createMutation.mutate({
               origem: "STOCK",
@@ -32,7 +37,7 @@ export function AfetacoesPage() {
               obra: form.get("obra"),
               fase: form.get("fase"),
               observacoes: form.get("observacoes") || null,
-              processar: form.get("processar") === "on"
+              processar: true,
             });
           }}
         >
@@ -43,8 +48,10 @@ export function AfetacoesPage() {
           <label>Obra<input name="obra" required /></label>
           <label>Fase<input name="fase" required /></label>
           <label>Observacoes<textarea name="observacoes" rows={3} /></label>
-          <label><input name="processar" type="checkbox" /> Processar</label>
-          <button className="btn primary" type="submit">Guardar</button>
+          {formMessage ? <div className="muted">{formMessage}</div> : null}
+          <button className="btn primary" type="submit" disabled={createMutation.isPending}>
+            {createMutation.isPending ? "A guardar..." : "Guardar"}
+          </button>
         </form>
       </section>
       <section className="panel">
@@ -53,9 +60,8 @@ export function AfetacoesPage() {
           {(data ?? []).map((item) => (
             <div className="list-row" key={String(item.id_afetacao)}>
               <div className="mono">{String(item.id_afetacao)}</div>
-              <div>{String(item.item_oficial ?? item.id_item)} · {String(item.obra)} / {String(item.fase)}</div>
+              <div>{String(item.item_oficial ?? item.id_item)} - {String(item.obra)} / {String(item.fase)}</div>
               <div className="muted">{String(item.estado)}</div>
-              <button className="btn secondary" onClick={() => processMutation.mutate(String(item.id_afetacao))}>Processar</button>
             </div>
           ))}
         </div>
@@ -63,4 +69,3 @@ export function AfetacoesPage() {
     </div>
   );
 }
-

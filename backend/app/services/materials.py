@@ -193,6 +193,7 @@ class MaterialsService:
     def create_afetacao(self, payload: AfetacaoCreate) -> AfetacaoRecord:
         catalog = self._require_catalog(payload.id_item)
         now = self._now()
+        should_process = payload.origem == "STOCK" or payload.processar
         record = {
             "id_afetacao": self.state.next_id("AFO"),
             "origem": payload.origem,
@@ -213,15 +214,15 @@ class MaterialsService:
             "fornecedor": None,
             "nif": None,
             "nr_documento": None,
-            "processar": payload.processar,
-            "estado": "AGUARDA_PROCESSAR" if not payload.processar else "PRONTO_MOVIMENTO",
+            "processar": should_process,
+            "estado": "AGUARDA_PROCESSAR" if not should_process else "PRONTO_MOVIMENTO",
             "observacoes": payload.observacoes,
             "created_at": now,
             "updated_at": now,
         }
         batches: dict[str, list[dict[str, Any]]] = {"afetacoes_obra": [record]}
         processed = None
-        if payload.processar:
+        if should_process:
             processed = self._process_stock_afetacao(record)
             record = processed["afetacao"]
             batches["afetacoes_obra"] = [record]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,8 @@ from backend.app.main import create_app
 
 class MaterialsApiTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._previous_disable_live = os.environ.get("BACKEND_DISABLE_LIVE_ADAPTERS")
+        os.environ["BACKEND_DISABLE_LIVE_ADAPTERS"] = "1"
         self.app = create_app()
         self.client = TestClient(self.app)
         self.catalog = self.client.post(
@@ -21,6 +24,12 @@ class MaterialsApiTests(unittest.TestCase):
                 "unidade": "UN",
             },
         ).json()
+
+    def tearDown(self) -> None:
+        if self._previous_disable_live is None:
+            os.environ.pop("BACKEND_DISABLE_LIVE_ADAPTERS", None)
+        else:
+            os.environ["BACKEND_DISABLE_LIVE_ADAPTERS"] = self._previous_disable_live
 
     def test_direct_invoice_item_generates_afetacao_and_movement(self) -> None:
         fatura = self.client.post(

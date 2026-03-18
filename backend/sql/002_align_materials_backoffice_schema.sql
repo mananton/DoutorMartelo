@@ -1,0 +1,100 @@
+alter table if exists public.faturas
+  add column if not exists observacoes text,
+  add column if not exists estado text,
+  add column if not exists sheet_row_num integer,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+alter table if exists public.faturas_itens
+  add column if not exists fornecedor text,
+  add column if not exists nif text,
+  add column if not exists nr_documento text,
+  add column if not exists data_fatura date,
+  add column if not exists descricao_original text,
+  add column if not exists id_item text,
+  add column if not exists item_oficial text,
+  add column if not exists unidade text,
+  add column if not exists natureza text,
+  add column if not exists quantidade numeric default 0,
+  add column if not exists custo_unit numeric default 0,
+  add column if not exists desconto_1 numeric default 0,
+  add column if not exists desconto_2 numeric default 0,
+  add column if not exists custo_total_sem_iva numeric default 0,
+  add column if not exists iva numeric default 0,
+  add column if not exists custo_total_com_iva numeric default 0,
+  add column if not exists destino text,
+  add column if not exists obra text,
+  add column if not exists fase text,
+  add column if not exists observacoes text,
+  add column if not exists estado_mapeamento text,
+  add column if not exists sugestao_alias text,
+  add column if not exists sheet_row_num integer,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+alter table if exists public.materiais_cad
+  add column if not exists fornecedor text,
+  add column if not exists descricao_original text,
+  add column if not exists item_oficial text,
+  add column if not exists natureza text,
+  add column if not exists unidade text,
+  add column if not exists observacoes text,
+  add column if not exists estado_cadastro text,
+  add column if not exists sheet_row_num integer,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+alter table if exists public.afetacoes_obra
+  add column if not exists source_id text,
+  add column if not exists item_oficial text,
+  add column if not exists natureza text,
+  add column if not exists quantidade numeric default 0,
+  add column if not exists unidade text,
+  add column if not exists custo_unit numeric default 0,
+  add column if not exists custo_total numeric default 0,
+  add column if not exists custo_total_sem_iva numeric default 0,
+  add column if not exists iva numeric default 0,
+  add column if not exists custo_total_com_iva numeric default 0,
+  add column if not exists fornecedor text,
+  add column if not exists nif text,
+  add column if not exists nr_documento text,
+  add column if not exists processar boolean default false,
+  add column if not exists estado text,
+  add column if not exists observacoes text,
+  add column if not exists sheet_row_num integer,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+alter table if exists public.materiais_mov
+  add column if not exists item_oficial text,
+  add column if not exists material text,
+  add column if not exists unidade text,
+  add column if not exists quantidade numeric default 0,
+  add column if not exists custo_unit numeric default 0,
+  add column if not exists custo_total_sem_iva numeric default 0,
+  add column if not exists iva numeric default 0,
+  add column if not exists custo_total_com_iva numeric default 0,
+  add column if not exists custo_total numeric default 0,
+  add column if not exists obra text,
+  add column if not exists fase text,
+  add column if not exists fornecedor text,
+  add column if not exists nif text,
+  add column if not exists nr_documento text,
+  add column if not exists observacoes text,
+  add column if not exists source_type text,
+  add column if not exists source_id text,
+  add column if not exists sequence bigint,
+  add column if not exists sheet_row_num integer,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+alter table if exists public.stock_atual
+  add column if not exists item_oficial text,
+  add column if not exists material text,
+  add column if not exists unidade text,
+  add column if not exists stock_atual numeric default 0,
+  add column if not exists custo_medio_atual numeric default 0,
+  add column if not exists sheet_row_num integer,
+  add column if not exists updated_at timestamptz default now();
+
+notify pgrst, 'reload schema';

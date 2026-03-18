@@ -3,6 +3,27 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+
+def _load_dotenv_file() -> None:
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and ((value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'"))):
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
+_load_dotenv_file()
 
 
 @dataclass(slots=True)
@@ -13,6 +34,7 @@ class Settings:
     supabase_url: str | None
     supabase_service_role_key: str | None
     supabase_schema: str
+    disable_live_adapters: bool
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -23,15 +45,16 @@ class Settings:
             supabase_url=os.getenv("SUPABASE_URL"),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
             supabase_schema=os.getenv("SUPABASE_SCHEMA", "public"),
+            disable_live_adapters=_read_bool_env("BACKEND_DISABLE_LIVE_ADAPTERS"),
         )
 
     @property
     def has_google_sheets(self) -> bool:
-        return bool(self.google_spreadsheet_id and (self.google_service_account_file or self.google_service_account_json))
+        return not self.disable_live_adapters and bool(self.google_spreadsheet_id and (self.google_service_account_file or self.google_service_account_json))
 
     @property
     def has_supabase(self) -> bool:
-        return bool(self.supabase_url and self.supabase_service_role_key)
+        return not self.disable_live_adapters and bool(self.supabase_url and self.supabase_service_role_key)
 
     def load_service_account_info(self) -> dict[str, object]:
         if self.google_service_account_json:
@@ -41,3 +64,7 @@ class Settings:
                 return json.load(handle)
         raise RuntimeError("Google service account config missing")
 
+
+def _read_bool_env(name: str) -> bool:
+    value = (os.getenv(name) or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}

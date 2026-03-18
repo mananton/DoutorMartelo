@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any
 
 import httpx
@@ -35,19 +36,33 @@ class LiveSupabaseAdapter(SupabaseAdapter):
         }
 
     def write_batches(self, batches: list[WriteBatch]) -> None:
-        with httpx.Client(timeout=20.0) as client:
+        with httpx.Client(timeout=20.0, trust_env=False) as client:
             for batch in batches:
                 if not batch.records:
                     continue
                 config = TABLE_CONFIG.get(batch.entity)
                 if not config:
                     raise SupabaseAdapterError(f"No Supabase table mapping for {batch.entity}")
-                response = client.post(
-                    f"{self.base_url}/{config['table']}",
-                    params={"on_conflict": config["conflict"]},
-                    headers=self.headers | {"Accept-Profile": self.settings.supabase_schema, "Content-Profile": self.settings.supabase_schema},
-                    json=batch.records,
-                )
+                payload = [self._json_ready(record) for record in batch.records]
+                try:
+                    response = client.post(
+                        f"{self.base_url}/{config['table']}",
+                        params={"on_conflict": config["conflict"]},
+                        headers=self.headers | {"Accept-Profile": self.settings.supabase_schema, "Content-Profile": self.settings.supabase_schema},
+                        json=payload,
+                    )
+                except httpx.HTTPError as exc:
+                    raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}: {exc}") from exc
                 if response.status_code >= 300:
                     raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}: HTTP {response.status_code} {response.text}")
 
+    def _json_ready(self, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return {key: self._json_ready(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._json_ready(item) for item in value]
+        return value

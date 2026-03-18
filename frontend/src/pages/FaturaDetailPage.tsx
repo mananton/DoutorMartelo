@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { api } from "../lib/api";
@@ -6,11 +7,18 @@ import { api } from "../lib/api";
 export function FaturaDetailPage() {
   const { idFatura = "" } = useParams();
   const queryClient = useQueryClient();
+  const [formMessage, setFormMessage] = useState<string>("");
   const detail = useQuery({ queryKey: ["fatura", idFatura], queryFn: () => api.getFatura(idFatura), enabled: !!idFatura });
   const preview = useMutation({ mutationFn: (payload: Record<string, unknown>) => api.previewItems(idFatura, payload) });
   const createItems = useMutation({
     mutationFn: (payload: Record<string, unknown>) => api.createItems(idFatura, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["fatura", idFatura] })
+    onSuccess: () => {
+      setFormMessage("Item da fatura guardado com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["fatura", idFatura] });
+    },
+    onError: (error) => {
+      setFormMessage(error instanceof Error ? error.message : "Falha ao guardar item da fatura.");
+    },
   });
 
   return (
@@ -35,6 +43,7 @@ export function FaturaDetailPage() {
           className="form"
           onSubmit={(event) => {
             event.preventDefault();
+            setFormMessage("");
             const form = new FormData(event.currentTarget);
             const payload = {
               items: [
@@ -101,10 +110,10 @@ export function FaturaDetailPage() {
             }}>Preview impacto</button>
             <button className="btn primary" type="submit">Adicionar linha</button>
           </div>
+          {formMessage ? <div className="muted">{formMessage}</div> : null}
         </form>
         <pre className="mono muted" style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(preview.data ?? createItems.data ?? {}, null, 2)}</pre>
       </section>
     </div>
   );
 }
-

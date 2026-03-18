@@ -1,18 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 import { api } from "../lib/api";
 
 export function FaturasPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [formMessage, setFormMessage] = useState<string>("");
   const { data } = useQuery({ queryKey: ["faturas"], queryFn: api.listFaturas });
   const createMutation = useMutation({
     mutationFn: api.createFatura,
     onSuccess: (created) => {
+      setFormMessage("Fatura guardada com sucesso.");
       queryClient.invalidateQueries({ queryKey: ["faturas"] });
       navigate(`/faturas/${String(created.id_fatura)}`);
-    }
+    },
+    onError: (error) => {
+      setFormMessage(error instanceof Error ? error.message : "Falha ao guardar fatura.");
+    },
   });
 
   return (
@@ -23,6 +29,7 @@ export function FaturasPage() {
           className="form"
           onSubmit={(event) => {
             event.preventDefault();
+            setFormMessage("");
             const form = new FormData(event.currentTarget);
             createMutation.mutate({
               fornecedor: form.get("fornecedor"),
@@ -42,7 +49,10 @@ export function FaturasPage() {
           <label>Valor Sem IVA<input name="valor_sem_iva" type="number" step="0.01" /></label>
           <label>IVA %<input name="iva" type="number" step="0.01" defaultValue="23" /></label>
           <label>Valor Com IVA<input name="valor_com_iva" type="number" step="0.01" /></label>
-          <button className="btn primary" type="submit">Guardar</button>
+          {formMessage ? <div className="muted">{formMessage}</div> : null}
+          <button className="btn primary" type="submit" disabled={createMutation.isPending}>
+            {createMutation.isPending ? "A guardar..." : "Guardar"}
+          </button>
         </form>
       </section>
 
@@ -61,4 +71,3 @@ export function FaturasPage() {
     </div>
   );
 }
-
