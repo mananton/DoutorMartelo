@@ -56,7 +56,10 @@ Expected output format:
     - `Estado_Cadastro`
   - `MATERIAIS_ALIAS` was removed from the workbook.
 - `FATURAS_ITENS` is now the source sheet for purchase lines.
-- `MATERIAIS_MOV` is expected to be auto-maintained from `FATURAS_ITENS` for purchase-driven rows.
+- `AFETACOES_OBRA` is now the operational bridge for obra/fase attribution.
+- `MATERIAIS_MOV` is expected to be auto-maintained:
+  - from `FATURAS_ITENS` for stock-entry rows
+  - from `AFETACOES_OBRA` for obra/fase consumption rows
 - `STOCK_ATUAL` should read its identity fields from `MATERIAIS_CAD` and its stock/cost behavior from `MATERIAIS_MOV`.
 
 ## Current Material Automation Hotspots
@@ -69,6 +72,7 @@ Expected output format:
   - `gerarMovimentosMateriais_`
   - `reconcileGeneratedMateriaisMovRows_`
 - Generated movement rows are linked by `[SRC_FIT:FIT-xxxxxx]` in `MATERIAIS_MOV.Observacoes`.
+- Consumption rows generated from `AFETACOES_OBRA` are linked by `[SRC_AFO:AFO-xxxxxx]`.
 - Recent changes were made specifically to:
   - stop wiping formulas in `FATURAS_ITENS`,
   - use net unit cost in movement generation,

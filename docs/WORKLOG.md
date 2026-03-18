@@ -200,3 +200,19 @@ Purpose: chronological, commit-based project history for fast handoff.
   - Materials workflow is closer to a usable day-to-day Google Sheets process.
   - `STOCK_ATUAL` can now depend on generated ledger rows instead of manual duplicate entry.
   - The current main risk is not architecture but spreadsheet behavior validation on real rows.
+
+## 2026-03-18
+
+### `uncommitted`
+- **Type**: docs / architecture plan
+- **Scope**: `docs/MATERIALS_BACKOFFICE_PLAN.md`, `docs/PROJECT_STATE.md`, `docs/OPEN_ITEMS.md`
+- **Summary**:
+  - Defined the recommended next migration step for materials and purchasing input.
+  - Recorded the operating split:
+    - keep `AppSheet` for labour and displacements
+    - introduce a dedicated app for `FATURAS`, `FATURAS_ITENS`, `MATERIAIS_CAD`, and `AFETACOES_OBRA`
+  - Recorded the preferred future architecture:
+    - app -> backend -> Google Sheets + Supabase
+    - instead of relying on Google Sheets + GAS triggers alone for the richer materials flow
+- **Impact**:
+  - The project now has a documented direction for reducing trigger-driven instability in the materials workflow without abandoning Google Sheets as an always-populated business record.

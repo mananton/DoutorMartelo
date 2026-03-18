@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-03-16
+Last updated: 2026-03-18
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
@@ -108,14 +108,32 @@ Last updated: 2026-03-16
   - Important implementation detail:
     - GAS was updated to avoid rewriting the full row because that wiped user formulas in total columns
 - `MATERIAIS_MOV` current intended use:
-  - auto-generated for purchase-driven `STOCK` / direct `CONSUMO` coming from `FATURAS_ITENS`
-  - manual only for later stock consumption, returns, adjustments, and transfers
-  - generated rows are linked back to `FATURAS_ITENS` via `[SRC_FIT:FIT-xxxxxx]` in `Observacoes`
-  - generated rows should now be created, updated, and removed automatically from invoice-line edits
+  - technical ledger only; it should no longer be treated as the main operational input sheet
+  - auto-generated for purchase-driven `STOCK` entries coming from `FATURAS_ITENS`
+  - auto-generated for `CONSUMO` entries coming from `AFETACOES_OBRA`
+  - generated rows are linked back to source sheets via `[SRC_FIT:FIT-xxxxxx]` and `[SRC_AFO:AFO-xxxxxx]` in `Observacoes`
+  - generated rows should now be created, updated, and removed automatically from source-sheet edits
+- `AFETACOES_OBRA` current intended use:
+  - operational sheet for cost attribution to `Obra` + `Fase`
+  - direct purchases registered in `FATURAS_ITENS` with direct consumption should auto-create generated rows here
+  - manual rows here should be used for later stock consumption into works/phases
+  - manual stock-consumption rows should snapshot `STOCK_ATUAL.Custo_Medio_Atual` into `Custo_Unit` at registration time
+- Current material rules by `Natureza`:
+  - `MATERIAL` can go to `STOCK` or direct `CONSUMO`
+  - `SERVICO`, `ALUGUER`, and `TRANSPORTE` should be direct-to-work only and must not affect `STOCK_ATUAL`
 - `STOCK_ATUAL` current expectation:
   - should depend on `MATERIAIS_MOV`, not `FATURAS_ITENS`, for stock quantities and average-cost logic
   - `Item_Oficial` and `Unidade` should be read from `MATERIAIS_CAD`
   - `Custo_Medio_Atual` should use net movement cost (discount-aware)
+- Future input-channel direction now defined:
+  - keep `AppSheet` for labour and displacement flows in the short term
+  - plan a dedicated materials/purchasing app for:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - `AFETACOES_OBRA`
+  - preferred architecture is app -> backend -> Google Sheets + Supabase, not app -> Sheets triggers only
+  - detailed plan is tracked in `docs/MATERIALS_BACKOFFICE_PLAN.md`
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).

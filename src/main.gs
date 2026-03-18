@@ -21,6 +21,7 @@ const SHEET_FERIAS      = "FERIAS";
 const SHEET_MATERIAIS_MOV = "MATERIAIS_MOV";
 const SHEET_MATERIAIS_CAD = "MATERIAIS_CAD";
 const SHEET_STOCK_ATUAL = "STOCK_ATUAL";
+const SHEET_AFETACOES_OBRA = "AFETACOES_OBRA";
 const SHEET_FATURAS = "FATURAS";
 const SHEET_FATURAS_ITENS = "FATURAS_ITENS";
 const SHEET_COMPROMISSOS_OBRA = "COMPROMISSOS_OBRA";
@@ -32,6 +33,7 @@ const TZ               = "Europe/Lisbon";
 const NREG_HOUR        = 23;
 const NREG_MINUTE      = 45;
 const ENABLE_EMPTY_ROW_CLEANUP = true; // limpeza automática reativada
+const ENABLE_AUTO_SUPABASE_SYNC = false;
 
 // ════════════════════════════════════════════════════════════
 //  SECÇÃO 1 — DASHBOARD WEB APP
@@ -92,6 +94,12 @@ function getAutoIdSpecs_() {
       prefix: "MOV",
       idHeaders: ["ID_Mov", "ID Mov", "ID_Movimento"],
       signalHeaders: ["Data", "Tipo", "ID_Item", "Item_Oficial", "Material", "Quantidade"]
+    },
+    {
+      sheetName: SHEET_AFETACOES_OBRA,
+      prefix: "AFO",
+      idHeaders: ["ID_Afetacao", "ID Afetacao"],
+      signalHeaders: ["Origem", "Data", "ID_Item", "Item_Oficial", "Obra", "Fase", "Quantidade"]
     }
   ];
 }
@@ -274,6 +282,54 @@ function buildAverageCostByItemFromMov_(sheet) {
   return out;
 }
 
+function buildCurrentAvgCostByItem_(ss) {
+  const out = {};
+  if (!ss) return out;
+
+  const stockLookup = buildLookupById_(
+    ss.getSheetByName(SHEET_STOCK_ATUAL),
+    ["ID_Item", "ID Item"],
+    {
+      custoMedio: ["Custo_Medio_Atual", "Custo Medio Atual"]
+    }
+  );
+  Object.keys(stockLookup).forEach(function(idItem) {
+    const custo = parseNumberLoose_(stockLookup[idItem].custoMedio);
+    if (custo) out[idItem] = custo;
+  });
+
+  const fallback = buildAverageCostByItemFromMov_(ss.getSheetByName(SHEET_MATERIAIS_MOV));
+  Object.keys(fallback).forEach(function(idItem) {
+    if (!out[idItem] && fallback[idItem]) out[idItem] = fallback[idItem];
+  });
+
+  return out;
+}
+
+function isMaterialFlowBusy_() {
+  const props = PropertiesService.getDocumentProperties();
+  const raw = props.getProperty("MATERIAL_FLOW_BUSY_UNTIL");
+  const until = raw ? parseInt(raw, 10) : 0;
+  if (!until) return false;
+  if (until < Date.now()) {
+    props.deleteProperty("MATERIAL_FLOW_BUSY_UNTIL");
+    return false;
+  }
+  return true;
+}
+
+function withMaterialFlowGuard_(callback) {
+  if (typeof callback !== "function") return null;
+  const props = PropertiesService.getDocumentProperties();
+  if (isMaterialFlowBusy_()) return null;
+  props.setProperty("MATERIAL_FLOW_BUSY_UNTIL", String(Date.now() + 120000));
+  try {
+    return callback();
+  } finally {
+    props.deleteProperty("MATERIAL_FLOW_BUSY_UNTIL");
+  }
+}
+
 function normalizeNature_(value) {
   const key = normalizeHeader_(value).replace(/\s+/g, "_").toUpperCase();
   if (key === "MATERIAL") return "MATERIAL";
@@ -400,6 +456,47 @@ function getMateriaisCadColumns_(headers) {
     observacoes: findHeaderIndexByAliases_(headers, ["Observacoes", "Observação", "Observacao"]),
     estado: findHeaderIndexByAliases_(headers, ["Estado_Cadastro", "Estado Cadastro"])
   };
+}
+
+function getAfetacoesObraColumns_(headers) {
+  return {
+    idAfetacao: findHeaderIndexByAliases_(headers, ["ID_Afetacao", "ID Afetacao"]),
+    origem: findHeaderIndexByAliases_(headers, ["Origem"]),
+    sourceId: findHeaderIndexByAliases_(headers, ["Source_ID", "Source ID", "ID_Source", "ID Source"]),
+    data: findHeaderIndexByAliases_(headers, ["Data"]),
+    idItem: findHeaderIndexByAliases_(headers, ["ID_Item", "ID Item"]),
+    itemOficial: findHeaderIndexByAliases_(headers, ["Item_Oficial", "Item Oficial"]),
+    natureza: findHeaderIndexByAliases_(headers, ["Natureza"]),
+    quantidade: findHeaderIndexByAliases_(headers, ["Quantidade"]),
+    unidade: findHeaderIndexByAliases_(headers, ["Unidade"]),
+    custoUnit: findHeaderIndexByAliases_(headers, ["Custo_Unit", "Custo Unit"]),
+    custoTotal: findHeaderIndexByAliases_(headers, ["Custo_Total", "Custo Total"]),
+    custoSemIva: findHeaderIndexByAliases_(headers, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+    iva: findHeaderIndexByAliases_(headers, ["IVA"]),
+    custoComIva: findHeaderIndexByAliases_(headers, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+    obra: findHeaderIndexByAliases_(headers, ["Obra"]),
+    fase: findHeaderIndexByAliases_(headers, ["Fase"]),
+    fornecedor: findHeaderIndexByAliases_(headers, ["Fornecedor"]),
+    nif: findHeaderIndexByAliases_(headers, ["NIF"]),
+    doc: findHeaderIndexByAliases_(headers, ["Nº Doc/Fatura", "N Doc/Fatura", "Doc Fatura", "Doc_Fatura"]),
+    processar: findHeaderIndexByAliases_(headers, ["Processar", "Confirmar", "Gerar_Movimento", "Gerar Movimento"]),
+    estado: findHeaderIndexByAliases_(headers, ["Estado"]),
+    observacoes: findHeaderIndexByAliases_(headers, ["Observacoes", "Observação", "Observacao", "Obs"])
+  };
+}
+
+function normalizeAfetacaoOrigem_(value) {
+  const key = normalizeHeader_(value).replace(/\s+/g, "_").toUpperCase();
+  if (key === "STOCK" || key === "ESTOQUE") return "STOCK";
+  if (key === "FATURA_DIRETA" || key === "FATURA" || key === "DIRETO" || key === "CONSUMO_DIRETO") return "FATURA_DIRETA";
+  return "";
+}
+
+function isAfetacaoProcessRequested_(row, cols) {
+  const origem = normalizeAfetacaoOrigem_(cols.origem >= 0 ? row[cols.origem] : "");
+  if (origem === "FATURA_DIRETA") return true;
+  if (cols.processar < 0) return false;
+  return toBool_(row[cols.processar]);
 }
 
 function buildMateriaisCadContext_(sheet) {
@@ -766,16 +863,529 @@ function hydrateMateriaisMovFromCatalog_(sheet, rowNum) {
   sheet.getRange(rowNum, 1, 1, lastCol).setValues([rowValues]);
 }
 
-function buildFatItemSourceMarker_(idItemFatura) {
-  return "[SRC_FIT:" + String(idItemFatura || "").trim() + "]";
+function hydrateAfetacoesObraRow_(sheet, rowNum) {
+  if (!sheet || rowNum < 2 || sheet.getName() !== SHEET_AFETACOES_OBRA) return;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return;
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const cols = getAfetacoesObraColumns_(headers);
+  const rowValues = sheet.getRange(rowNum, 1, 1, lastCol).getValues()[0];
+  if (!rowHasSignalData_(rowValues, [
+    cols.origem,
+    cols.idItem,
+    cols.quantidade,
+    cols.obra,
+    cols.fase
+  ])) {
+    return;
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const catalog = buildMateriaisCatalogById_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
+  const avgCostByItem = buildCurrentAvgCostByItem_(ss);
+
+  const origem = normalizeAfetacaoOrigem_(cols.origem >= 0 ? rowValues[cols.origem] : "");
+  const idItem = String(cols.idItem >= 0 ? rowValues[cols.idItem] : "").trim();
+  const quantidade = parseNumberLoose_(cols.quantidade >= 0 ? rowValues[cols.quantidade] : 0);
+  const custoUnitAtual = parseNumberLoose_(cols.custoUnit >= 0 ? rowValues[cols.custoUnit] : 0);
+  const ivaPercent = parseNumberLoose_(cols.iva >= 0 ? rowValues[cols.iva] : 0);
+  const obra = String(cols.obra >= 0 ? rowValues[cols.obra] : "").trim();
+  const fase = String(cols.fase >= 0 ? rowValues[cols.fase] : "").trim();
+  const processar = isAfetacaoProcessRequested_(rowValues, cols);
+  const catalogItem = catalog[idItem] || {};
+  const natureza = catalogItem.natureza || normalizeNature_(cols.natureza >= 0 ? rowValues[cols.natureza] : "");
+  const unidade = catalogItem.unidade || String(cols.unidade >= 0 ? rowValues[cols.unidade] : "").trim();
+  const itemOficial = catalogItem.itemOficial || String(cols.itemOficial >= 0 ? rowValues[cols.itemOficial] : "").trim();
+  let estado = "";
+
+  if (cols.origem >= 0 && origem && rowValues[cols.origem] !== origem) rowValues[cols.origem] = origem;
+  if (cols.itemOficial >= 0 && itemOficial) rowValues[cols.itemOficial] = itemOficial;
+  if (cols.natureza >= 0 && natureza) rowValues[cols.natureza] = natureza;
+  if (cols.unidade >= 0 && unidade) rowValues[cols.unidade] = unidade;
+
+  if (!idItem) {
+    estado = "ID_ITEM_EM_FALTA";
+  } else if (!catalogItem.itemOficial) {
+    estado = "CADASTRO_EM_FALTA";
+  } else if (!origem) {
+    estado = "ORIGEM_INVALIDA";
+  } else if (origem === "STOCK") {
+    if (natureza && natureza !== "MATERIAL") {
+      estado = "NATUREZA_STOCK_INVALIDA";
+    } else {
+      const custoUnit = custoUnitAtual > 0 ? custoUnitAtual : parseNumberLoose_(avgCostByItem[idItem]);
+      if (custoUnit > 0) {
+        const custoSemIva = quantidade > 0 ? custoUnit * quantidade : 0;
+        const custoComIva = custoSemIva * (1 + ((ivaPercent || 0) / 100));
+        if (cols.custoUnit >= 0) rowValues[cols.custoUnit] = custoUnit;
+        if (cols.custoSemIva >= 0) rowValues[cols.custoSemIva] = custoSemIva;
+        if (cols.custoComIva >= 0) rowValues[cols.custoComIva] = custoComIva;
+        if (cols.custoTotal >= 0) rowValues[cols.custoTotal] = custoComIva || custoSemIva;
+        if (!obra) {
+          estado = "OBRA_EM_FALTA";
+        } else if (!fase) {
+          estado = "FASE_EM_FALTA";
+        } else if (!processar) {
+          estado = "AGUARDA_PROCESSAR";
+        } else {
+          estado = "PRONTO_MOVIMENTO";
+        }
+      } else {
+        estado = "CUSTO_STOCK_EM_FALTA";
+      }
+    }
+  } else if (origem === "FATURA_DIRETA") {
+    const custoUnitDireto = computeAfetacaoUnitCost_(rowValues, cols);
+    const custoSemIva = quantidade > 0 ? (parseNumberLoose_(cols.custoSemIva >= 0 ? rowValues[cols.custoSemIva] : 0) || (custoUnitDireto * quantidade)) : 0;
+    const custoComIva = quantidade > 0 ? (parseNumberLoose_(cols.custoComIva >= 0 ? rowValues[cols.custoComIva] : 0) || (custoSemIva * (1 + ((ivaPercent || 0) / 100)))) : 0;
+    if (cols.custoTotal >= 0 && quantidade > 0 && custoUnitDireto >= 0) {
+      rowValues[cols.custoTotal] = custoComIva || custoSemIva || (custoUnitDireto * quantidade);
+    }
+    if (cols.custoSemIva >= 0) rowValues[cols.custoSemIva] = custoSemIva;
+    if (cols.custoComIva >= 0) rowValues[cols.custoComIva] = custoComIva;
+    if (!obra) {
+      estado = "OBRA_EM_FALTA";
+    } else if (!fase) {
+      estado = "FASE_EM_FALTA";
+    } else {
+      estado = "PRONTO_MOVIMENTO";
+    }
+  }
+
+  if (cols.estado >= 0) {
+    rowValues[cols.estado] = estado;
+  }
+
+  sheet.getRange(rowNum, 1, 1, lastCol).setValues([rowValues]);
+  if (cols.estado >= 0) {
+    sheet.getRange(rowNum, cols.estado + 1).setBackground(getStatusBackgroundColor_(estado));
+  }
 }
 
-function parseSourceMarkersFromRows_(rows, obsIdx) {
+function syncAfetacoesObraFromFaturasItens_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const itemsSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
+  const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
+  if (!itemsSheet || !afetSheet) return { generated: 0, updated: 0, removed: 0, invalid: 0 };
+
+  const itemsLastRow = itemsSheet.getLastRow();
+  const itemsLastCol = itemsSheet.getLastColumn();
+  if (itemsLastRow < 2 || itemsLastCol < 1) return { generated: 0, updated: 0, removed: 0, invalid: 0 };
+
+  const itemHeaders = itemsSheet.getRange(1, 1, 1, itemsLastCol).getValues()[0];
+  const itemCols = {
+    idItemFatura: findHeaderIndexByAliases_(itemHeaders, ["ID_Item_Fatura", "ID Item Fatura"]),
+    fornecedor: findHeaderIndexByAliases_(itemHeaders, ["Fornecedor"]),
+    nif: findHeaderIndexByAliases_(itemHeaders, ["NIF"]),
+    doc: findHeaderIndexByAliases_(itemHeaders, ["Nº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]),
+    data: findHeaderIndexByAliases_(itemHeaders, ["Data Fatura", "Data"]),
+    descricao: findHeaderIndexByAliases_(itemHeaders, ["Descricao_Original", "Descricao Original"]),
+    idItem: findHeaderIndexByAliases_(itemHeaders, ["ID_Item", "ID Item"]),
+    itemOficial: findHeaderIndexByAliases_(itemHeaders, ["Item_Oficial", "Item Oficial"]),
+    unidade: findHeaderIndexByAliases_(itemHeaders, ["Unidade"]),
+    quantidade: findHeaderIndexByAliases_(itemHeaders, ["Quantidade"]),
+    custoUnit: findHeaderIndexByAliases_(itemHeaders, ["Custo_Unit", "Custo Unit"]),
+    desconto1: findHeaderIndexByAliases_(itemHeaders, ["Desconto 1", "Desconto_1"]),
+    desconto2: findHeaderIndexByAliases_(itemHeaders, ["Desconto 2", "Desconto_2"]),
+    custoSemIva: findHeaderIndexByAliases_(itemHeaders, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+    iva: findHeaderIndexByAliases_(itemHeaders, ["IVA"]),
+    custoComIva: findHeaderIndexByAliases_(itemHeaders, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+    destino: findHeaderIndexByAliases_(itemHeaders, ["Destino"]),
+    obra: findHeaderIndexByAliases_(itemHeaders, ["Obra"]),
+    fase: findHeaderIndexByAliases_(itemHeaders, ["Fase"]),
+    estado: findHeaderIndexByAliases_(itemHeaders, ["Estado_Mapeamento", "Estado Mapeamento"])
+  };
+  const itemRows = itemsSheet.getRange(2, 1, itemsLastRow - 1, itemsLastCol).getValues();
+  const statusValues = itemCols.estado >= 0
+    ? itemRows.map(function(row) { return [row[itemCols.estado]]; })
+    : null;
+  const statusBgValues = itemCols.estado >= 0
+    ? itemsSheet.getRange(2, itemCols.estado + 1, itemRows.length, 1).getBackgrounds()
+    : null;
+
+  const afetLastRow = afetSheet.getLastRow();
+  const afetLastCol = afetSheet.getLastColumn();
+  if (afetLastCol < 1) return { generated: 0, updated: 0, removed: 0, invalid: 0 };
+
+  const afetHeaders = afetSheet.getRange(1, 1, 1, afetLastCol).getValues()[0];
+  const afetCols = getAfetacoesObraColumns_(afetHeaders);
+  const afetRows = afetLastRow >= 2
+    ? afetSheet.getRange(2, 1, afetLastRow - 1, afetLastCol).getValues()
+    : [];
+  const catalogById = buildMateriaisCatalogById_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
+
+  const existingBySource = {};
+  afetRows.forEach(function(row, index) {
+    const origem = normalizeAfetacaoOrigem_(afetCols.origem >= 0 ? row[afetCols.origem] : "");
+    const sourceId = String(afetCols.sourceId >= 0 ? row[afetCols.sourceId] : "").trim();
+    if (origem !== "FATURA_DIRETA" || !sourceId) return;
+    existingBySource[sourceId] = {
+      rowNumber: index + 2,
+      values: row.slice()
+    };
+  });
+
+  let nextAfetNum = nextSequentialIdForSheet_(afetSheet, ["ID_Afetacao", "ID Afetacao"], "AFO");
+  let generated = 0;
+  let updated = 0;
+  let removed = 0;
+  let invalid = 0;
+  const validSourceIds = {};
+  const newRows = [];
+  const updatedRows = [];
+
+  function setStatus_(rowIndex, status) {
+    if (!statusValues) return;
+    statusValues[rowIndex][0] = status;
+    statusBgValues[rowIndex][0] = getStatusBackgroundColor_(status);
+  }
+
+  function readCell_(row, idx) {
+    return idx >= 0 ? row[idx] : "";
+  }
+
+  for (let i = 0; i < itemRows.length; i++) {
+    const row = itemRows[i];
+    if (!rowHasSignalData_(row, [itemCols.idItemFatura, itemCols.descricao, itemCols.quantidade, itemCols.custoUnit])) {
+      continue;
+    }
+
+    const idItemFatura = String(readCell_(row, itemCols.idItemFatura) || "").trim();
+    const descricao = String(readCell_(row, itemCols.descricao) || "").trim();
+    const idItem = String(readCell_(row, itemCols.idItem) || "").trim();
+    const itemOficial = String(readCell_(row, itemCols.itemOficial) || "").trim();
+    const destino = normalizeDestinoValue_(readCell_(row, itemCols.destino));
+    const quantidade = parseNumberLoose_(readCell_(row, itemCols.quantidade));
+    const obra = String(readCell_(row, itemCols.obra) || "").trim();
+    const fase = String(readCell_(row, itemCols.fase) || "").trim();
+
+    if (destino !== "CONSUMO") continue;
+    if (!idItemFatura) {
+      setStatus_(i, "ID_ITEM_FATURA_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (!descricao) {
+      setStatus_(i, "DESCRICAO_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (!idItem || !itemOficial) {
+      setStatus_(i, "CADASTRO_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (quantidade <= 0) {
+      setStatus_(i, "QUANTIDADE_INVALIDA");
+      invalid += 1;
+      continue;
+    }
+    if (!obra) {
+      setStatus_(i, "OBRA_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (!fase) {
+      setStatus_(i, "FASE_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+
+    validSourceIds[idItemFatura] = true;
+    const quantidadeNum = parseNumberLoose_(readCell_(row, itemCols.quantidade));
+    const custoUnitLiquido = computeNetUnitCostFromFatItem_(row, itemCols);
+    const custoSemIva = parseNumberLoose_(readCell_(row, itemCols.custoSemIva));
+    const custoComIva = parseNumberLoose_(readCell_(row, itemCols.custoComIva));
+    const totalBase = custoComIva || custoSemIva || (quantidadeNum * custoUnitLiquido);
+    const existing = existingBySource[idItemFatura];
+    const afetRow = existing ? existing.values.slice() : new Array(afetLastCol).fill("");
+
+    if (afetCols.idAfetacao >= 0 && !existing) afetRow[afetCols.idAfetacao] = formatAutoId_("AFO", nextAfetNum++);
+    if (afetCols.origem >= 0) afetRow[afetCols.origem] = "FATURA_DIRETA";
+    if (afetCols.sourceId >= 0) afetRow[afetCols.sourceId] = idItemFatura;
+    if (afetCols.data >= 0) afetRow[afetCols.data] = readCell_(row, itemCols.data);
+    if (afetCols.idItem >= 0) afetRow[afetCols.idItem] = idItem;
+    if (afetCols.itemOficial >= 0) afetRow[afetCols.itemOficial] = itemOficial;
+    if (afetCols.natureza >= 0) {
+      afetRow[afetCols.natureza] = (catalogById[idItem] || {}).natureza || "";
+    }
+    if (afetCols.quantidade >= 0) afetRow[afetCols.quantidade] = quantidadeNum;
+    if (afetCols.unidade >= 0) afetRow[afetCols.unidade] = readCell_(row, itemCols.unidade);
+    if (afetCols.custoUnit >= 0) afetRow[afetCols.custoUnit] = custoUnitLiquido;
+    if (afetCols.custoTotal >= 0) afetRow[afetCols.custoTotal] = totalBase;
+    if (afetCols.custoSemIva >= 0) afetRow[afetCols.custoSemIva] = custoSemIva || (quantidadeNum * custoUnitLiquido);
+    if (afetCols.iva >= 0) afetRow[afetCols.iva] = readCell_(row, itemCols.iva);
+    if (afetCols.custoComIva >= 0) afetRow[afetCols.custoComIva] = custoComIva || totalBase;
+    if (afetCols.obra >= 0) afetRow[afetCols.obra] = obra;
+    if (afetCols.fase >= 0) afetRow[afetCols.fase] = fase;
+    if (afetCols.fornecedor >= 0) afetRow[afetCols.fornecedor] = readCell_(row, itemCols.fornecedor);
+    if (afetCols.nif >= 0) afetRow[afetCols.nif] = readCell_(row, itemCols.nif);
+    if (afetCols.doc >= 0) afetRow[afetCols.doc] = readCell_(row, itemCols.doc);
+    if (afetCols.observacoes >= 0) {
+      afetRow[afetCols.observacoes] = "Gerado automaticamente a partir de FATURAS_ITENS";
+    }
+    if (afetCols.estado >= 0) afetRow[afetCols.estado] = existing ? "AFETACAO_ATUALIZADA" : "AFETACAO_GERADA";
+
+    if (existing) {
+      updatedRows.push({ rowNumber: existing.rowNumber, values: afetRow });
+      updated += 1;
+      setStatus_(i, "AFETACAO_ATUALIZADA");
+    } else {
+      newRows.push(afetRow);
+      generated += 1;
+      setStatus_(i, "AFETACAO_GERADA");
+    }
+  }
+
+  if (updatedRows.length) {
+    updatedRows.forEach(function(entry) {
+      afetSheet.getRange(entry.rowNumber, 1, 1, afetLastCol).setValues([entry.values]);
+      if (afetCols.estado >= 0) {
+        afetSheet.getRange(entry.rowNumber, afetCols.estado + 1).setBackground(getStatusBackgroundColor_(entry.values[afetCols.estado]));
+      }
+    });
+  }
+  if (newRows.length) {
+    const startRow = afetSheet.getLastRow() + 1;
+    afetSheet.getRange(startRow, 1, newRows.length, afetLastCol).setValues(newRows);
+    if (afetCols.estado >= 0) {
+      const bgs = newRows.map(function(row) {
+        return [getStatusBackgroundColor_(row[afetCols.estado])];
+      });
+      afetSheet.getRange(startRow, afetCols.estado + 1, newRows.length, 1).setBackgrounds(bgs);
+    }
+  }
+
+  for (let i = afetRows.length - 1; i >= 0; i--) {
+    const row = afetRows[i];
+    const origem = normalizeAfetacaoOrigem_(afetCols.origem >= 0 ? row[afetCols.origem] : "");
+    const sourceId = String(afetCols.sourceId >= 0 ? row[afetCols.sourceId] : "").trim();
+    if (origem !== "FATURA_DIRETA" || !sourceId) continue;
+    if (!validSourceIds[sourceId]) {
+      afetSheet.deleteRow(i + 2);
+      removed += 1;
+    }
+  }
+
+  if (statusValues) {
+    itemsSheet.getRange(2, itemCols.estado + 1, statusValues.length, 1).setValues(statusValues);
+    itemsSheet.getRange(2, itemCols.estado + 1, statusBgValues.length, 1).setBackgrounds(statusBgValues);
+  }
+
+  return { generated: generated, updated: updated, removed: removed, invalid: invalid };
+}
+
+function gerarMovimentosAfetacoesObra_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
+  const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
+  if (!afetSheet || !movSheet) return { generated: 0, updated: 0, invalid: 0, totalRows: 0 };
+
+  const afetLastRow = afetSheet.getLastRow();
+  const afetLastCol = afetSheet.getLastColumn();
+  if (afetLastRow < 2 || afetLastCol < 1) return { generated: 0, updated: 0, invalid: 0, totalRows: 0 };
+
+  const afetHeaders = afetSheet.getRange(1, 1, 1, afetLastCol).getValues()[0];
+  const afetCols = getAfetacoesObraColumns_(afetHeaders);
+  const afetRows = afetSheet.getRange(2, 1, afetLastRow - 1, afetLastCol).getValues();
+
+  const movLastRow = movSheet.getLastRow();
+  const movLastCol = movSheet.getLastColumn();
+  const movHeaders = movLastCol > 0 ? movSheet.getRange(1, 1, 1, movLastCol).getValues()[0] : [];
+  const movCols = {
+    idMov: findHeaderIndexByAliases_(movHeaders, ["ID_Mov", "ID Mov", "ID_Movimento"]),
+    data: findHeaderIndexByAliases_(movHeaders, ["Data"]),
+    tipo: findHeaderIndexByAliases_(movHeaders, ["Tipo"]),
+    idItem: findHeaderIndexByAliases_(movHeaders, ["ID_Item", "ID Item"]),
+    itemOficial: findHeaderIndexByAliases_(movHeaders, ["Item_Oficial", "Item Oficial"]),
+    material: findHeaderIndexByAliases_(movHeaders, ["Material"]),
+    unidade: findHeaderIndexByAliases_(movHeaders, ["Unidade"]),
+    quantidade: findHeaderIndexByAliases_(movHeaders, ["Quantidade"]),
+    custoUnit: findHeaderIndexByAliases_(movHeaders, ["Custo_Unit", "Custo Unit"]),
+    custoSemIva: findHeaderIndexByAliases_(movHeaders, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+    iva: findHeaderIndexByAliases_(movHeaders, ["IVA"]),
+    custoComIva: findHeaderIndexByAliases_(movHeaders, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+    obra: findHeaderIndexByAliases_(movHeaders, ["Obra"]),
+    fase: findHeaderIndexByAliases_(movHeaders, ["Fase"]),
+    fornecedor: findHeaderIndexByAliases_(movHeaders, ["Fornecedor"]),
+    nif: findHeaderIndexByAliases_(movHeaders, ["NIF"]),
+    doc: findHeaderIndexByAliases_(movHeaders, ["Nº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]),
+    observacoes: findHeaderIndexByAliases_(movHeaders, ["Observacoes", "Observação", "Observacao", "Obs"])
+  };
+
+  const existingRows = movLastRow >= 2
+    ? movSheet.getRange(2, 1, movLastRow - 1, movLastCol).getValues()
+    : [];
+  const existingMarkers = parseSourceMarkersFromRows_(existingRows, movCols.observacoes, "AFO");
+  const statusValues = afetCols.estado >= 0
+    ? afetRows.map(function(row) { return [row[afetCols.estado]]; })
+    : null;
+  const statusBgValues = afetCols.estado >= 0
+    ? afetSheet.getRange(2, afetCols.estado + 1, afetRows.length, 1).getBackgrounds()
+    : null;
+
+  let nextMovNum = nextSequentialIdForSheet_(movSheet, ["ID_Mov", "ID Mov", "ID_Movimento"], "MOV");
+  const newRows = [];
+  const updatedRows = [];
+  let generated = 0;
+  let updated = 0;
+  let invalid = 0;
+
+  function setStatus_(rowIndex, status) {
+    if (!statusValues) return;
+    statusValues[rowIndex][0] = status;
+    statusBgValues[rowIndex][0] = getStatusBackgroundColor_(status);
+  }
+
+  for (let i = 0; i < afetRows.length; i++) {
+    const row = afetRows[i];
+    if (!rowHasSignalData_(row, [afetCols.idAfetacao, afetCols.idItem, afetCols.quantidade, afetCols.obra, afetCols.fase])) {
+      continue;
+    }
+
+    const origem = normalizeAfetacaoOrigem_(afetCols.origem >= 0 ? row[afetCols.origem] : "");
+    const idAfetacao = String(afetCols.idAfetacao >= 0 ? row[afetCols.idAfetacao] : "").trim();
+    const idItem = String(afetCols.idItem >= 0 ? row[afetCols.idItem] : "").trim();
+    const itemOficial = String(afetCols.itemOficial >= 0 ? row[afetCols.itemOficial] : "").trim();
+    const natureza = normalizeNature_(afetCols.natureza >= 0 ? row[afetCols.natureza] : "");
+    const quantidade = parseNumberLoose_(afetCols.quantidade >= 0 ? row[afetCols.quantidade] : 0);
+    const obra = String(afetCols.obra >= 0 ? row[afetCols.obra] : "").trim();
+    const fase = String(afetCols.fase >= 0 ? row[afetCols.fase] : "").trim();
+    const custoUnit = computeAfetacaoUnitCost_(row, afetCols);
+    const custoSemIva = parseNumberLoose_(afetCols.custoSemIva >= 0 ? row[afetCols.custoSemIva] : 0) || (quantidade * custoUnit);
+    const custoComIva = parseNumberLoose_(afetCols.custoComIva >= 0 ? row[afetCols.custoComIva] : 0) || custoSemIva;
+    const data = afetCols.data >= 0 ? row[afetCols.data] : "";
+
+    if (!idAfetacao) {
+      setStatus_(i, "ID_AFETACAO_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (!origem) {
+      setStatus_(i, "ORIGEM_INVALIDA");
+      invalid += 1;
+      continue;
+    }
+    if (!data) {
+      setStatus_(i, "DATA_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (!idItem || !itemOficial) {
+      setStatus_(i, "CADASTRO_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (quantidade <= 0) {
+      setStatus_(i, "QUANTIDADE_INVALIDA");
+      invalid += 1;
+      continue;
+    }
+    if (!obra) {
+      setStatus_(i, "OBRA_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (!fase) {
+      setStatus_(i, "FASE_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+    if (origem === "STOCK" && natureza && natureza !== "MATERIAL") {
+      setStatus_(i, "NATUREZA_STOCK_INVALIDA");
+      invalid += 1;
+      continue;
+    }
+    if (origem === "STOCK" && custoUnit <= 0) {
+      setStatus_(i, "CUSTO_STOCK_EM_FALTA");
+      invalid += 1;
+      continue;
+    }
+
+    const existing = existingMarkers[idAfetacao];
+    const movRow = existing ? existing.row.slice() : new Array(movLastCol).fill("");
+    if (movCols.idMov >= 0 && !existing) movRow[movCols.idMov] = formatAutoId_("MOV", nextMovNum++);
+    if (movCols.data >= 0) movRow[movCols.data] = data;
+    if (movCols.tipo >= 0) movRow[movCols.tipo] = "CONSUMO";
+    if (movCols.idItem >= 0) movRow[movCols.idItem] = idItem;
+    if (movCols.itemOficial >= 0) movRow[movCols.itemOficial] = itemOficial;
+    if (movCols.material >= 0) movRow[movCols.material] = itemOficial;
+    if (movCols.unidade >= 0) movRow[movCols.unidade] = afetCols.unidade >= 0 ? row[afetCols.unidade] : "";
+    if (movCols.quantidade >= 0) movRow[movCols.quantidade] = quantidade;
+    if (movCols.custoUnit >= 0) movRow[movCols.custoUnit] = custoUnit;
+    if (movCols.custoSemIva >= 0) movRow[movCols.custoSemIva] = custoSemIva;
+    if (movCols.iva >= 0) movRow[movCols.iva] = afetCols.iva >= 0 ? row[afetCols.iva] : 0;
+    if (movCols.custoComIva >= 0) movRow[movCols.custoComIva] = custoComIva;
+    if (movCols.obra >= 0) movRow[movCols.obra] = obra;
+    if (movCols.fase >= 0) movRow[movCols.fase] = fase;
+    if (movCols.fornecedor >= 0) movRow[movCols.fornecedor] = afetCols.fornecedor >= 0 ? row[afetCols.fornecedor] : "";
+    if (movCols.nif >= 0) movRow[movCols.nif] = afetCols.nif >= 0 ? row[afetCols.nif] : "";
+    if (movCols.doc >= 0) movRow[movCols.doc] = afetCols.doc >= 0 ? row[afetCols.doc] : "";
+    if (movCols.observacoes >= 0) {
+      let obs = appendSourceMarkerToObs_(afetCols.observacoes >= 0 ? row[afetCols.observacoes] : "", idAfetacao, "AFO");
+      const sourceId = String(afetCols.sourceId >= 0 ? row[afetCols.sourceId] : "").trim();
+      if (sourceId) {
+        obs = appendSourceMarkerToObs_(obs, sourceId, "FIT");
+      }
+      movRow[movCols.observacoes] = obs;
+    }
+
+    if (existing) {
+      updatedRows.push({ rowNumber: existing.rowNumber, values: movRow });
+      setStatus_(i, "MOVIMENTO_ATUALIZADO");
+      updated += 1;
+    } else {
+      newRows.push(movRow);
+      setStatus_(i, "MOVIMENTO_GERADO");
+      generated += 1;
+    }
+  }
+
+  if (updatedRows.length) {
+    updatedRows.forEach(function(entry) {
+      movSheet.getRange(entry.rowNumber, 1, 1, movLastCol).setValues([entry.values]);
+    });
+  }
+  if (newRows.length) {
+    const startRow = movSheet.getLastRow() + 1;
+    movSheet.getRange(startRow, 1, newRows.length, movLastCol).setValues(newRows);
+    if (movCols.tipo >= 0) {
+      movSheet.getRange(startRow, movCols.tipo + 1, newRows.length, 1).clearDataValidations();
+    }
+  }
+  if (statusValues) {
+    afetSheet.getRange(2, afetCols.estado + 1, statusValues.length, 1).setValues(statusValues);
+    afetSheet.getRange(2, afetCols.estado + 1, statusBgValues.length, 1).setBackgrounds(statusBgValues);
+  }
+
+  return {
+    generated: generated,
+    updated: updated,
+    invalid: invalid,
+    totalRows: afetRows.length
+  };
+}
+
+function buildSourceMarker_(label, sourceId) {
+  return "[SRC_" + String(label || "").trim().toUpperCase() + ":" + String(sourceId || "").trim() + "]";
+}
+
+function buildFatItemSourceMarker_(idItemFatura) {
+  return buildSourceMarker_("FIT", idItemFatura);
+}
+
+function buildAfetacaoSourceMarker_(idAfetacao) {
+  return buildSourceMarker_("AFO", idAfetacao);
+}
+
+function parseSourceMarkersFromRows_(rows, obsIdx, label) {
   const out = {};
   if (obsIdx < 0) return out;
+  const regex = new RegExp("\\[SRC_" + String(label || "").trim().toUpperCase() + ":([^\\]]+)\\]", "i");
   for (let i = 0; i < rows.length; i++) {
     const obs = String(rows[i][obsIdx] || "");
-    const match = obs.match(/\[SRC_FIT:([^\]]+)\]/i);
+    const match = obs.match(regex);
     if (match && match[1]) {
       out[String(match[1]).trim()] = {
         rowIndex: i,
@@ -794,9 +1404,9 @@ function normalizeDestinoValue_(value) {
   return normalized;
 }
 
-function appendSourceMarkerToObs_(obs, idItemFatura) {
+function appendSourceMarkerToObs_(obs, sourceId, label) {
   const base = String(obs || "").trim();
-  const marker = buildFatItemSourceMarker_(idItemFatura);
+  const marker = buildSourceMarker_(label, sourceId);
   if (base.indexOf(marker) >= 0) return base;
   return base ? (base + " " + marker) : marker;
 }
@@ -835,7 +1445,154 @@ function nextSequentialIdForSheet_(sheet, idHeaders, prefix) {
   return maxNum + 1;
 }
 
-function isFatItemRowActiveForMovement_(row, itemCols) {
+function getFatItemColumns_(headers) {
+  return {
+    idItemFatura: findHeaderIndexByAliases_(headers, ["ID_Item_Fatura", "ID Item Fatura"]),
+    idFatura: findHeaderIndexByAliases_(headers, ["ID_Fatura", "ID Fatura"]),
+    fornecedor: findHeaderIndexByAliases_(headers, ["Fornecedor"]),
+    nif: findHeaderIndexByAliases_(headers, ["NIF"]),
+    doc: findHeaderIndexByAliases_(headers, ["Nº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]),
+    data: findHeaderIndexByAliases_(headers, ["Data Fatura", "Data"]),
+    descricao: findHeaderIndexByAliases_(headers, ["Descricao_Original", "Descrição_Original", "Descricao Original"]),
+    idItem: findHeaderIndexByAliases_(headers, ["ID_Item", "ID Item"]),
+    itemOficial: findHeaderIndexByAliases_(headers, ["Item_Oficial", "Item Oficial"]),
+    unidade: findHeaderIndexByAliases_(headers, ["Unidade"]),
+    quantidade: findHeaderIndexByAliases_(headers, ["Quantidade"]),
+    custoUnit: findHeaderIndexByAliases_(headers, ["Custo_Unit", "Custo Unit"]),
+    desconto1: findHeaderIndexByAliases_(headers, ["Desconto 1", "Desconto_1"]),
+    desconto2: findHeaderIndexByAliases_(headers, ["Desconto 2", "Desconto_2"]),
+    custoSemIva: findHeaderIndexByAliases_(headers, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+    iva: findHeaderIndexByAliases_(headers, ["IVA"]),
+    custoComIva: findHeaderIndexByAliases_(headers, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+    destino: findHeaderIndexByAliases_(headers, ["Destino"]),
+    obra: findHeaderIndexByAliases_(headers, ["Obra"]),
+    fase: findHeaderIndexByAliases_(headers, ["Fase"]),
+    observacoes: findHeaderIndexByAliases_(headers, ["Observacoes", "Observação", "Observacao"]),
+    estado: findHeaderIndexByAliases_(headers, ["Estado_Mapeamento", "Estado Mapeamento"]),
+    sugestao: findHeaderIndexByAliases_(headers, ["Sugestao_Alias", "Sugestão_Alias", "Sugestao Alias"])
+  };
+}
+
+function getMovColumns_(headers) {
+  return {
+    idMov: findHeaderIndexByAliases_(headers, ["ID_Mov", "ID Mov", "ID_Movimento"]),
+    data: findHeaderIndexByAliases_(headers, ["Data"]),
+    tipo: findHeaderIndexByAliases_(headers, ["Tipo"]),
+    idItem: findHeaderIndexByAliases_(headers, ["ID_Item", "ID Item"]),
+    itemOficial: findHeaderIndexByAliases_(headers, ["Item_Oficial", "Item Oficial"]),
+    material: findHeaderIndexByAliases_(headers, ["Material"]),
+    unidade: findHeaderIndexByAliases_(headers, ["Unidade"]),
+    quantidade: findHeaderIndexByAliases_(headers, ["Quantidade"]),
+    custoUnit: findHeaderIndexByAliases_(headers, ["Custo_Unit", "Custo Unit"]),
+    desconto1: findHeaderIndexByAliases_(headers, ["Desconto 1", "Desconto_1"]),
+    desconto2: findHeaderIndexByAliases_(headers, ["Desconto 2", "Desconto_2"]),
+    custoSemIva: findHeaderIndexByAliases_(headers, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+    iva: findHeaderIndexByAliases_(headers, ["IVA"]),
+    custoComIva: findHeaderIndexByAliases_(headers, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+    obra: findHeaderIndexByAliases_(headers, ["Obra"]),
+    fase: findHeaderIndexByAliases_(headers, ["Fase"]),
+    fornecedor: findHeaderIndexByAliases_(headers, ["Fornecedor"]),
+    nif: findHeaderIndexByAliases_(headers, ["NIF"]),
+    doc: findHeaderIndexByAliases_(headers, ["Nº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]),
+    observacoes: findHeaderIndexByAliases_(headers, ["Observacoes", "Observação", "Observacao", "Obs"])
+  };
+}
+
+function getSingleRowValues_(sheet, rowNum) {
+  if (!sheet || rowNum < 1) return [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+  return sheet.getRange(rowNum, 1, 1, lastCol).getValues()[0];
+}
+
+function findAfetacaoRowBySourceId_(sheet, sourceId) {
+  if (!sheet || !sourceId) return null;
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return null;
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const cols = getAfetacoesObraColumns_(headers);
+  if (cols.origem < 0 || cols.sourceId < 0) return null;
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    const origem = normalizeAfetacaoOrigem_(rows[i][cols.origem]);
+    const currentSourceId = String(rows[i][cols.sourceId] || "").trim();
+    if (origem === "FATURA_DIRETA" && currentSourceId === String(sourceId).trim()) {
+      return {
+        rowNumber: i + 2,
+        values: rows[i].slice(),
+        headers: headers,
+        cols: cols,
+        lastCol: lastCol
+      };
+    }
+  }
+  return null;
+}
+
+function findMovRowBySourceMarker_(sheet, label, sourceId) {
+  if (!sheet || !label || !sourceId) return null;
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return null;
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const cols = getMovColumns_(headers);
+  if (cols.observacoes < 0) return null;
+
+  const obsValues = sheet.getRange(2, cols.observacoes + 1, lastRow - 1, 1).getValues();
+  const regex = new RegExp("\\[SRC_" + String(label).trim().toUpperCase() + ":" + String(sourceId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\]", "i");
+  for (let i = 0; i < obsValues.length; i++) {
+    const obs = String(obsValues[i][0] || "");
+    if (!regex.test(obs)) continue;
+    return {
+      rowNumber: i + 2,
+      values: getSingleRowValues_(sheet, i + 2),
+      headers: headers,
+      cols: cols,
+      lastCol: lastCol,
+      observacoes: obs
+    };
+  }
+  return null;
+}
+
+function deleteGeneratedMovBySourceMarker_(sheet, label, sourceId) {
+  const hit = findMovRowBySourceMarker_(sheet, label, sourceId);
+  if (!hit) return 0;
+  sheet.deleteRow(hit.rowNumber);
+  return 1;
+}
+
+function upsertMovRow_(sheet, movCols, movLastCol, existingHit, values) {
+  if (existingHit) {
+    sheet.getRange(existingHit.rowNumber, 1, 1, movLastCol).setValues([values]);
+    return { rowNumber: existingHit.rowNumber, created: false };
+  }
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, 1, movLastCol).setValues([values]);
+  if (movCols.tipo >= 0) {
+    sheet.getRange(startRow, movCols.tipo + 1, 1, 1).clearDataValidations();
+  }
+  return { rowNumber: startRow, created: true };
+}
+
+function isFatItemRowActiveForStockMovement_(row, itemCols) {
+  const idItemFatura = String(itemCols.idItemFatura >= 0 ? row[itemCols.idItemFatura] : "").trim();
+  const descricao = String(itemCols.descricao >= 0 ? row[itemCols.descricao] : "").trim();
+  const idItem = String(itemCols.idItem >= 0 ? row[itemCols.idItem] : "").trim();
+  const itemOficial = String(itemCols.itemOficial >= 0 ? row[itemCols.itemOficial] : "").trim();
+  const destino = normalizeDestinoValue_(itemCols.destino >= 0 ? row[itemCols.destino] : "");
+  const quantidade = parseNumberLoose_(itemCols.quantidade >= 0 ? row[itemCols.quantidade] : 0);
+
+  if (!idItemFatura || !descricao || !idItem || !itemOficial || quantidade <= 0) return false;
+  if (destino !== "STOCK") return false;
+  return true;
+}
+
+function isFatItemRowActiveForDirectAfetacao_(row, itemCols) {
   const idItemFatura = String(itemCols.idItemFatura >= 0 ? row[itemCols.idItemFatura] : "").trim();
   const descricao = String(itemCols.descricao >= 0 ? row[itemCols.descricao] : "").trim();
   const idItem = String(itemCols.idItem >= 0 ? row[itemCols.idItem] : "").trim();
@@ -846,38 +1603,321 @@ function isFatItemRowActiveForMovement_(row, itemCols) {
   const fase = String(itemCols.fase >= 0 ? row[itemCols.fase] : "").trim();
 
   if (!idItemFatura || !descricao || !idItem || !itemOficial || quantidade <= 0) return false;
-  if (destino !== "STOCK" && destino !== "CONSUMO") return false;
-  if (destino === "CONSUMO" && (!obra || !fase)) return false;
+  if (destino !== "CONSUMO") return false;
+  if (!obra || !fase) return false;
   return true;
+}
+
+function computeAfetacaoUnitCost_(row, cols) {
+  const quantidade = parseNumberLoose_(cols.quantidade >= 0 ? row[cols.quantidade] : 0);
+  const custoSemIva = parseNumberLoose_(cols.custoSemIva >= 0 ? row[cols.custoSemIva] : 0);
+  if (quantidade > 0 && custoSemIva > 0) {
+    return custoSemIva / quantidade;
+  }
+  return parseNumberLoose_(cols.custoUnit >= 0 ? row[cols.custoUnit] : 0);
+}
+
+function isAfetacaoObraRowActiveForMovement_(row, cols) {
+  const idAfetacao = String(cols.idAfetacao >= 0 ? row[cols.idAfetacao] : "").trim();
+  const origem = normalizeAfetacaoOrigem_(cols.origem >= 0 ? row[cols.origem] : "");
+  const data = cols.data >= 0 ? row[cols.data] : "";
+  const idItem = String(cols.idItem >= 0 ? row[cols.idItem] : "").trim();
+  const itemOficial = String(cols.itemOficial >= 0 ? row[cols.itemOficial] : "").trim();
+  const quantidade = parseNumberLoose_(cols.quantidade >= 0 ? row[cols.quantidade] : 0);
+  const obra = String(cols.obra >= 0 ? row[cols.obra] : "").trim();
+  const fase = String(cols.fase >= 0 ? row[cols.fase] : "").trim();
+  const natureza = normalizeNature_(cols.natureza >= 0 ? row[cols.natureza] : "");
+  const processar = isAfetacaoProcessRequested_(row, cols);
+
+  if (!idAfetacao || !origem || !data || !idItem || !itemOficial || quantidade <= 0 || !obra || !fase) return false;
+  if (origem === "STOCK" && natureza && natureza !== "MATERIAL") return false;
+  if (!processar) return false;
+  return true;
+}
+
+function needsFatItemFlowForEditedRows_(sheet, startRow, endRow, itemCols) {
+  if (!sheet || startRow > endRow) return false;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return false;
+  const rows = sheet.getRange(startRow, 1, endRow - startRow + 1, lastCol).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const idItemFatura = String(itemCols.idItemFatura >= 0 ? row[itemCols.idItemFatura] : "").trim();
+    const destino = normalizeDestinoValue_(itemCols.destino >= 0 ? row[itemCols.destino] : "");
+    if (isFatItemRowActiveForStockMovement_(row, itemCols)) return true;
+    if (isFatItemRowActiveForDirectAfetacao_(row, itemCols)) return true;
+    if (idItemFatura && (destino === "STOCK" || destino === "CONSUMO")) return true;
+  }
+  return false;
+}
+
+function needsAfetacaoFlowForEditedRows_(sheet, startRow, endRow, cols) {
+  if (!sheet || startRow > endRow) return false;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return false;
+  const rows = sheet.getRange(startRow, 1, endRow - startRow + 1, lastCol).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const idAfetacao = String(cols.idAfetacao >= 0 ? row[cols.idAfetacao] : "").trim();
+    const origem = normalizeAfetacaoOrigem_(cols.origem >= 0 ? row[cols.origem] : "");
+    const idItem = String(cols.idItem >= 0 ? row[cols.idItem] : "").trim();
+    const quantidade = parseNumberLoose_(cols.quantidade >= 0 ? row[cols.quantidade] : 0);
+    const obra = String(cols.obra >= 0 ? row[cols.obra] : "").trim();
+    const fase = String(cols.fase >= 0 ? row[cols.fase] : "").trim();
+    if (isAfetacaoObraRowActiveForMovement_(row, cols)) return true;
+    if (idAfetacao && origem && idItem && (quantidade > 0 || obra || fase)) return true;
+  }
+  return false;
+}
+
+function syncAfetacaoFromFatItemRow_(itemsSheet, rowNum) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
+  if (!itemsSheet || !afetSheet || rowNum < 2) return { action: "skipped" };
+
+  const itemHeaders = itemsSheet.getRange(1, 1, 1, itemsSheet.getLastColumn()).getValues()[0];
+  const itemCols = getFatItemColumns_(itemHeaders);
+  const itemRow = getSingleRowValues_(itemsSheet, rowNum);
+  const idItemFatura = String(itemCols.idItemFatura >= 0 ? itemRow[itemCols.idItemFatura] : "").trim();
+  const directActive = isFatItemRowActiveForDirectAfetacao_(itemRow, itemCols);
+  const existing = idItemFatura ? findAfetacaoRowBySourceId_(afetSheet, idItemFatura) : null;
+
+  if (!directActive) {
+    if (existing) {
+      const idAfetacao = existing.cols.idAfetacao >= 0 ? String(existing.values[existing.cols.idAfetacao] || "").trim() : "";
+      if (idAfetacao) deleteGeneratedMovBySourceMarker_(ss.getSheetByName(SHEET_MATERIAIS_MOV), "AFO", idAfetacao);
+      afetSheet.deleteRow(existing.rowNumber);
+      return { action: "deleted" };
+    }
+    return { action: "noop" };
+  }
+
+  const catalogById = buildMateriaisCatalogById_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
+  const idItem = String(itemCols.idItem >= 0 ? itemRow[itemCols.idItem] : "").trim();
+  const itemOficial = String(itemCols.itemOficial >= 0 ? itemRow[itemCols.itemOficial] : "").trim();
+  const quantidade = parseNumberLoose_(itemCols.quantidade >= 0 ? itemRow[itemCols.quantidade] : 0);
+  const custoUnitLiquido = computeNetUnitCostFromFatItem_(itemRow, itemCols);
+  const custoSemIva = parseNumberLoose_(itemCols.custoSemIva >= 0 ? itemRow[itemCols.custoSemIva] : 0);
+  const custoComIva = parseNumberLoose_(itemCols.custoComIva >= 0 ? itemRow[itemCols.custoComIva] : 0);
+  const afetHeaders = existing
+    ? existing.headers
+    : afetSheet.getRange(1, 1, 1, afetSheet.getLastColumn()).getValues()[0];
+  const afetLastCol = afetSheet.getLastColumn();
+  const afetCols = existing ? existing.cols : getAfetacoesObraColumns_(afetHeaders);
+  const afetRow = existing ? existing.values.slice() : new Array(afetLastCol).fill("");
+  const catalogItem = catalogById[idItem] || {};
+
+  if (afetCols.idAfetacao >= 0 && !existing) {
+    const nextNum = nextSequentialIdForSheet_(afetSheet, ["ID_Afetacao", "ID Afetacao"], "AFO");
+    afetRow[afetCols.idAfetacao] = formatAutoId_("AFO", nextNum);
+  }
+  if (afetCols.origem >= 0) afetRow[afetCols.origem] = "FATURA_DIRETA";
+  if (afetCols.sourceId >= 0) afetRow[afetCols.sourceId] = idItemFatura;
+  if (afetCols.data >= 0) afetRow[afetCols.data] = itemCols.data >= 0 ? itemRow[itemCols.data] : "";
+  if (afetCols.idItem >= 0) afetRow[afetCols.idItem] = idItem;
+  if (afetCols.itemOficial >= 0) afetRow[afetCols.itemOficial] = itemOficial;
+  if (afetCols.natureza >= 0) afetRow[afetCols.natureza] = catalogItem.natureza || "";
+  if (afetCols.quantidade >= 0) afetRow[afetCols.quantidade] = quantidade;
+  if (afetCols.unidade >= 0) afetRow[afetCols.unidade] = itemCols.unidade >= 0 ? itemRow[itemCols.unidade] : "";
+  if (afetCols.custoUnit >= 0) afetRow[afetCols.custoUnit] = custoUnitLiquido;
+  if (afetCols.custoTotal >= 0) afetRow[afetCols.custoTotal] = custoComIva || custoSemIva || (quantidade * custoUnitLiquido);
+  if (afetCols.custoSemIva >= 0) afetRow[afetCols.custoSemIva] = custoSemIva || (quantidade * custoUnitLiquido);
+  if (afetCols.iva >= 0) afetRow[afetCols.iva] = itemCols.iva >= 0 ? itemRow[itemCols.iva] : 0;
+  if (afetCols.custoComIva >= 0) afetRow[afetCols.custoComIva] = custoComIva || custoSemIva || (quantidade * custoUnitLiquido);
+  if (afetCols.obra >= 0) afetRow[afetCols.obra] = itemCols.obra >= 0 ? itemRow[itemCols.obra] : "";
+  if (afetCols.fase >= 0) afetRow[afetCols.fase] = itemCols.fase >= 0 ? itemRow[itemCols.fase] : "";
+  if (afetCols.fornecedor >= 0) afetRow[afetCols.fornecedor] = itemCols.fornecedor >= 0 ? itemRow[itemCols.fornecedor] : "";
+  if (afetCols.nif >= 0) afetRow[afetCols.nif] = itemCols.nif >= 0 ? itemRow[itemCols.nif] : "";
+  if (afetCols.doc >= 0) afetRow[afetCols.doc] = itemCols.doc >= 0 ? itemRow[itemCols.doc] : "";
+  if (afetCols.processar >= 0) afetRow[afetCols.processar] = true;
+  if (afetCols.observacoes >= 0) afetRow[afetCols.observacoes] = "Gerado automaticamente a partir de FATURAS_ITENS";
+  if (afetCols.estado >= 0) afetRow[afetCols.estado] = existing ? "AFETACAO_ATUALIZADA" : "AFETACAO_GERADA";
+
+  if (existing) {
+    afetSheet.getRange(existing.rowNumber, 1, 1, afetLastCol).setValues([afetRow]);
+    if (afetCols.estado >= 0) {
+      afetSheet.getRange(existing.rowNumber, afetCols.estado + 1).setBackground(getStatusBackgroundColor_(afetRow[afetCols.estado]));
+    }
+    return { action: "updated", rowNumber: existing.rowNumber, idAfetacao: String(afetRow[afetCols.idAfetacao] || "").trim() };
+  }
+
+  const newRowNum = afetSheet.getLastRow() + 1;
+  afetSheet.getRange(newRowNum, 1, 1, afetLastCol).setValues([afetRow]);
+  if (afetCols.estado >= 0) {
+    afetSheet.getRange(newRowNum, afetCols.estado + 1, 1, 1).setBackground(getStatusBackgroundColor_(afetRow[afetCols.estado]));
+  }
+  return { action: "created", rowNumber: newRowNum, idAfetacao: String(afetRow[afetCols.idAfetacao] || "").trim() };
+}
+
+function syncStockMovementFromFatItemRow_(itemsSheet, rowNum) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
+  if (!itemsSheet || !movSheet || rowNum < 2) return { action: "skipped" };
+
+  const itemHeaders = itemsSheet.getRange(1, 1, 1, itemsSheet.getLastColumn()).getValues()[0];
+  const itemCols = getFatItemColumns_(itemHeaders);
+  const itemRow = getSingleRowValues_(itemsSheet, rowNum);
+  const idItemFatura = String(itemCols.idItemFatura >= 0 ? itemRow[itemCols.idItemFatura] : "").trim();
+  const stockActive = isFatItemRowActiveForStockMovement_(itemRow, itemCols);
+  const existing = idItemFatura ? findMovRowBySourceMarker_(movSheet, "FIT", idItemFatura) : null;
+
+  if (!stockActive) {
+    if (existing && existing.observacoes.indexOf("[SRC_AFO:") < 0) {
+      movSheet.deleteRow(existing.rowNumber);
+      return { action: "deleted" };
+    }
+    return { action: "noop" };
+  }
+
+  const movHeaders = existing
+    ? existing.headers
+    : movSheet.getRange(1, 1, 1, movSheet.getLastColumn()).getValues()[0];
+  const movCols = existing ? existing.cols : getMovColumns_(movHeaders);
+  const movLastCol = movSheet.getLastColumn();
+  const movRow = existing ? existing.values.slice() : new Array(movLastCol).fill("");
+  const materiaisCatalogById = buildMateriaisCatalogById_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
+  const idItem = String(itemCols.idItem >= 0 ? itemRow[itemCols.idItem] : "").trim();
+  const catalogItem = materiaisCatalogById[idItem] || {};
+  const itemOficial = String(catalogItem.itemOficial || (itemCols.itemOficial >= 0 ? itemRow[itemCols.itemOficial] : "") || "").trim();
+  const unidade = String(catalogItem.unidade || (itemCols.unidade >= 0 ? itemRow[itemCols.unidade] : "") || "").trim();
+  const quantidade = parseNumberLoose_(itemCols.quantidade >= 0 ? itemRow[itemCols.quantidade] : 0);
+
+  if (movCols.idMov >= 0 && !existing) {
+    const nextNum = nextSequentialIdForSheet_(movSheet, ["ID_Mov", "ID Mov", "ID_Movimento"], "MOV");
+    movRow[movCols.idMov] = formatAutoId_("MOV", nextNum);
+  }
+  if (movCols.data >= 0) movRow[movCols.data] = itemCols.data >= 0 ? itemRow[itemCols.data] : "";
+  if (movCols.tipo >= 0) movRow[movCols.tipo] = "ENTRADA";
+  if (movCols.idItem >= 0) movRow[movCols.idItem] = idItem;
+  if (movCols.itemOficial >= 0) movRow[movCols.itemOficial] = itemOficial;
+  if (movCols.material >= 0) movRow[movCols.material] = itemOficial || (itemCols.descricao >= 0 ? itemRow[itemCols.descricao] : "");
+  if (movCols.unidade >= 0) movRow[movCols.unidade] = unidade;
+  if (movCols.quantidade >= 0) movRow[movCols.quantidade] = quantidade;
+  if (movCols.custoUnit >= 0) movRow[movCols.custoUnit] = computeNetUnitCostFromFatItem_(itemRow, itemCols);
+  if (movCols.desconto1 >= 0) movRow[movCols.desconto1] = itemCols.desconto1 >= 0 ? itemRow[itemCols.desconto1] : "";
+  if (movCols.desconto2 >= 0) movRow[movCols.desconto2] = itemCols.desconto2 >= 0 ? itemRow[itemCols.desconto2] : "";
+  if (movCols.custoSemIva >= 0) movRow[movCols.custoSemIva] = itemCols.custoSemIva >= 0 ? itemRow[itemCols.custoSemIva] : "";
+  if (movCols.iva >= 0) movRow[movCols.iva] = itemCols.iva >= 0 ? itemRow[itemCols.iva] : "";
+  if (movCols.custoComIva >= 0) movRow[movCols.custoComIva] = itemCols.custoComIva >= 0 ? itemRow[itemCols.custoComIva] : "";
+  if (movCols.obra >= 0) movRow[movCols.obra] = "";
+  if (movCols.fase >= 0) movRow[movCols.fase] = "";
+  if (movCols.fornecedor >= 0) movRow[movCols.fornecedor] = itemCols.fornecedor >= 0 ? itemRow[itemCols.fornecedor] : "";
+  if (movCols.nif >= 0) movRow[movCols.nif] = itemCols.nif >= 0 ? itemRow[itemCols.nif] : "";
+  if (movCols.doc >= 0) movRow[movCols.doc] = itemCols.doc >= 0 ? itemRow[itemCols.doc] : "";
+  if (movCols.observacoes >= 0) {
+    movRow[movCols.observacoes] = appendSourceMarkerToObs_(itemCols.observacoes >= 0 ? itemRow[itemCols.observacoes] : "", idItemFatura, "FIT");
+  }
+
+  const result = upsertMovRow_(movSheet, movCols, movLastCol, existing, movRow);
+  return { action: result.created ? "created" : "updated", rowNumber: result.rowNumber };
+}
+
+function syncMovFromAfetacaoRow_(afetSheet, rowNum) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
+  if (!afetSheet || !movSheet || rowNum < 2) return { action: "skipped" };
+
+  const afetHeaders = afetSheet.getRange(1, 1, 1, afetSheet.getLastColumn()).getValues()[0];
+  const afetCols = getAfetacoesObraColumns_(afetHeaders);
+  const afetRow = getSingleRowValues_(afetSheet, rowNum);
+  const idAfetacao = String(afetCols.idAfetacao >= 0 ? afetRow[afetCols.idAfetacao] : "").trim();
+  const active = isAfetacaoObraRowActiveForMovement_(afetRow, afetCols);
+  const existing = idAfetacao ? findMovRowBySourceMarker_(movSheet, "AFO", idAfetacao) : null;
+
+  if (!active) {
+    if (existing) {
+      movSheet.deleteRow(existing.rowNumber);
+      return { action: "deleted" };
+    }
+    return { action: "noop" };
+  }
+
+  const movHeaders = existing
+    ? existing.headers
+    : movSheet.getRange(1, 1, 1, movSheet.getLastColumn()).getValues()[0];
+  const movCols = existing ? existing.cols : getMovColumns_(movHeaders);
+  const movLastCol = movSheet.getLastColumn();
+  const movRow = existing ? existing.values.slice() : new Array(movLastCol).fill("");
+  const quantidade = parseNumberLoose_(afetCols.quantidade >= 0 ? afetRow[afetCols.quantidade] : 0);
+  const custoUnit = computeAfetacaoUnitCost_(afetRow, afetCols);
+  const custoSemIva = parseNumberLoose_(afetCols.custoSemIva >= 0 ? afetRow[afetCols.custoSemIva] : 0) || (quantidade * custoUnit);
+  const custoComIva = parseNumberLoose_(afetCols.custoComIva >= 0 ? afetRow[afetCols.custoComIva] : 0) || custoSemIva;
+
+  if (movCols.idMov >= 0 && !existing) {
+    const nextNum = nextSequentialIdForSheet_(movSheet, ["ID_Mov", "ID Mov", "ID_Movimento"], "MOV");
+    movRow[movCols.idMov] = formatAutoId_("MOV", nextNum);
+  }
+  if (movCols.data >= 0) movRow[movCols.data] = afetCols.data >= 0 ? afetRow[afetCols.data] : "";
+  if (movCols.tipo >= 0) movRow[movCols.tipo] = "CONSUMO";
+  if (movCols.idItem >= 0) movRow[movCols.idItem] = afetCols.idItem >= 0 ? afetRow[afetCols.idItem] : "";
+  if (movCols.itemOficial >= 0) movRow[movCols.itemOficial] = afetCols.itemOficial >= 0 ? afetRow[afetCols.itemOficial] : "";
+  if (movCols.material >= 0) movRow[movCols.material] = afetCols.itemOficial >= 0 ? afetRow[afetCols.itemOficial] : "";
+  if (movCols.unidade >= 0) movRow[movCols.unidade] = afetCols.unidade >= 0 ? afetRow[afetCols.unidade] : "";
+  if (movCols.quantidade >= 0) movRow[movCols.quantidade] = quantidade;
+  if (movCols.custoUnit >= 0) movRow[movCols.custoUnit] = custoUnit;
+  if (movCols.custoSemIva >= 0) movRow[movCols.custoSemIva] = custoSemIva;
+  if (movCols.iva >= 0) movRow[movCols.iva] = afetCols.iva >= 0 ? afetRow[afetCols.iva] : 0;
+  if (movCols.custoComIva >= 0) movRow[movCols.custoComIva] = custoComIva;
+  if (movCols.obra >= 0) movRow[movCols.obra] = afetCols.obra >= 0 ? afetRow[afetCols.obra] : "";
+  if (movCols.fase >= 0) movRow[movCols.fase] = afetCols.fase >= 0 ? afetRow[afetCols.fase] : "";
+  if (movCols.fornecedor >= 0) movRow[movCols.fornecedor] = afetCols.fornecedor >= 0 ? afetRow[afetCols.fornecedor] : "";
+  if (movCols.nif >= 0) movRow[movCols.nif] = afetCols.nif >= 0 ? afetRow[afetCols.nif] : "";
+  if (movCols.doc >= 0) movRow[movCols.doc] = afetCols.doc >= 0 ? afetRow[afetCols.doc] : "";
+  if (movCols.observacoes >= 0) {
+    let obs = appendSourceMarkerToObs_(afetCols.observacoes >= 0 ? afetRow[afetCols.observacoes] : "", idAfetacao, "AFO");
+    const sourceId = String(afetCols.sourceId >= 0 ? afetRow[afetCols.sourceId] : "").trim();
+    if (sourceId) obs = appendSourceMarkerToObs_(obs, sourceId, "FIT");
+    movRow[movCols.observacoes] = obs;
+  }
+
+  const result = upsertMovRow_(movSheet, movCols, movLastCol, existing, movRow);
+  return { action: result.created ? "created" : "updated", rowNumber: result.rowNumber };
 }
 
 function reconcileGeneratedMateriaisMovRows_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const itemsSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
+  const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
   const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
-  if (!itemsSheet || !movSheet) return 0;
+  if (!movSheet) return 0;
 
-  const itemsLastRow = itemsSheet.getLastRow();
-  const itemsLastCol = itemsSheet.getLastColumn();
-  const itemHeaders = itemsLastCol > 0 ? itemsSheet.getRange(1, 1, 1, itemsLastCol).getValues()[0] : [];
-  const itemCols = {
-    idItemFatura: findHeaderIndexByAliases_(itemHeaders, ["ID_Item_Fatura", "ID Item Fatura"]),
-    descricao: findHeaderIndexByAliases_(itemHeaders, ["Descricao_Original", "Descricao Original"]),
-    idItem: findHeaderIndexByAliases_(itemHeaders, ["ID_Item", "ID Item"]),
-    itemOficial: findHeaderIndexByAliases_(itemHeaders, ["Item_Oficial", "Item Oficial"]),
-    quantidade: findHeaderIndexByAliases_(itemHeaders, ["Quantidade"]),
-    destino: findHeaderIndexByAliases_(itemHeaders, ["Destino"]),
-    obra: findHeaderIndexByAliases_(itemHeaders, ["Obra"]),
-    fase: findHeaderIndexByAliases_(itemHeaders, ["Fase"])
-  };
-  const validIds = {};
-  if (itemCols.idItemFatura >= 0 && itemsLastRow >= 2) {
-    const itemValues = itemsSheet.getRange(2, 1, itemsLastRow - 1, itemsLastCol).getValues();
-    itemValues.forEach(function(row) {
-      if (!isFatItemRowActiveForMovement_(row, itemCols)) return;
-      const id = String(row[itemCols.idItemFatura] || "").trim();
-      if (id) validIds[id] = true;
-    });
+  const validFitIds = {};
+  if (itemsSheet) {
+    const itemsLastRow = itemsSheet.getLastRow();
+    const itemsLastCol = itemsSheet.getLastColumn();
+    const itemHeaders = itemsLastCol > 0 ? itemsSheet.getRange(1, 1, 1, itemsLastCol).getValues()[0] : [];
+    const itemCols = {
+      idItemFatura: findHeaderIndexByAliases_(itemHeaders, ["ID_Item_Fatura", "ID Item Fatura"]),
+      descricao: findHeaderIndexByAliases_(itemHeaders, ["Descricao_Original", "Descricao Original"]),
+      idItem: findHeaderIndexByAliases_(itemHeaders, ["ID_Item", "ID Item"]),
+      itemOficial: findHeaderIndexByAliases_(itemHeaders, ["Item_Oficial", "Item Oficial"]),
+      quantidade: findHeaderIndexByAliases_(itemHeaders, ["Quantidade"]),
+      destino: findHeaderIndexByAliases_(itemHeaders, ["Destino"])
+    };
+    if (itemCols.idItemFatura >= 0 && itemsLastRow >= 2) {
+      const itemValues = itemsSheet.getRange(2, 1, itemsLastRow - 1, itemsLastCol).getValues();
+      itemValues.forEach(function(row) {
+        if (!isFatItemRowActiveForStockMovement_(row, itemCols)) return;
+        const id = String(row[itemCols.idItemFatura] || "").trim();
+        if (id) validFitIds[id] = true;
+      });
+    }
+  }
+
+  const validAfetacaoIds = {};
+  if (afetSheet) {
+    const afetLastRow = afetSheet.getLastRow();
+    const afetLastCol = afetSheet.getLastColumn();
+    const afetHeaders = afetLastCol > 0 ? afetSheet.getRange(1, 1, 1, afetLastCol).getValues()[0] : [];
+    const afetCols = getAfetacoesObraColumns_(afetHeaders);
+    if (afetCols.idAfetacao >= 0 && afetLastRow >= 2) {
+      const afetValues = afetSheet.getRange(2, 1, afetLastRow - 1, afetLastCol).getValues();
+      afetValues.forEach(function(row) {
+        if (!isAfetacaoObraRowActiveForMovement_(row, afetCols)) return;
+        const id = String(row[afetCols.idAfetacao] || "").trim();
+        if (id) validAfetacaoIds[id] = true;
+      });
+    }
   }
 
   const movLastRow = movSheet.getLastRow();
@@ -892,10 +1932,16 @@ function reconcileGeneratedMateriaisMovRows_() {
   let removed = 0;
   for (let i = movRows.length - 1; i >= 0; i--) {
     const obs = String(movRows[i][obsCol] || "");
-    const match = obs.match(/\[SRC_FIT:([^\]]+)\]/i);
-    if (!match || !match[1]) continue;
-    const idItemFatura = String(match[1] || "").trim();
-    if (idItemFatura && !validIds[idItemFatura]) {
+    const fitMatch = obs.match(/\[SRC_FIT:([^\]]+)\]/i);
+    const afetMatch = obs.match(/\[SRC_AFO:([^\]]+)\]/i);
+    const idItemFatura = fitMatch && fitMatch[1] ? String(fitMatch[1]).trim() : "";
+    const idAfetacao = afetMatch && afetMatch[1] ? String(afetMatch[1]).trim() : "";
+    if (idAfetacao && !validAfetacaoIds[idAfetacao]) {
+      movSheet.deleteRow(i + 2);
+      removed += 1;
+      continue;
+    }
+    if (idItemFatura && !validFitIds[idItemFatura]) {
       movSheet.deleteRow(i + 2);
       removed += 1;
     }
@@ -907,6 +1953,8 @@ function gerarMovimentosMateriais_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const itemsSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
   const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
+  const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
+  const routeDirectToAfetacoes = !!afetSheet;
   if (!itemsSheet || !movSheet) {
     throw new Error("Folhas obrigatorias nao encontradas: FATURAS_ITENS / MATERIAIS_MOV");
   }
@@ -973,7 +2021,7 @@ function gerarMovimentosMateriais_() {
   const existingRows = movLastRow >= 2
     ? movSheet.getRange(2, 1, movLastRow - 1, movLastCol).getValues()
     : [];
-  const existingMarkers = parseSourceMarkersFromRows_(existingRows, movCols.observacoes);
+  const existingMarkers = parseSourceMarkersFromRows_(existingRows, movCols.observacoes, "FIT");
   const materiaisCatalogById = buildMateriaisCatalogById_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
 
   const statusValues = itemCols.estado >= 0
@@ -1023,6 +2071,9 @@ function gerarMovimentosMateriais_() {
       sugestaoValues[i][0] = suggestItemOficialFromDescricao_(descricao);
     }
 
+    if (routeDirectToAfetacoes && destino === "CONSUMO") {
+      continue;
+    }
     if (!rowHasSignalData_(row, [itemCols.idItemFatura, itemCols.descricao, itemCols.quantidade, itemCols.custoUnit])) {
       continue;
     }
@@ -1083,7 +2134,7 @@ function gerarMovimentosMateriais_() {
     if (movCols.nif >= 0) movRow[movCols.nif] = readCell_(row, itemCols.nif);
     if (movCols.doc >= 0) movRow[movCols.doc] = readCell_(row, itemCols.doc);
     if (movCols.observacoes >= 0) {
-      movRow[movCols.observacoes] = appendSourceMarkerToObs_(readCell_(row, itemCols.observacoes), idItemFatura);
+      movRow[movCols.observacoes] = appendSourceMarkerToObs_(readCell_(row, itemCols.observacoes), idItemFatura, "FIT");
     }
 
     if (existingMarker) {
@@ -1134,11 +2185,12 @@ function gerarMovimentosMateriais_() {
 function getStatusBackgroundColor_(status) {
   const key = String(status || "").trim().toUpperCase();
   if (!key) return "#ffffff";
-  if (key === "ALIAS_EM_FALTA" || key === "CADASTRO_EM_FALTA" || key === "SEMELHANTE_REVER") return "#fff2cc";
-  if (key === "MOVIMENTO_GERADO" || key === "MOVIMENTO_ATUALIZADO") return "#d9ead3";
+  if (key === "ALIAS_EM_FALTA" || key === "CADASTRO_EM_FALTA" || key === "SEMELHANTE_REVER" || key === "AGUARDA_PROCESSAR") return "#fff2cc";
+  if (key === "MOVIMENTO_GERADO" || key === "MOVIMENTO_ATUALIZADO" || key === "AFETACAO_GERADA" || key === "AFETACAO_ATUALIZADA" || key === "PRONTO_MOVIMENTO") return "#d9ead3";
   if (key === "JA_EXISTENTE" || key === "MOVIMENTO_JA_EXISTE" || key === "MOVIMENTO_JA_EXISTIA") return "#d9eaf7";
   if (key === "DUPLICADO_EXATO" || key === "ITEM_ENCONTRADO") return "#d9eaf7";
   if (key === "NOVO_ITEM" || key === "OK") return "#d9ead3";
+  if (key === "CUSTO_STOCK_EM_FALTA") return "#fff2cc";
   return "#f4cccc";
 }
 
@@ -1187,16 +2239,51 @@ function onEdit(e) {
         (obraCol >= 0 && obraCol + 1 >= editedStart && obraCol + 1 <= editedEnd) ||
         (faseCol >= 0 && faseCol + 1 >= editedStart && faseCol + 1 <= editedEnd);
       if (idFaturaTouched || fornecedorTouched || descricaoTouched || movementTouched) {
-        const startRow = e.range.getRow();
-        const endRow = startRow + e.range.getNumRows() - 1;
-        for (let rowNum = Math.max(2, startRow); rowNum <= endRow; rowNum++) {
-          if (idFaturaTouched) {
-            hydrateFaturasItensFromFaturas_(sheet, rowNum);
+        withMaterialFlowGuard_(function() {
+          const startRow = e.range.getRow();
+          const endRow = startRow + e.range.getNumRows() - 1;
+          const afetSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AFETACOES_OBRA);
+          for (let rowNum = Math.max(2, startRow); rowNum <= endRow; rowNum++) {
+            if (idFaturaTouched) {
+              hydrateFaturasItensFromFaturas_(sheet, rowNum);
+            }
+            hydrateFaturasItensFromCatalog_(sheet, rowNum);
+            const afetResult = syncAfetacaoFromFatItemRow_(sheet, rowNum);
+            if (afetSheet && afetResult && afetResult.rowNumber) {
+              syncMovFromAfetacaoRow_(afetSheet, afetResult.rowNumber);
+            }
+            syncStockMovementFromFatItemRow_(sheet, rowNum);
           }
-          hydrateFaturasItensFromCatalog_(sheet, rowNum);
-        }
-        reconcileGeneratedMateriaisMovRows_();
-        gerarMovimentosMateriais_();
+        });
+      }
+    }
+    if (sheet && sheet.getName() === SHEET_AFETACOES_OBRA) {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const cols = getAfetacoesObraColumns_(headers);
+      const editedStart = e.range.getColumn();
+      const editedEnd = editedStart + e.range.getNumColumns() - 1;
+      const watchedCols = [
+        cols.origem,
+        cols.idItem,
+        cols.quantidade,
+        cols.iva,
+        cols.obra,
+        cols.fase,
+        cols.data
+      ].filter(function(idx) { return idx >= 0; });
+      if (cols.processar >= 0) watchedCols.push(cols.processar);
+      const affectsFlow = watchedCols.some(function(idx) {
+        return idx + 1 >= editedStart && idx + 1 <= editedEnd;
+      });
+      if (affectsFlow) {
+        withMaterialFlowGuard_(function() {
+          const startRow = e.range.getRow();
+          const endRow = startRow + e.range.getNumRows() - 1;
+          for (let rowNum = Math.max(2, startRow); rowNum <= endRow; rowNum++) {
+            hydrateAfetacoesObraRow_(sheet, rowNum);
+            syncMovFromAfetacaoRow_(sheet, rowNum);
+          }
+        });
       }
     }
     if (sheet && sheet.getName() === SHEET_MATERIAIS_MOV) {
@@ -1222,7 +2309,6 @@ function onEdit(e) {
 function onSheetChange(e) {
   if (e &&
       e.changeType !== "REMOVE_ROW" &&
-      e.changeType !== "EDIT" &&
       e.changeType !== "INSERT_ROW") {
     return;
   }
@@ -1230,13 +2316,20 @@ function onSheetChange(e) {
   corrigirCustosRegistos_();
   processarDispensados_();
   ensureManagedSheetIds_();
-  reconcileGeneratedMateriaisMovRows_();
+  withMaterialFlowGuard_(function() {
+    syncAfetacoesObraFromFaturasItens_();
+    reconcileGeneratedMateriaisMovRows_();
+    gerarMovimentosMateriais_();
+    gerarMovimentosAfetacoesObra_();
+  });
 
   // Sync para Supabase (migração paralela)
-  try {
-    syncToSupabase(e);
-  } catch (err) {
-    Logger.log("Erro na sync Supabase: " + err);
+  if (ENABLE_AUTO_SUPABASE_SYNC) {
+    try {
+      syncToSupabase(e);
+    } catch (err) {
+      Logger.log("Erro na sync Supabase: " + err);
+    }
   }
 }
 

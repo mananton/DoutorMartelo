@@ -222,7 +222,37 @@ Format: short ADR-style records with rationale and impact.
 - **Rationale**:
   - Gross invoice unit price produces incorrect average stock cost.
 - **Impact**:
-  - `STOCK_ATUAL.Custo_Medio_Atual` should be computed from `MATERIAIS_MOV.Custo_Unit` and now reflects discounts for newly generated movements.
+- `STOCK_ATUAL.Custo_Medio_Atual` should be computed from `MATERIAIS_MOV.Custo_Unit` and now reflects discounts for newly generated movements.
+
+## D-016: Separate work attribution from the technical movement ledger
+- **Status**: accepted
+- **Date**: 2026-03-17
+- **Commit**: `pending`
+- **Decision**:
+  - Keep `FATURAS_ITENS` as the purchase-line source.
+  - Introduce `AFETACOES_OBRA` as the operational sheet for attributing cost to `Obra` + `Fase`.
+  - Keep `MATERIAIS_MOV` as a technical ledger generated from source sheets, not as the main manual input surface.
+  - Direct-consumption lines in `FATURAS_ITENS` should auto-create generated rows in `AFETACOES_OBRA`.
+  - Later stock consumption should be registered manually in `AFETACOES_OBRA`, one simple line per output.
+- **Rationale**:
+  - The previous flow was mixing operational input with a system ledger in the same sheet.
+  - That makes auditability worse and complicates future stock evolution.
+- **Impact**:
+  - Operators register stock outputs in `AFETACOES_OBRA`, not in `MATERIAIS_MOV`.
+  - `MATERIAIS_MOV` becomes clearer as a generated log that feeds cost and stock calculations.
+
+## D-017: Stock outputs snapshot current average cost at registration time
+- **Status**: accepted
+- **Date**: 2026-03-17
+- **Commit**: `pending`
+- **Decision**:
+  - Manual stock outputs entered in `AFETACOES_OBRA` should fill `Custo_Unit` from `STOCK_ATUAL.Custo_Medio_Atual`.
+  - That value is treated as a snapshot at registration time, even if the user enters an older `Data`.
+- **Rationale**:
+  - The business prefers operational simplicity and stable day-to-day registration over historical-cost reconstruction.
+- **Impact**:
+  - Late-entered stock consumptions use the current average cost when registered.
+  - Historical costing stays operationally consistent, with the known tradeoff that it is not a backdated average-cost engine.
 
 ## Standing Constraints
 - Do not rename global sheet constants.

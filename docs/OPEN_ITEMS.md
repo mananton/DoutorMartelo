@@ -1,6 +1,26 @@
 # Open Items
 
-Last reviewed: 2026-03-11
+Last reviewed: 2026-03-18
+
+## P1 - Define Materials Backoffice MVP
+- A dedicated materials/purchasing app is now the recommended next step.
+- Scope to cover first:
+  - `FATURAS`
+  - `FATURAS_ITENS`
+  - `MATERIAIS_CAD`
+  - `AFETACOES_OBRA`
+- Keep `AppSheet` for:
+  - labour input
+  - displacement input
+- Reference plan:
+  - `docs/MATERIALS_BACKOFFICE_PLAN.md`
+
+## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
+- Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.
+- Next technical goal:
+  - move more materials business logic out of cell-by-cell trigger timing
+  - keep Google Sheets populated, but reduce dependence on reactive GAS for incomplete row edits
+- This item is one of the drivers for the dedicated materials app plan.
 
 ## P1 - Implement Monthly Payment Map
 - Functional spec agreed in `docs/MAPA_MENSAL_SPEC.md`.
