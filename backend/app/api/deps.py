@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Request
 
@@ -15,6 +16,14 @@ from backend.app.services.sync import SyncService
 
 
 class ServiceContainer:
+    DIAGNOSTIC_CONFIG = {
+        "faturas": ("id_fatura", "faturas"),
+        "faturas_itens": ("id_item_fatura", "fatura_items"),
+        "materiais_cad": ("id_item", "catalog"),
+        "afetacoes_obra": ("id_afetacao", "afetacoes"),
+        "materiais_mov": ("id_mov", "movimentos"),
+    }
+
     def __init__(self) -> None:
         self.settings = Settings.from_env()
         self.state = RuntimeState()
@@ -53,6 +62,33 @@ class ServiceContainer:
             "afetacoes_obra": len(self.state.afetacoes),
             "materiais_mov": len(self.state.movimentos),
             "reloaded_at": datetime.now(UTC),
+        }
+
+    def sync_diagnostics(self) -> dict[str, Any]:
+        snapshot = self.google_sheets.load_snapshot()
+        entities = []
+        for entity, (id_field, state_attr) in self.DIAGNOSTIC_CONFIG.items():
+            runtime_records = getattr(self.state, state_attr)
+            runtime_ids = {str(record_id) for record_id in runtime_records.keys() if str(record_id).strip()}
+            sheet_ids = {
+                str(record.get(id_field))
+                for record in snapshot.get(entity, [])
+                if str(record.get(id_field) or "").strip()
+            }
+            entities.append(
+                {
+                    "entity": entity,
+                    "runtime_count": len(runtime_ids),
+                    "sheet_count": len(sheet_ids),
+                    "matches": runtime_ids == sheet_ids,
+                    "missing_in_runtime": sorted(sheet_ids - runtime_ids)[:10],
+                    "missing_in_sheet": sorted(runtime_ids - sheet_ids)[:10],
+                }
+            )
+        return {
+            "source": "google_sheets",
+            "checked_at": datetime.now(UTC),
+            "entities": entities,
         }
 
 

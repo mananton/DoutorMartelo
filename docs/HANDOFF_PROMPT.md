@@ -77,6 +77,12 @@ Expected output format:
   - stock snapshot and average-cost context before save
   - clearer stock-cost error feedback
 - `Sincronizacao` now exposes card-based operational status instead of raw JSON
+- a read-only `Tecnico` view now exists for:
+  - `STOCK_ATUAL`
+  - `MATERIAIS_MOV`
+- `Sincronizacao` now also supports a manual divergence diagnostic:
+  - compares runtime IDs with fresh Google Sheets IDs
+  - reports missing IDs on either side for the core material entities
 
 ## Current Material Automation Hotspots
 - Read `src/main.gs` carefully before changing materials logic.

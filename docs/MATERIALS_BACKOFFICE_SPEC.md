@@ -703,3 +703,8 @@ This is the safest order for the current business constraint:
   - explicit `Recarregar do Sheets`
   - per-entity status cards
   - base visibility even when the current backend session has no sync activity yet
+- `TECNICO`
+  - read-only stock snapshot list
+  - read-only movement ledger list
+  - simple search for validation/debug follow-up
+- `SINCRONIZACAO` now also supports a manual runtime-vs-sheets divergence diagnostic based on entity IDs

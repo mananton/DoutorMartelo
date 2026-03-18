@@ -19,13 +19,11 @@ Last reviewed: 2026-03-18
   - improve screen UX and guided input for:
     - `MATERIAIS_CAD`
   - keep validating real writes and sync retries against production-like sheets
-  - decide when to expose read-only technical views for:
-    - `MATERIAIS_MOV`
-    - `STOCK_ATUAL`
   - latest delivered UX improvements:
     - `FATURAS_ITENS` now supports guided catalog selection, quick catalog creation, and readable impact preview
     - `AFETACOES_OBRA` now supports guided item selection with stock/cost context before save
     - `Sincronizacao` now shows operational status cards instead of raw JSON
+    - read-only technical view now exists for `STOCK_ATUAL` and `MATERIAIS_MOV`
 
 ## P1 - Harden Materials Backoffice Runtime Hydration
 - The backend now hydrates startup state from Google Sheets.
@@ -34,6 +32,7 @@ Last reviewed: 2026-03-18
   - decide whether any entities should later hydrate from Supabase instead of Sheets
   - add safer diagnostics when a row loads but cannot be parsed into the runtime model
   - decide whether to expose a more explicit per-screen refresh indicator after `Recarregar do Sheets`
+  - review whether diagnostics should later compare selected business fields and not only ID presence
 
 ## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
 - Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.

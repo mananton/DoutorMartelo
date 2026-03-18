@@ -142,6 +142,45 @@ class MaterialsApiTests(unittest.TestCase):
             ["faturas", "faturas_itens", "materiais_cad", "afetacoes_obra", "materiais_mov"],
         )
 
+    def test_stock_and_diagnostics_endpoints(self) -> None:
+        fatura = self.client.post(
+            "/api/faturas",
+            json={
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "nr_documento": "FT 2026/003",
+                "data_fatura": "2026-03-18",
+            },
+        ).json()
+        self.client.post(
+            f"/api/faturas/{fatura['id_fatura']}/itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Prego 30",
+                        "quantidade": 50,
+                        "custo_unit": 0.2,
+                        "iva": 23,
+                        "destino": "STOCK",
+                        "id_item": self.catalog["id_item"],
+                    }
+                ]
+            },
+        )
+
+        stock_list = self.client.get("/api/stock-atual")
+        self.assertEqual(stock_list.status_code, 200)
+        self.assertTrue(any(item["id_item"] == self.catalog["id_item"] for item in stock_list.json()))
+
+        movimentos = self.client.get("/api/materiais-mov")
+        self.assertEqual(movimentos.status_code, 200)
+        self.assertGreaterEqual(len(movimentos.json()), 1)
+
+        diagnostics = self.client.get("/api/sync/diagnostics")
+        self.assertEqual(diagnostics.status_code, 200)
+        self.assertEqual(diagnostics.json()["source"], "google_sheets")
+        self.assertEqual(len(diagnostics.json()["entities"]), 5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -162,6 +162,10 @@ Last updated: 2026-03-18
   - `Sincronizacao` now shows the core entity jobs even before any sync attempt happens in the current backend session
   - `FATURAS_ITENS` now has guided item selection from catalog, quick-create of catalog items, and a readable impact preview before save
   - `AFETACOES_OBRA` now has guided `ID_Item` lookup, live stock snapshot lookup, and clearer business-error messaging for stock-cost issues
+  - the app now includes a read-only technical view for:
+    - `STOCK_ATUAL`
+    - `MATERIAIS_MOV`
+  - `Sincronizacao` now includes a manual divergence diagnostic comparing runtime IDs vs current Google Sheets IDs for the core material entities
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).

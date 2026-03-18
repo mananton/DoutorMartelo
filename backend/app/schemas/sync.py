@@ -17,3 +17,18 @@ class ReloadStateResponse(ApiModel):
     afetacoes_obra: int
     materiais_mov: int
     reloaded_at: datetime
+
+
+class SyncDiagnosticsEntity(ApiModel):
+    entity: str
+    runtime_count: int
+    sheet_count: int
+    matches: bool
+    missing_in_runtime: list[str]
+    missing_in_sheet: list[str]
+
+
+class SyncDiagnosticsResponse(ApiModel):
+    source: str
+    checked_at: datetime
+    entities: list[SyncDiagnosticsEntity]

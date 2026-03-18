@@ -51,8 +51,11 @@ export const api = {
   listAfetacoes: () => request<JsonRecord[]>("/api/afetacoes"),
   createAfetacao: (payload: JsonRecord) => request<JsonRecord>("/api/afetacoes", { method: "POST", body: JSON.stringify(payload) }),
   processAfetacao: (id: string) => request<JsonRecord>(`/api/afetacoes/${id}/processar`, { method: "POST" }),
+  listStockSnapshots: () => request<JsonRecord[]>("/api/stock-atual"),
   getStockSnapshot: (id: string) => request<JsonRecord>(`/api/stock-atual/${id}`),
+  listMovimentos: () => request<JsonRecord[]>("/api/materiais-mov"),
   getSyncStatus: () => request<JsonRecord>("/api/sync/status"),
+  getSyncDiagnostics: () => request<JsonRecord>("/api/sync/diagnostics"),
   retrySync: () => request<JsonRecord>("/api/sync/retry", { method: "POST" }),
   reloadState: () => request<JsonRecord>("/api/sync/reload", { method: "POST" }),
 };

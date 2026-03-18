@@ -38,6 +38,15 @@ export function SyncPage() {
   const [message, setMessage] = useState<string>("");
   const { data } = useQuery({ queryKey: ["sync-status"], queryFn: api.getSyncStatus });
   const jobs = ((data?.jobs as SyncJob[] | undefined) ?? []);
+  const diagnosticsMutation = useMutation({
+    mutationFn: api.getSyncDiagnostics,
+    onSuccess: () => {
+      setMessage("Diagnostico de divergencias concluido.");
+    },
+    onError: (error) => {
+      setMessage(error instanceof Error ? error.message : "Falha ao executar diagnostico.");
+    },
+  });
 
   const retryMutation = useMutation({
     mutationFn: api.retrySync,
@@ -107,6 +116,16 @@ export function SyncPage() {
           {reloadMutation.isPending ? "A recarregar..." : "Recarregar do Sheets"}
         </button>
         <button
+          className="btn secondary"
+          onClick={() => {
+            setMessage("");
+            diagnosticsMutation.mutate();
+          }}
+          disabled={diagnosticsMutation.isPending}
+        >
+          {diagnosticsMutation.isPending ? "A diagnosticar..." : "Diagnosticar divergencias"}
+        </button>
+        <button
           className="btn primary"
           onClick={() => {
             setMessage("");
@@ -119,6 +138,31 @@ export function SyncPage() {
       </div>
 
       {message ? <div className="status-note" style={{ marginTop: "1rem" }}>{message}</div> : null}
+
+      {diagnosticsMutation.data ? (
+        <div className="assistant-block" style={{ marginTop: "1rem" }}>
+          <div className="assistant-head">
+            <strong>Diagnostico runtime vs Google Sheets</strong>
+            <span className="muted">{formatDateTime(String((diagnosticsMutation.data as Record<string, unknown>).checked_at ?? ""))}</span>
+          </div>
+          <div className="sync-job-grid">
+            {(((diagnosticsMutation.data as Record<string, unknown>).entities as Record<string, unknown>[] | undefined) ?? []).map((entity) => (
+              <div className="sync-job-card" key={String(entity.entity)}>
+                <div className="row-head">
+                  <strong>{entityLabel(String(entity.entity ?? ""))}</strong>
+                  <span className={`tag ${entity.matches ? "tag-success" : "tag-danger"}`}>{entity.matches ? "Alinhado" : "Divergente"}</span>
+                </div>
+                <div className="sync-meta">
+                  <div><span className="detail-label">Runtime</span><div>{String(entity.runtime_count ?? 0)}</div></div>
+                  <div><span className="detail-label">Sheets</span><div>{String(entity.sheet_count ?? 0)}</div></div>
+                </div>
+                <div className="muted">Faltam no runtime: {(((entity.missing_in_runtime as string[] | undefined) ?? []).join(", ")) || "-"}</div>
+                <div className="muted">Faltam no sheets: {(((entity.missing_in_sheet as string[] | undefined) ?? []).join(", ")) || "-"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="sync-job-grid">
         {jobs.map((job) => (

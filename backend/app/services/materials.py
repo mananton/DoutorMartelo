@@ -24,6 +24,7 @@ from backend.app.schemas.materials import (
     FaturaItemsResponse,
     FaturaRecord,
     FaturaUpdate,
+    MovimentoRecord,
 )
 from backend.app.services.state import RuntimeState
 
@@ -272,6 +273,16 @@ class MaterialsService:
                 value -= amount
         avg = value / qty if qty > 0 else 0.0
         return StockSnapshot(id_item=id_item, item_oficial=catalog["item_oficial"], unidade=catalog["unidade"], stock_atual=round(qty, 6), custo_medio_atual=round(avg, 6))
+
+    def list_stock_snapshots(self) -> list[StockSnapshot]:
+        ids = set(self.state.catalog.keys())
+        ids.update(movement["id_item"] for movement in self.state.movimentos.values() if movement.get("id_item"))
+        snapshots = [self.get_stock_snapshot(id_item) for id_item in sorted(ids)]
+        return sorted(snapshots, key=lambda item: item.id_item)
+
+    def list_movimentos(self) -> list[MovimentoRecord]:
+        movements = sorted(self.state.movimentos.values(), key=lambda item: item["sequence"], reverse=True)
+        return [self._to_model(MovimentoRecord, movement) for movement in movements]
 
     def _persist(self, groups: dict[str, list[dict[str, Any]]]) -> None:
         batches = [WriteBatch(entity=entity, records=records) for entity, records in groups.items() if records]

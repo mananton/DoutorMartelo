@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from backend.app.api.deps import ServiceContainer, get_container
 from backend.app.schemas.common import BulkRowsRequest, BulkSyncResponse
-from backend.app.schemas.sync import ReloadStateResponse, SyncStatusResponse
+from backend.app.schemas.sync import ReloadStateResponse, SyncDiagnosticsResponse, SyncStatusResponse
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -26,6 +26,11 @@ def retry_pending(container: ServiceContainer = Depends(get_container)) -> SyncS
 @router.post("/sync/reload", response_model=ReloadStateResponse)
 def reload_from_sheets(container: ServiceContainer = Depends(get_container)) -> ReloadStateResponse:
     return ReloadStateResponse.model_validate(container.reload_from_sheets())
+
+
+@router.get("/sync/diagnostics", response_model=SyncDiagnosticsResponse)
+def get_sync_diagnostics(container: ServiceContainer = Depends(get_container)) -> SyncDiagnosticsResponse:
+    return SyncDiagnosticsResponse.model_validate(container.sync_diagnostics())
 
 
 @router.post("/sync/colaboradores", response_model=BulkSyncResponse)

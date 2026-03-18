@@ -5,6 +5,7 @@ import { CatalogoPage } from "./pages/CatalogoPage";
 import { FaturaDetailPage } from "./pages/FaturaDetailPage";
 import { FaturasPage } from "./pages/FaturasPage";
 import { SyncPage } from "./pages/SyncPage";
+import { TecnicoPage } from "./pages/TecnicoPage";
 
 export function App() {
   return (
@@ -14,6 +15,7 @@ export function App() {
         <NavLink to="/faturas">Faturas</NavLink>
         <NavLink to="/catalogo">Catalogo</NavLink>
         <NavLink to="/afetacoes">Afetacoes</NavLink>
+        <NavLink to="/tecnico">Tecnico</NavLink>
         <NavLink to="/sync">Sincronizacao</NavLink>
       </aside>
       <main className="main">
@@ -33,10 +35,10 @@ export function App() {
           <Route path="/faturas/:idFatura" element={<FaturaDetailPage />} />
           <Route path="/catalogo" element={<CatalogoPage />} />
           <Route path="/afetacoes" element={<AfetacoesPage />} />
+          <Route path="/tecnico" element={<TecnicoPage />} />
           <Route path="/sync" element={<SyncPage />} />
         </Routes>
       </main>
     </div>
   );
 }
-

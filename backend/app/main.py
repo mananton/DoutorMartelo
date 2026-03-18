@@ -7,6 +7,7 @@ from backend.app.api.deps import ServiceContainer
 from backend.app.api.routers.afetacoes import router as afetacoes_router
 from backend.app.api.routers.catalogo import router as catalogo_router
 from backend.app.api.routers.faturas import router as faturas_router
+from backend.app.api.routers.movimentos import router as movimentos_router
 from backend.app.api.routers.stock import router as stock_router
 from backend.app.api.routers.sync import router as sync_router
 
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(catalogo_router)
     app.include_router(afetacoes_router)
     app.include_router(stock_router)
+    app.include_router(movimentos_router)
     return app
 
 

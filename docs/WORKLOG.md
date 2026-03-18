@@ -301,3 +301,16 @@ Purpose: chronological, commit-based project history for fast handoff.
   - Day-to-day registration now needs less manual lookup and gives earlier warning/context before save.
   - Sync status is easier to read operationally without inspecting raw payloads.
   - `FATURAS_ITENS` roundtrip fidelity between app and Google Sheets is improved.
+
+### `uncommitted`
+- **Type**: feat(ui) / diagnostics
+- **Scope**: `backend/app/api/*`, `backend/app/services/materials.py`, `frontend/`, docs
+- **Summary**:
+  - Added read-only technical endpoints and UI for:
+    - `STOCK_ATUAL`
+    - `MATERIAIS_MOV`
+  - Added manual sync diagnostics comparing runtime IDs against fresh Google Sheets IDs for the core material entities.
+  - Extended frontend API support for stock snapshots, movement list, and sync diagnostics.
+- **Impact**:
+  - Operators now have a non-destructive place to inspect current stock and movement consequences.
+  - Divergence suspicion can now be checked explicitly instead of relying on visual guessing.
