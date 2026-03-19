@@ -53,3 +53,13 @@ class WorkOption(ApiModel):
 
 class WorkOptionsResponse(ApiModel):
     obras: list[WorkOption]
+
+
+class SupplierOption(ApiModel):
+    id_fornecedor: str | None = None
+    fornecedor: str
+    nif: str | None = None
+
+
+class SupplierOptionsResponse(ApiModel):
+    fornecedores: list[SupplierOption]

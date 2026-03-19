@@ -68,6 +68,11 @@ def sync_materiais_cad(payload: BulkRowsRequest, container: ServiceContainer = D
     return _ingest("materiais_cad", payload, container)
 
 
+@router.post("/sync/materiais-referencias", response_model=BulkSyncResponse)
+def sync_materiais_referencias(payload: BulkRowsRequest, container: ServiceContainer = Depends(get_container)) -> BulkSyncResponse:
+    return _ingest("materiais_referencias", payload, container)
+
+
 @router.post("/sync/afetacoes-obra", response_model=BulkSyncResponse)
 def sync_afetacoes(payload: BulkRowsRequest, container: ServiceContainer = Depends(get_container)) -> BulkSyncResponse:
     return _ingest("afetacoes_obra", payload, container)

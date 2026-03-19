@@ -12,6 +12,7 @@ CORE_SYNC_ENTITIES = [
     "faturas",
     "faturas_itens",
     "materiais_cad",
+    "materiais_referencias",
     "afetacoes_obra",
     "materiais_mov",
 ]
@@ -35,7 +36,7 @@ class SyncService:
                 pending_retry=True,
                 upserted=0,
                 error=str(exc),
-                payload=rows,
+                payload={"operation": "upsert", "rows": rows},
             )
             return BulkSyncResponse(
                 entity=entity,
@@ -44,9 +45,27 @@ class SyncService:
                 last_error=str(exc),
             )
 
+    def delete_rows(self, entity: str, ids: list[str]) -> None:
+        if not ids:
+            return
+        try:
+            self.supabase.delete_records(entity, ids)
+            self.state.touch_sync_job(entity, pending_retry=False, upserted=len(ids))
+        except SupabaseAdapterError as exc:
+            self.state.touch_sync_job(
+                entity,
+                pending_retry=True,
+                upserted=0,
+                error=str(exc),
+                payload={"operation": "delete", "ids": ids},
+            )
+
     def retry_pending(self) -> SyncStatusResponse:
         for entity, payload in list(self.state.pending_sync_payloads.items()):
-            self.ingest_rows(entity, payload)
+            if payload.get("operation") == "delete":
+                self.delete_rows(entity, [str(item) for item in payload.get("ids", [])])
+                continue
+            self.ingest_rows(entity, payload.get("rows", []))
         return self.status()
 
     def status(self) -> SyncStatusResponse:
@@ -70,4 +89,8 @@ class SyncService:
         for entity, job in sorted(jobs_by_entity.items()):
             if entity not in CORE_SYNC_ENTITIES:
                 jobs.append(job)
-        return SyncStatusResponse(jobs=jobs)
+        return SyncStatusResponse(
+            jobs=jobs,
+            last_reload_at=self.state.last_reload_at,
+            last_reload_source=self.state.last_reload_source,
+        )

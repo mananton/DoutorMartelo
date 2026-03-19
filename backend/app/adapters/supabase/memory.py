@@ -15,3 +15,7 @@ class MemorySupabaseAdapter(SupabaseAdapter):
             if batch.entity in self.fail_entities:
                 raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}")
         self.state.supabase_write_log.extend(batches)
+
+    def delete_records(self, entity: str, ids: list[str]) -> None:
+        if entity in self.fail_entities:
+            raise SupabaseAdapterError(f"Supabase mirror failed for {entity}")

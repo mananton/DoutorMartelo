@@ -6,6 +6,7 @@ from backend.app.api.deps import ServiceContainer, get_container
 from backend.app.schemas.materials import (
     FaturaCreate,
     FaturaDetail,
+    FaturaItemRecord,
     FaturaItemUpdate,
     FaturaItemsCreateRequest,
     FaturaItemsResponse,
@@ -36,6 +37,11 @@ def patch_fatura(id_fatura: str, payload: FaturaUpdate, container: ServiceContai
     return container.materials.patch_fatura(id_fatura, payload)
 
 
+@router.delete("/{id_fatura}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_fatura(id_fatura: str, container: ServiceContainer = Depends(get_container)) -> None:
+    container.materials.delete_fatura(id_fatura)
+
+
 @router.post("/{id_fatura}/itens/preview", response_model=FaturaItemsResponse)
 def preview_items(
     id_fatura: str,
@@ -54,12 +60,16 @@ def create_items(
     return container.materials.create_fatura_items(id_fatura, payload.items)
 
 
-@router.patch("/{id_fatura}/itens/{item_id}")
-def patch_item(id_fatura: str, item_id: str, payload: FaturaItemUpdate, container: ServiceContainer = Depends(get_container)):
+@router.patch("/{id_fatura}/itens/{item_id}", response_model=FaturaItemRecord)
+def patch_item(
+    id_fatura: str,
+    item_id: str,
+    payload: FaturaItemUpdate,
+    container: ServiceContainer = Depends(get_container),
+) -> FaturaItemRecord:
     return container.materials.update_fatura_item(id_fatura, item_id, payload.model_dump(exclude_none=True))
 
 
 @router.delete("/{id_fatura}/itens/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item(id_fatura: str, item_id: str, container: ServiceContainer = Depends(get_container)) -> None:
     container.materials.delete_fatura_item(id_fatura, item_id)
-

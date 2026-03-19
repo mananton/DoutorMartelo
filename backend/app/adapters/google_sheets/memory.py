@@ -11,6 +11,9 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
     def write_batches(self, batches: list[WriteBatch]) -> None:
         self.state.google_write_log.extend(batches)
 
+    def delete_records(self, entity: str, ids: list[str]) -> None:
+        return
+
     def load_snapshot(self) -> dict[str, list[dict[str, object]]]:
         return {}
 
@@ -28,4 +31,27 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
         return [
             {"obra": obra, "ativa": True, "fases": sorted(fases)}
             for obra, fases in sorted(fases_by_obra.items())
+        ]
+
+    def load_supplier_options(self) -> list[dict[str, object]]:
+        suppliers_by_name: dict[str, dict[str, object]] = {}
+        for collection in (self.state.faturas.values(), self.state.fatura_items.values(), self.state.movimentos.values()):
+            for record in collection:
+                fornecedor = str(record.get("fornecedor") or "").strip()
+                if not fornecedor:
+                    continue
+                nif = str(record.get("nif") or "").strip() or None
+                key = fornecedor.lower()
+                current = suppliers_by_name.get(key)
+                if current is None:
+                    suppliers_by_name[key] = {"fornecedor": fornecedor, "nif": nif}
+                    continue
+                if not current.get("nif") and nif:
+                    current["nif"] = nif
+        return [
+            suppliers_by_name[key]
+            for key in sorted(
+                suppliers_by_name.keys(),
+                key=lambda item: str(suppliers_by_name[item].get("fornecedor") or "").lower(),
+            )
         ]

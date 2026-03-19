@@ -22,3 +22,7 @@ def create_catalog(payload: CatalogEntryCreate, container: ServiceContainer = De
 def patch_catalog(id_item: str, payload: CatalogEntryUpdate, container: ServiceContainer = Depends(get_container)) -> CatalogEntryRecord:
     return container.materials.patch_catalog_entry(id_item, payload)
 
+
+@router.delete("/{id_item}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_catalog(id_item: str, container: ServiceContainer = Depends(get_container)) -> None:
+    container.materials.delete_catalog_entry(id_item)

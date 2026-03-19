@@ -23,7 +23,11 @@ def patch_afetacao(id_afetacao: str, payload: AfetacaoUpdate, container: Service
     return container.materials.patch_afetacao(id_afetacao, payload)
 
 
+@router.delete("/{id_afetacao}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_afetacao(id_afetacao: str, container: ServiceContainer = Depends(get_container)) -> None:
+    container.materials.delete_afetacao(id_afetacao)
+
+
 @router.post("/{id_afetacao}/processar", response_model=AfetacaoRecord)
 def process_afetacao(id_afetacao: str, container: ServiceContainer = Depends(get_container)) -> AfetacaoRecord:
     return container.materials.process_afetacao(id_afetacao)
-

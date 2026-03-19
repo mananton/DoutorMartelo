@@ -14,16 +14,52 @@ class MaterialsApiTests(unittest.TestCase):
         os.environ["BACKEND_DISABLE_LIVE_ADAPTERS"] = "1"
         self.app = create_app()
         self.client = TestClient(self.app)
-        self.catalog = self.client.post(
+        response = self.client.post(
             "/api/materiais-cad",
             json={
-                "fornecedor": "Fornecedor Base",
                 "descricao_original": "Prego 30",
                 "item_oficial": "Prego Zincado 30",
                 "natureza": "MATERIAL",
                 "unidade": "UN",
             },
+        )
+        self.assertEqual(response.status_code, 201)
+        self.catalog = response.json()
+
+    def _create_fatura(self, suffix: str = "001") -> dict[str, object]:
+        return self.client.post(
+            "/api/faturas",
+            json={
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "nr_documento": f"FT 2026/{suffix}",
+                "data_fatura": "2026-03-18",
+                "valor_sem_iva": 100,
+                "iva": 23,
+                "valor_com_iva": 123,
+            },
         ).json()
+
+    def _create_item(self, id_fatura: str, *, destino: str, obra: str | None = None, fase: str | None = None) -> dict[str, object]:
+        response = self.client.post(
+            f"/api/faturas/{id_fatura}/itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Prego 30",
+                        "quantidade": 100,
+                        "custo_unit": 0.1,
+                        "iva": 23,
+                        "destino": destino,
+                        "obra": obra,
+                        "fase": fase,
+                        "id_item": self.catalog["id_item"],
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()["items"][0]
 
     def tearDown(self) -> None:
         if self._previous_disable_live is None:
@@ -32,69 +68,15 @@ class MaterialsApiTests(unittest.TestCase):
             os.environ["BACKEND_DISABLE_LIVE_ADAPTERS"] = self._previous_disable_live
 
     def test_direct_invoice_item_generates_afetacao_and_movement(self) -> None:
-        fatura = self.client.post(
-            "/api/faturas",
-            json={
-                "fornecedor": "Fornecedor Base",
-                "nif": "501234567",
-                "nr_documento": "FT 2026/001",
-                "data_fatura": "2026-03-18",
-                "valor_sem_iva": 100,
-                "iva": 23,
-                "valor_com_iva": 123,
-            },
-        ).json()
-        response = self.client.post(
-            f"/api/faturas/{fatura['id_fatura']}/itens",
-            json={
-                "items": [
-                    {
-                        "descricao_original": "Prego 30",
-                        "quantidade": 100,
-                        "custo_unit": 0.1,
-                        "iva": 23,
-                        "destino": "CONSUMO",
-                        "obra": "Obra A",
-                        "fase": "Fase 1",
-                        "id_item": self.catalog["id_item"],
-                    }
-                ]
-            },
-        )
-        self.assertEqual(response.status_code, 201)
+        fatura = self._create_fatura("001")
+        self._create_item(fatura["id_fatura"], destino="CONSUMO", obra="Obra A", fase="Fase 1")
         afetacoes = self.client.get("/api/afetacoes").json()
         self.assertEqual(len(afetacoes), 1)
         self.assertEqual(afetacoes[0]["origem"], "FATURA_DIRETA")
 
     def test_stock_entry_then_manual_afetacao_uses_average_cost(self) -> None:
-        fatura = self.client.post(
-            "/api/faturas",
-            json={
-                "fornecedor": "Fornecedor Base",
-                "nif": "501234567",
-                "nr_documento": "FT 2026/002",
-                "data_fatura": "2026-03-18",
-                "valor_sem_iva": 100,
-                "iva": 23,
-                "valor_com_iva": 123,
-            },
-        ).json()
-        create_item = self.client.post(
-            f"/api/faturas/{fatura['id_fatura']}/itens",
-            json={
-                "items": [
-                    {
-                        "descricao_original": "Prego 30",
-                        "quantidade": 100,
-                        "custo_unit": 0.1,
-                        "iva": 23,
-                        "destino": "STOCK",
-                        "id_item": self.catalog["id_item"],
-                    }
-                ]
-            },
-        )
-        self.assertEqual(create_item.status_code, 201)
+        fatura = self._create_fatura("002")
+        self._create_item(fatura["id_fatura"], destino="STOCK")
 
         afetacao = self.client.post(
             "/api/afetacoes",
@@ -139,34 +121,12 @@ class MaterialsApiTests(unittest.TestCase):
         entities = [job["entity"] for job in status.json()["jobs"]]
         self.assertEqual(
             entities,
-            ["faturas", "faturas_itens", "materiais_cad", "afetacoes_obra", "materiais_mov"],
+            ["faturas", "faturas_itens", "materiais_cad", "materiais_referencias", "afetacoes_obra", "materiais_mov"],
         )
 
     def test_stock_and_diagnostics_endpoints(self) -> None:
-        fatura = self.client.post(
-            "/api/faturas",
-            json={
-                "fornecedor": "Fornecedor Base",
-                "nif": "501234567",
-                "nr_documento": "FT 2026/003",
-                "data_fatura": "2026-03-18",
-            },
-        ).json()
-        self.client.post(
-            f"/api/faturas/{fatura['id_fatura']}/itens",
-            json={
-                "items": [
-                    {
-                        "descricao_original": "Prego 30",
-                        "quantidade": 50,
-                        "custo_unit": 0.2,
-                        "iva": 23,
-                        "destino": "STOCK",
-                        "id_item": self.catalog["id_item"],
-                    }
-                ]
-            },
-        )
+        fatura = self._create_fatura("003")
+        self._create_item(fatura["id_fatura"], destino="STOCK")
 
         stock_list = self.client.get("/api/stock-atual")
         self.assertEqual(stock_list.status_code, 200)
@@ -179,52 +139,12 @@ class MaterialsApiTests(unittest.TestCase):
         diagnostics = self.client.get("/api/sync/diagnostics")
         self.assertEqual(diagnostics.status_code, 200)
         self.assertEqual(diagnostics.json()["source"], "google_sheets")
-        self.assertEqual(len(diagnostics.json()["entities"]), 5)
+        self.assertEqual(len(diagnostics.json()["entities"]), 6)
 
     def test_work_options_endpoint_returns_obras_and_fases(self) -> None:
-        fatura = self.client.post(
-            "/api/faturas",
-            json={
-                "fornecedor": "Fornecedor Base",
-                "nif": "501234567",
-                "nr_documento": "FT 2026/004",
-                "data_fatura": "2026-03-18",
-            },
-        ).json()
-        self.client.post(
-            f"/api/faturas/{fatura['id_fatura']}/itens",
-            json={
-                "items": [
-                    {
-                        "descricao_original": "Prego 30",
-                        "quantidade": 20,
-                        "custo_unit": 0.15,
-                        "iva": 23,
-                        "destino": "CONSUMO",
-                        "obra": "Obra Ativa A",
-                        "fase": "Estrutura",
-                        "id_item": self.catalog["id_item"],
-                    }
-                ]
-            },
-        )
-        self.client.post(
-            f"/api/faturas/{fatura['id_fatura']}/itens",
-            json={
-                "items": [
-                    {
-                        "descricao_original": "Prego 30",
-                        "quantidade": 5,
-                        "custo_unit": 0.15,
-                        "iva": 23,
-                        "destino": "CONSUMO",
-                        "obra": "Obra Ativa B",
-                        "fase": "Acabamentos",
-                        "id_item": self.catalog["id_item"],
-                    }
-                ]
-            },
-        )
+        fatura = self._create_fatura("004")
+        self._create_item(fatura["id_fatura"], destino="CONSUMO", obra="Obra Ativa A", fase="Estrutura")
+        self._create_item(fatura["id_fatura"], destino="CONSUMO", obra="Obra Ativa B", fase="Acabamentos")
 
         response = self.client.get("/api/options/obras-fases")
         self.assertEqual(response.status_code, 200)
@@ -234,6 +154,140 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertIn("Obra Ativa B", by_obra)
         self.assertIn("Estrutura", by_obra["Obra Ativa A"]["fases"])
         self.assertIn("Acabamentos", by_obra["Obra Ativa B"]["fases"])
+
+    def test_patch_invoice_item_reconciles_generated_records(self) -> None:
+        fatura = self._create_fatura("005")
+        item = self._create_item(fatura["id_fatura"], destino="STOCK")
+
+        response = self.client.patch(
+            f"/api/faturas/{fatura['id_fatura']}/itens/{item['id_item_fatura']}",
+            json={
+                "destino": "CONSUMO",
+                "obra": "Obra C",
+                "fase": "Acabamentos",
+                "quantidade": 40,
+                "custo_unit": 0.2,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["destino"], "CONSUMO")
+
+        detail = self.client.get(f"/api/faturas/{fatura['id_fatura']}").json()
+        self.assertEqual(detail["items"][0]["destino"], "CONSUMO")
+
+        afetacoes = self.client.get("/api/afetacoes").json()
+        self.assertEqual(len(afetacoes), 1)
+        self.assertEqual(afetacoes[0]["origem"], "FATURA_DIRETA")
+        self.assertEqual(afetacoes[0]["obra"], "Obra C")
+
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 1)
+        self.assertEqual(movimentos[0]["source_type"], "AFO")
+
+    def test_delete_invoice_item_cleans_generated_records(self) -> None:
+        fatura = self._create_fatura("006")
+        item = self._create_item(fatura["id_fatura"], destino="CONSUMO", obra="Obra D", fase="Estrutura")
+
+        response = self.client.delete(f"/api/faturas/{fatura['id_fatura']}/itens/{item['id_item_fatura']}")
+        self.assertEqual(response.status_code, 204)
+
+        detail = self.client.get(f"/api/faturas/{fatura['id_fatura']}").json()
+        self.assertEqual(detail["items"], [])
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        self.assertEqual(self.client.get("/api/materiais-mov").json(), [])
+
+    def test_patch_catalog_updates_dependents_and_delete_is_blocked(self) -> None:
+        fatura = self._create_fatura("007")
+        self._create_item(fatura["id_fatura"], destino="STOCK")
+
+        patch = self.client.patch(
+            f"/api/materiais-cad/{self.catalog['id_item']}",
+            json={
+                "item_oficial": "Prego Zincado 30 Atualizado",
+                "unidade": "CX",
+            },
+        )
+        self.assertEqual(patch.status_code, 200)
+
+        detail = self.client.get(f"/api/faturas/{fatura['id_fatura']}").json()
+        self.assertEqual(detail["items"][0]["item_oficial"], "Prego Zincado 30 Atualizado")
+        self.assertEqual(detail["items"][0]["unidade"], "CX")
+
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(movimentos[0]["item_oficial"], "Prego Zincado 30 Atualizado")
+        self.assertEqual(movimentos[0]["unidade"], "CX")
+
+        delete = self.client.delete(f"/api/materiais-cad/{self.catalog['id_item']}")
+        self.assertEqual(delete.status_code, 422)
+        self.assertEqual(delete.json()["detail"], "CATALOGO_REFERENCIADO")
+
+    def test_patch_and_delete_manual_afetacao_reconciles_movement(self) -> None:
+        fatura = self._create_fatura("008")
+        self._create_item(fatura["id_fatura"], destino="STOCK")
+
+        afetacao = self.client.post(
+            "/api/afetacoes",
+            json={
+                "origem": "STOCK",
+                "data": "2026-03-18",
+                "id_item": self.catalog["id_item"],
+                "quantidade": 10,
+                "iva": 23,
+                "obra": "Obra B",
+                "fase": "Fase 2",
+                "processar": True,
+            },
+        ).json()
+
+        patch = self.client.patch(
+            f"/api/afetacoes/{afetacao['id_afetacao']}",
+            json={
+                "quantidade": 15,
+                "obra": "Obra Corrigida",
+                "fase": "Fase Corrigida",
+            },
+        )
+        self.assertEqual(patch.status_code, 200)
+        self.assertEqual(patch.json()["obra"], "Obra Corrigida")
+
+        stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 85)
+
+        delete = self.client.delete(f"/api/afetacoes/{afetacao['id_afetacao']}")
+        self.assertEqual(delete.status_code, 204)
+        stock_after_delete = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
+        self.assertEqual(stock_after_delete["stock_atual"], 100)
+
+    def test_delete_fatura_cascades_children(self) -> None:
+        fatura = self._create_fatura("009")
+        self._create_item(fatura["id_fatura"], destino="CONSUMO", obra="Obra Z", fase="Fase Z")
+
+        delete = self.client.delete(f"/api/faturas/{fatura['id_fatura']}")
+        self.assertEqual(delete.status_code, 204)
+        self.assertEqual(self.client.get("/api/faturas").json(), [])
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        self.assertEqual(self.client.get("/api/materiais-mov").json(), [])
+
+    def test_sync_diagnostics_reports_field_mismatch(self) -> None:
+        fatura = self._create_fatura("010")
+        container = self.app.state.container
+        current = container.state.faturas[str(fatura["id_fatura"])]
+        container.google_sheets.load_snapshot = lambda: {
+            "faturas": [{**current, "fornecedor": "Fornecedor Divergente", "sheet_row_num": 7}],
+            "faturas_itens": [],
+            "materiais_cad": [],
+            "materiais_referencias": [],
+            "afetacoes_obra": [],
+            "materiais_mov": [],
+        }
+
+        diagnostics = self.client.get("/api/sync/diagnostics")
+        self.assertEqual(diagnostics.status_code, 200)
+        faturas_diag = next(entity for entity in diagnostics.json()["entities"] if entity["entity"] == "faturas")
+        self.assertFalse(faturas_diag["matches"])
+        self.assertEqual(faturas_diag["field_mismatch_count"], 1)
+        self.assertEqual(faturas_diag["field_mismatches"][0]["id"], str(fatura["id_fatura"]))
+        self.assertIn("fornecedor", faturas_diag["field_mismatches"][0]["fields"])
 
 
 if __name__ == "__main__":

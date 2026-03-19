@@ -74,6 +74,10 @@ class FaturaItemsCreateRequest(ApiModel):
 
 class FaturaItemUpdate(ApiModel):
     descricao_original: str | None = None
+    id_item: str | None = None
+    item_oficial: str | None = None
+    unidade: str | None = None
+    natureza: Natureza | None = None
     quantidade: float | None = None
     custo_unit: float | None = None
     iva: float | None = None
@@ -114,12 +118,11 @@ class FaturaItemRecord(ApiModel):
 
 
 class CatalogEntryCreate(ApiModel):
-    fornecedor: str
-    descricao_original: str
     item_oficial: str
     natureza: Natureza
     unidade: str
     observacoes: str | None = None
+    descricao_original: str | None = None
 
 
 class CatalogEntryUpdate(ApiModel):
@@ -132,13 +135,23 @@ class CatalogEntryUpdate(ApiModel):
 
 class CatalogEntryRecord(ApiModel):
     id_item: str
-    fornecedor: str
-    descricao_original: str
     item_oficial: str
     natureza: Natureza
     unidade: str
     observacoes: str | None = None
     estado_cadastro: str = "ATIVO"
+    referencias: list[str] = Field(default_factory=list)
+    reference_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatalogReferenceRecord(ApiModel):
+    id_referencia: str
+    descricao_original: str
+    id_item: str
+    observacoes: str | None = None
+    estado_referencia: str = "ATIVA"
     created_at: datetime
     updated_at: datetime
 
@@ -158,6 +171,7 @@ class AfetacaoCreate(ApiModel):
 
 class AfetacaoUpdate(ApiModel):
     data: date | None = None
+    id_item: str | None = None
     quantidade: float | None = None
     iva: float | None = None
     obra: str | None = None

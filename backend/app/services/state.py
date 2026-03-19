@@ -14,15 +14,18 @@ class RuntimeState:
     faturas: dict[str, dict[str, Any]] = field(default_factory=dict)
     fatura_items: dict[str, dict[str, Any]] = field(default_factory=dict)
     catalog: dict[str, dict[str, Any]] = field(default_factory=dict)
+    catalog_references: dict[str, dict[str, Any]] = field(default_factory=dict)
     afetacoes: dict[str, dict[str, Any]] = field(default_factory=dict)
     movimentos: dict[str, dict[str, Any]] = field(default_factory=dict)
     sync_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    pending_sync_payloads: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    pending_sync_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     synced_rows: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     counters: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     google_write_log: list[WriteBatch] = field(default_factory=list)
     supabase_write_log: list[WriteBatch] = field(default_factory=list)
     sequence: int = 0
+    last_reload_at: datetime | None = None
+    last_reload_source: str | None = None
 
     def next_id(self, prefix: str) -> str:
         self.counters[prefix] += 1
@@ -39,7 +42,7 @@ class RuntimeState:
         pending_retry: bool,
         upserted: int = 0,
         error: str | None = None,
-        payload: list[dict[str, Any]] | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> None:
         now = datetime.now(UTC)
         job = self.sync_jobs.get(entity, {"entity": entity})
@@ -58,7 +61,13 @@ class RuntimeState:
             self.pending_sync_payloads[entity] = payload
         self.sync_jobs[entity] = job
 
-    def hydrate_from_snapshot(self, snapshot: dict[str, list[dict[str, Any]]], *, preserve_sync_state: bool = False) -> None:
+    def hydrate_from_snapshot(
+        self,
+        snapshot: dict[str, list[dict[str, Any]]],
+        *,
+        preserve_sync_state: bool = False,
+        source: str = "google_sheets",
+    ) -> None:
         previous_sync_jobs = dict(self.sync_jobs)
         previous_pending_sync_payloads = dict(self.pending_sync_payloads)
         previous_synced_rows = dict(self.synced_rows)
@@ -76,6 +85,11 @@ class RuntimeState:
             record["id_item"]: record
             for record in snapshot.get("materiais_cad", [])
             if record.get("id_item")
+        }
+        self.catalog_references = {
+            record["id_referencia"]: record
+            for record in snapshot.get("materiais_referencias", [])
+            if record.get("id_referencia")
         }
         self.afetacoes = {
             record["id_afetacao"]: record
@@ -107,6 +121,8 @@ class RuntimeState:
             self._seed_counter(identifier)
         for identifier in self.catalog:
             self._seed_counter(identifier)
+        for identifier in self.catalog_references:
+            self._seed_counter(identifier)
         for identifier in self.afetacoes:
             self._seed_counter(identifier)
         for identifier in self.movimentos:
@@ -119,6 +135,8 @@ class RuntimeState:
                 continue
         if self.sequence == 0 and self.movimentos:
             self.sequence = len(self.movimentos)
+        self.last_reload_at = datetime.now(UTC)
+        self.last_reload_source = source
 
     def _seed_counter(self, identifier: str) -> None:
         match = re.match(r"^([A-Z]+)-(\d+)$", str(identifier or "").strip())

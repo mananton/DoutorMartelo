@@ -17,15 +17,18 @@ type ItemFormState = {
   destino: string;
   obra: string;
   fase: string;
+  desconto_1: string;
+  desconto_2: string;
+  observacoes: string;
 };
 
 type CatalogItem = Record<string, unknown> & {
   id_item?: string;
-  fornecedor?: string;
-  descricao_original?: string;
   item_oficial?: string;
   natureza?: string;
   unidade?: string;
+  referencias?: string[];
+  reference_count?: number;
 };
 
 type ImpactItem = {
@@ -34,6 +37,29 @@ type ImpactItem = {
   source?: string;
   type?: string;
 };
+
+type FaturaItemRow = Record<string, unknown> & {
+  id_item_fatura?: string;
+  descricao_original?: string;
+  id_item?: string;
+  item_oficial?: string;
+  natureza?: string;
+  unidade?: string;
+  quantidade?: number;
+  custo_unit?: number;
+  desconto_1?: number;
+  desconto_2?: number;
+  iva?: number;
+  destino?: string;
+  obra?: string;
+  fase?: string;
+  observacoes?: string;
+  custo_total_sem_iva?: number;
+  custo_total_com_iva?: number;
+  estado_mapeamento?: string;
+};
+
+type AssistantTab = "resumo" | "catalogo" | "impacto";
 
 const INITIAL_FORM: ItemFormState = {
   descricao_original: "",
@@ -47,6 +73,9 @@ const INITIAL_FORM: ItemFormState = {
   destino: "STOCK",
   obra: "",
   fase: "",
+  desconto_1: "0",
+  desconto_2: "0",
+  observacoes: "",
 };
 
 function normalize(value: string | undefined) {
@@ -65,6 +94,16 @@ function formatAmount(value: number, digits = 2) {
   }).format(value);
 }
 
+function suggestItemOficialFromDescription(value: string) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_")
+    .toUpperCase();
+}
+
 function buildItemPayload(form: ItemFormState, resolvedItemId: string | null) {
   return {
     descricao_original: form.descricao_original,
@@ -72,8 +111,11 @@ function buildItemPayload(form: ItemFormState, resolvedItemId: string | null) {
     custo_unit: toNumber(form.custo_unit),
     iva: toNumber(form.iva),
     destino: form.destino,
-    obra: form.obra || null,
-    fase: form.fase || null,
+    obra: form.destino === "CONSUMO" ? form.obra || null : null,
+    fase: form.destino === "CONSUMO" ? form.fase || null : null,
+    desconto_1: toNumber(form.desconto_1),
+    desconto_2: toNumber(form.desconto_2),
+    observacoes: form.observacoes || null,
     id_item: resolvedItemId,
     item_oficial: form.item_oficial || null,
     natureza: form.natureza || null,
@@ -91,40 +133,61 @@ function resetFormForNextLine(previous: ItemFormState): ItemFormState {
   };
 }
 
-function scoreCatalogItem(item: CatalogItem, search: string, fornecedor: string, descricaoOriginal: string) {
+function catalogReferences(item: CatalogItem) {
+  return ((item.referencias as string[] | undefined) ?? []).map((value) => String(value));
+}
+
+function scoreCatalogItem(item: CatalogItem, search: string, descricaoOriginal: string) {
   const normalizedSearch = normalize(search);
-  const normalizedFornecedor = normalize(fornecedor);
   const normalizedDescricao = normalize(descricaoOriginal);
   const itemId = normalize(item.id_item);
-  const itemFornecedor = normalize(item.fornecedor);
-  const itemDescricao = normalize(item.descricao_original);
   const itemOficial = normalize(item.item_oficial);
+  const itemReferencias = catalogReferences(item).map(normalize);
 
   let score = 0;
 
-  if (normalizedFornecedor && itemFornecedor === normalizedFornecedor) score += 30;
-  if (normalizedDescricao && itemDescricao === normalizedDescricao) score += 45;
-  if (normalizedFornecedor && normalizedDescricao && itemFornecedor === normalizedFornecedor && itemDescricao === normalizedDescricao) score += 80;
+  if (normalizedDescricao && itemReferencias.includes(normalizedDescricao)) score += 95;
 
   if (normalizedSearch) {
     if (itemId === normalizedSearch) score += 140;
     if (itemOficial === normalizedSearch) score += 90;
-    if (itemDescricao === normalizedSearch) score += 75;
+    if (itemReferencias.includes(normalizedSearch)) score += 75;
     if (itemId.includes(normalizedSearch)) score += 50;
     if (itemOficial.includes(normalizedSearch)) score += 40;
-    if (itemDescricao.includes(normalizedSearch)) score += 35;
-    if (itemFornecedor.includes(normalizedSearch)) score += 15;
+    if (itemReferencias.some((value) => value.includes(normalizedSearch))) score += 35;
   }
 
   return score;
+}
+
+function toFormState(item: FaturaItemRow): ItemFormState {
+  return {
+    descricao_original: String(item.descricao_original ?? ""),
+    id_item: String(item.id_item ?? ""),
+    item_oficial: String(item.item_oficial ?? ""),
+    natureza: String(item.natureza ?? ""),
+    unidade: String(item.unidade ?? ""),
+    quantidade: String(item.quantidade ?? ""),
+    custo_unit: String(item.custo_unit ?? ""),
+    iva: String(item.iva ?? 23),
+    destino: String(item.destino ?? "STOCK"),
+    obra: String(item.obra ?? ""),
+    fase: String(item.fase ?? ""),
+    desconto_1: String(item.desconto_1 ?? 0),
+    desconto_2: String(item.desconto_2 ?? 0),
+    observacoes: String(item.observacoes ?? ""),
+  };
 }
 
 export function FaturaDetailPage() {
   const { idFatura = "" } = useParams();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ItemFormState>(INITIAL_FORM);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<string>("");
   const [catalogMessage, setCatalogMessage] = useState<string>("");
+  const [assistantTab, setAssistantTab] = useState<AssistantTab>("resumo");
+
   const detail = useQuery({
     queryKey: ["fatura", idFatura],
     queryFn: () => api.getFatura(idFatura),
@@ -132,11 +195,13 @@ export function FaturaDetailPage() {
   });
   const catalogQuery = useQuery({ queryKey: ["catalogo"], queryFn: api.listCatalog });
   const workOptionsQuery = useQuery({ queryKey: ["work-options"], queryFn: api.getWorkOptions });
+
   const preview = useMutation({ mutationFn: (payload: Record<string, unknown>) => api.previewItems(idFatura, payload) });
   const createCatalog = useMutation({
     mutationFn: api.createCatalog,
     onSuccess: (created) => {
       const itemId = String(created.id_item ?? "");
+      setAssistantTab("catalogo");
       setCatalogMessage(`Item ${itemId} criado no catalogo e associado a esta linha.`);
       setForm((current) => ({
         ...current,
@@ -154,23 +219,68 @@ export function FaturaDetailPage() {
   const createItems = useMutation({
     mutationFn: (payload: Record<string, unknown>) => api.createItems(idFatura, payload),
     onSuccess: () => {
+      setAssistantTab("resumo");
       setFormMessage("Item da fatura guardado com sucesso.");
       setCatalogMessage("");
       setForm((current) => resetFormForNextLine(current));
       preview.reset();
       queryClient.invalidateQueries({ queryKey: ["fatura", idFatura] });
       queryClient.invalidateQueries({ queryKey: ["catalogo"] });
+      queryClient.invalidateQueries({ queryKey: ["afetacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["movimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-list"] });
       queryClient.invalidateQueries({ queryKey: ["sync-status"] });
     },
     onError: (error) => {
       setFormMessage(error instanceof Error ? error.message : "Falha ao guardar item da fatura.");
     },
   });
+  const updateItem = useMutation({
+    mutationFn: ({ itemId, payload }: { itemId: string; payload: Record<string, unknown> }) => api.updateFaturaItem(idFatura, itemId, payload),
+    onSuccess: (_, variables) => {
+      setAssistantTab("resumo");
+      setFormMessage(`Linha ${variables.itemId} atualizada com sucesso.`);
+      setCatalogMessage("");
+      setEditingItemId(null);
+      setForm(INITIAL_FORM);
+      preview.reset();
+      queryClient.invalidateQueries({ queryKey: ["fatura", idFatura] });
+      queryClient.invalidateQueries({ queryKey: ["catalogo"] });
+      queryClient.invalidateQueries({ queryKey: ["afetacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["movimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-list"] });
+      queryClient.invalidateQueries({ queryKey: ["sync-status"] });
+    },
+    onError: (error) => {
+      setFormMessage(error instanceof Error ? error.message : "Falha ao atualizar linha da fatura.");
+    },
+  });
+  const deleteItem = useMutation({
+    mutationFn: (itemId: string) => api.deleteFaturaItem(idFatura, itemId),
+    onSuccess: (_, itemId) => {
+      setAssistantTab("resumo");
+      setFormMessage(`Linha ${itemId} apagada com sucesso.`);
+      if (editingItemId === itemId) {
+        setEditingItemId(null);
+        setForm(INITIAL_FORM);
+        setCatalogMessage("");
+      }
+      preview.reset();
+      queryClient.invalidateQueries({ queryKey: ["fatura", idFatura] });
+      queryClient.invalidateQueries({ queryKey: ["afetacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["movimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-list"] });
+      queryClient.invalidateQueries({ queryKey: ["sync-status"] });
+    },
+    onError: (error) => {
+      setFormMessage(error instanceof Error ? error.message : "Falha ao apagar linha da fatura.");
+    },
+  });
 
   const fornecedorAtual = String((detail.data?.fatura as Record<string, unknown> | undefined)?.fornecedor ?? "");
   const workOptions = ((workOptionsQuery.data?.obras as WorkOption[] | undefined) ?? []);
   const searchTerm = useDeferredValue(form.id_item || form.item_oficial || form.descricao_original);
-  const selectedCatalog = (catalogQuery.data ?? []).find((item) => String(item.id_item ?? "") === form.id_item);
+  const selectedCatalog = ((catalogQuery.data as CatalogItem[] | undefined) ?? []).find((item) => String(item.id_item ?? "") === form.id_item);
   const availableFases = useMemo(
     () =>
       Array.from(
@@ -183,16 +293,28 @@ export function FaturaDetailPage() {
   const suggestions = ((catalogQuery.data as CatalogItem[] | undefined) ?? [])
     .map((item) => ({
       item,
-      score: scoreCatalogItem(item, searchTerm, fornecedorAtual, form.descricao_original),
+      score: scoreCatalogItem(item, searchTerm, form.descricao_original),
     }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score)
     .slice(0, 5);
+  const suggestedItemOficial = useMemo(
+    () => suggestItemOficialFromDescription(form.descricao_original),
+    [form.descricao_original],
+  );
+  const strongestSuggestionScore = suggestions[0]?.score ?? 0;
+  const hasRelevantCatalogSuggestions = strongestSuggestionScore >= 60;
+  const shouldSuggestNewItemOficial = !form.id_item && Boolean(form.descricao_original.trim()) && Boolean(suggestedItemOficial) && !hasRelevantCatalogSuggestions;
+  const isSuggestedItemOficial =
+    Boolean(form.item_oficial.trim()) &&
+    normalize(form.item_oficial) === normalize(suggestedItemOficial);
 
   const quantidade = toNumber(form.quantidade);
   const custoUnit = toNumber(form.custo_unit);
   const iva = toNumber(form.iva);
-  const totalSemIva = quantidade * custoUnit;
+  const desconto1 = toNumber(form.desconto_1);
+  const desconto2 = toNumber(form.desconto_2);
+  const totalSemIva = quantidade * custoUnit * (1 - desconto1 / 100) * (1 - desconto2 / 100);
   const totalComIva = totalSemIva * (1 + iva / 100);
   const localImpacts: ImpactItem[] =
     form.destino === "STOCK"
@@ -202,8 +324,9 @@ export function FaturaDetailPage() {
           { entity: "MATERIAIS_MOV", source: "AFETACOES_OBRA", type: "generated", summary: "Vai gerar movimento tecnico de consumo." },
         ];
   const previewImpacts = ((preview.data?.impacts as ImpactItem[] | undefined) ?? localImpacts);
-  const canQuickCreate = Boolean(fornecedorAtual && form.descricao_original && form.item_oficial && form.natureza && form.unidade);
+  const canQuickCreate = Boolean(form.descricao_original && form.item_oficial && form.natureza && form.unidade);
   const needsCatalogCreation = !form.id_item && Boolean(form.item_oficial && form.natureza && form.unidade);
+
   useEffect(() => {
     if (!selectedCatalog || !form.id_item) return;
     if (
@@ -226,6 +349,17 @@ export function FaturaDetailPage() {
     setCatalogMessage("");
     setForm((current) => {
       const next = { ...current, [field]: value };
+      if (field === "descricao_original") {
+        const previousSuggestedItemOficial = suggestItemOficialFromDescription(current.descricao_original);
+        const nextSuggestedItemOficial = suggestItemOficialFromDescription(value);
+        const itemWasAutoSuggested = normalize(current.item_oficial) === normalize(previousSuggestedItemOficial);
+        if (nextSuggestedItemOficial && (!current.item_oficial.trim() || itemWasAutoSuggested || Boolean(current.id_item))) {
+          next.item_oficial = nextSuggestedItemOficial;
+        }
+        if (!value.trim() && itemWasAutoSuggested) {
+          next.item_oficial = "";
+        }
+      }
       if (field === "id_item" && value !== current.id_item && !value) {
         next.item_oficial = "";
         next.natureza = "";
@@ -243,6 +377,7 @@ export function FaturaDetailPage() {
   }
 
   function applyCatalogItem(item: CatalogItem) {
+    setAssistantTab("catalogo");
     setCatalogMessage(`Item ${String(item.id_item)} selecionado a partir do catalogo.`);
     setForm((current) => ({
       ...current,
@@ -256,310 +391,540 @@ export function FaturaDetailPage() {
   function handleObraChange(value: string) {
     setFormMessage("");
     setCatalogMessage("");
-    setForm((current) => {
-      return {
-        ...current,
-        obra: value,
-        fase: current.fase,
-      };
-    });
+    setForm((current) => ({
+      ...current,
+      obra: value,
+      fase: current.fase,
+    }));
   }
 
   function runPreview() {
     setFormMessage("");
+    setAssistantTab("impacto");
     preview.mutate({ items: [buildItemPayload(form, selectedCatalog ? form.id_item : null)] });
   }
 
   function handleQuickCreate() {
+    setAssistantTab("catalogo");
     setCatalogMessage("");
     createCatalog.mutate({
-      fornecedor: fornecedorAtual,
       descricao_original: form.descricao_original,
       item_oficial: form.item_oficial,
       natureza: form.natureza,
       unidade: form.unidade,
+      observacoes: form.observacoes || null,
     });
   }
 
+  function applySuggestedItemOficial() {
+    if (!suggestedItemOficial) return;
+    setAssistantTab("catalogo");
+    setCatalogMessage("");
+    setForm((current) => ({
+      ...current,
+      item_oficial: suggestedItemOficial,
+    }));
+  }
+
+  function startEdit(item: FaturaItemRow) {
+    setEditingItemId(String(item.id_item_fatura ?? ""));
+    setAssistantTab("resumo");
+    setForm(toFormState(item));
+    setFormMessage("");
+    setCatalogMessage(`A editar ${String(item.id_item_fatura ?? "")}.`);
+    preview.reset();
+  }
+
+  function cancelEdit() {
+    setEditingItemId(null);
+    setAssistantTab("resumo");
+    setForm(INITIAL_FORM);
+    setFormMessage("");
+    setCatalogMessage("");
+    preview.reset();
+  }
+
+  const existingItems = ((detail.data?.items as FaturaItemRow[] | undefined) ?? []);
+  const fatura = (detail.data?.fatura as Record<string, unknown> | undefined) ?? {};
+  const documentoAtual = String(fatura.nr_documento ?? "-");
+  const dataFaturaAtual = String(fatura.data_fatura ?? "-");
+  const valorSemIvaFatura = Number(fatura.valor_sem_iva ?? 0);
+  const valorComIvaFatura = Number(fatura.valor_com_iva ?? 0);
+  const workspaceModeLabel = editingItemId ? `A editar ${editingItemId}` : "Nova linha";
+  const destinoLabel = form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto";
+  const formBusy = createItems.isPending || updateItem.isPending;
+  const helperNotes = [
+    form.destino === "STOCK" ? "Para selecionar `Obra` e `Fase`, muda primeiro o `Destino` para `CONSUMO`." : null,
+    form.destino !== "STOCK" && workOptions.length ? "O campo `Obra` mostra as obras carregadas da Google Sheet." : null,
+    form.destino !== "STOCK" && availableFases.length ? "O campo `Fase` mostra a lista global de fases carregada da Google Sheet." : null,
+  ].filter((note): note is string => Boolean(note));
+
   return (
-    <div className="grid two">
-      <section className="panel">
-        <h3>Detalhe da Fatura</h3>
-        <div className="detail-stack">
-          <div className="detail-card">
-            <div className="detail-label">Fornecedor</div>
-            <div>{fornecedorAtual || "-"}</div>
+    <div className="detail-page">
+      <section className="panel detail-hero">
+        <div className="detail-hero-head">
+          <div>
+            <div className="mono muted">Fatura {idFatura}</div>
+            <h3>Workspace de Itens</h3>
+            <div className="muted">Lanca ou corrige linhas sem sair da fatura. O foco desta vista e manter o formulario principal limpo e a conferência mais rápida.</div>
           </div>
-          <div className="detail-card">
-            <div className="detail-label">Documento</div>
-            <div>{String((detail.data?.fatura as Record<string, unknown> | undefined)?.nr_documento ?? "-")}</div>
-          </div>
-          <div className="detail-card">
-            <div className="detail-label">Data</div>
-            <div>{String((detail.data?.fatura as Record<string, unknown> | undefined)?.data_fatura ?? "-")}</div>
+          <div className="inline-actions">
+            <span className="tag">{workspaceModeLabel}</span>
+            <span className="tag">{destinoLabel}</span>
+            <span className="tag tag-success">{existingItems.length} linha(s)</span>
           </div>
         </div>
-        <h4>Itens ja lancados</h4>
-        <div className="list">
-          {((detail.data?.items as Record<string, unknown>[] | undefined) ?? []).map((item) => (
-            <div className="list-row" key={String(item.id_item_fatura)}>
-              <div className="row-head">
-                <strong>{String(item.descricao_original)}</strong>
-                <span className="tag">{String(item.destino)}</span>
-              </div>
-              <div className="muted">
-                {String(item.id_item ?? "-")} | {String(item.item_oficial ?? "-")} | {String(item.quantidade ?? 0)} {String(item.unidade ?? "")}
-              </div>
-              <div className="muted">
-                {String(item.natureza ?? "-")} | {String(item.custo_unit ?? 0)} un | {String(item.custo_total_sem_iva ?? 0)} sem IVA | {String(item.custo_total_com_iva ?? 0)} com IVA
-              </div>
-              <div className="muted">
-                {String(item.obra ?? "-")} | {String(item.fase ?? "-")} | {String(item.estado_mapeamento ?? "-")}
-              </div>
-            </div>
-          ))}
+        <div className="detail-header-grid">
+          <div className="summary-card accent">
+            <div className="summary-title">Fornecedor</div>
+            <div className="summary-main">{fornecedorAtual || "-"}</div>
+            <div className="muted">Base de mapeamento e criacao rapida de item oficial.</div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-title">Documento</div>
+            <div className="summary-main">{documentoAtual}</div>
+            <div className="muted">{dataFaturaAtual}</div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-title">Totais da fatura</div>
+            <div className="summary-main">{formatAmount(valorSemIvaFatura)} sem IVA</div>
+            <div className="muted">{formatAmount(valorComIvaFatura)} com IVA</div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-title">Linhas lancadas</div>
+            <div className="summary-main">{existingItems.length}</div>
+            <div className="muted">{editingItemId ? `Edicao ativa em ${editingItemId}` : "Pronto para nova linha."}</div>
+          </div>
         </div>
       </section>
 
-      <section className="panel">
-        <h3>Adicionar Linha</h3>
-        <div className="form-summary-grid">
-          <div className="summary-card accent">
-            <div className="summary-title">Mapeamento</div>
-            {selectedCatalog ? (
-              <>
-                <div className="summary-main">{String(selectedCatalog.id_item)} | {String(selectedCatalog.item_oficial ?? "-")}</div>
-                <div className="muted">{String(selectedCatalog.natureza ?? "-")} | {String(selectedCatalog.unidade ?? "-")}</div>
-              </>
-            ) : needsCatalogCreation ? (
-              <>
-                <div className="summary-main">Item novo pronto para catalogo</div>
-                <div className="muted">Podes criar agora ou deixar o backend cria-lo ao guardar.</div>
-              </>
-            ) : (
-              <>
-                <div className="summary-main">Sem item associado</div>
-                <div className="muted">Escolhe um item existente ou preenche os dados para criar um novo.</div>
-              </>
-            )}
+      <div className="detail-shell">
+        <section className="panel detail-main-panel">
+          <div className="row-head">
+            <div>
+              <div className="section-kicker">Linha em trabalho</div>
+              <h3>{editingItemId ? `Editar Linha ${editingItemId}` : "Adicionar Linha"}</h3>
+              <div className="muted">O centro da pagina fica reservado ao lancamento da linha. Sugestoes, preview e criacao de catalogo passam para um rail de apoio ao lado.</div>
+            </div>
+            {editingItemId ? (
+              <button className="btn secondary" type="button" onClick={cancelEdit}>
+                Cancelar edicao
+              </button>
+            ) : null}
           </div>
-          <div className="summary-card">
-            <div className="summary-title">Totais da linha</div>
-            <div className="summary-main">{formatAmount(totalSemIva)} sem IVA</div>
-            <div className="muted">{formatAmount(totalComIva)} com IVA | {formatAmount(quantidade, 2)} unidades</div>
-          </div>
-          <div className="summary-card">
-            <div className="summary-title">Impacto previsto</div>
-            <div className="summary-main">{form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto"}</div>
-            <div className="muted">{previewImpacts.length} efeitos operacionais previstos</div>
-          </div>
-        </div>
+
+          {formMessage ? <div className="status-note">{formMessage}</div> : null}
 
         <form
-          className="form"
+          className="form detail-form"
           onSubmit={(event) => {
             event.preventDefault();
             setFormMessage("");
-            createItems.mutate({ items: [buildItemPayload(form, selectedCatalog ? form.id_item : null)] });
+            const payload = buildItemPayload(form, selectedCatalog ? form.id_item : null);
+            if (editingItemId) {
+              updateItem.mutate({ itemId: editingItemId, payload });
+              return;
+            }
+            createItems.mutate({ items: [payload] });
           }}
         >
-          <div className="form-grid">
-            <label>
-              Descricao Original
-              <input name="descricao_original" required value={form.descricao_original} onChange={(event) => updateField("descricao_original", event.target.value)} />
-            </label>
-            <label>
-              Fornecedor da fatura
-              <input value={fornecedorAtual} disabled readOnly />
-            </label>
-            <label>
-              ID_Item existente
-              <input
-                name="id_item"
-                placeholder="Pesquisa por ID, descricao ou item oficial"
-                value={form.id_item}
-                onChange={(event) => updateField("id_item", event.target.value)}
-              />
-            </label>
-            <label>
-              Item Oficial
-              <input
-                name="item_oficial"
-                placeholder="Preenche so se for item novo"
-                value={form.item_oficial}
-                onChange={(event) => updateField("item_oficial", event.target.value)}
-              />
-            </label>
-            <label>
-              Natureza
-              <select name="natureza" value={form.natureza} onChange={(event) => updateField("natureza", event.target.value)}>
-                <option value="">Selecione</option>
-                <option value="MATERIAL">MATERIAL</option>
-                <option value="SERVICO">SERVICO</option>
-                <option value="ALUGUER">ALUGUER</option>
-                <option value="TRANSPORTE">TRANSPORTE</option>
-              </select>
-            </label>
-            <label>
-              Unidade
-              <input name="unidade" placeholder="UN, M2, H..." value={form.unidade} onChange={(event) => updateField("unidade", event.target.value)} />
-            </label>
-            <label>
-              Quantidade
-              <input name="quantidade" type="number" step="0.01" required value={form.quantidade} onChange={(event) => updateField("quantidade", event.target.value)} />
-            </label>
-            <label>
-              Custo Unit
-              <input name="custo_unit" type="number" step="0.0001" required value={form.custo_unit} onChange={(event) => updateField("custo_unit", event.target.value)} />
-            </label>
-            <label>
-              IVA %
-              <input name="iva" type="number" step="0.01" value={form.iva} onChange={(event) => updateField("iva", event.target.value)} />
-            </label>
-            <label>
-              Destino
-              <select name="destino" value={form.destino} onChange={(event) => updateField("destino", event.target.value)}>
-                <option value="STOCK">STOCK</option>
-                <option value="CONSUMO">CONSUMO</option>
-              </select>
-            </label>
-            <label>
-              Obra
-              {workOptions.length ? (
-                <select
-                  name="obra"
-                  value={form.obra}
-                  onChange={(event) => handleObraChange(event.target.value)}
-                  disabled={form.destino === "STOCK"}
-                >
-                  <option value="">Selecione</option>
-                  {workOptions.map((item) => (
-                    <option key={String(item.obra)} value={String(item.obra)}>
-                      {String(item.obra)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
+          <div className="form-section">
+            <div className="section-kicker">Item e mapeamento</div>
+            <div className="section-copy">Define a descricao da linha, reaproveita um item existente quando possivel e so preenche o item oficial se for um caso novo.</div>
+            <div className="form-grid">
+              <label>
+                Descricao Original
+                <input name="descricao_original" required value={form.descricao_original} onChange={(event) => updateField("descricao_original", event.target.value)} />
+              </label>
+              <label>
+                Fornecedor da fatura
+                <input value={fornecedorAtual} disabled readOnly />
+              </label>
+              <label>
+                ID_Item existente
                 <input
-                  name="obra"
-                  value={form.obra}
-                  onChange={(event) => updateField("obra", event.target.value)}
-                  disabled={form.destino === "STOCK"}
+                  name="id_item"
+                  placeholder="Pesquisa por ID, descricao ou item oficial"
+                  value={form.id_item}
+                  onChange={(event) => updateField("id_item", event.target.value)}
                 />
-              )}
-            </label>
-            <label>
-              Fase
-              {availableFases.length ? (
-                <select
-                  name="fase"
-                  value={form.fase}
-                  onChange={(event) => updateField("fase", event.target.value)}
-                  disabled={form.destino === "STOCK"}
-                >
-                  <option value="">Selecione</option>
-                  {availableFases.map((fase) => (
-                    <option key={fase} value={fase}>
-                      {fase}
-                    </option>
-                  ))}
-                </select>
-              ) : (
+              </label>
+              <label>
+                Item Oficial
                 <input
-                  name="fase"
-                  value={form.fase}
-                  onChange={(event) => updateField("fase", event.target.value)}
-                  disabled={form.destino === "STOCK"}
+                  name="item_oficial"
+                  placeholder="Preenche so se for item novo"
+                  value={form.item_oficial}
+                  onChange={(event) => updateField("item_oficial", event.target.value)}
                 />
-              )}
-            </label>
-          </div>
-          {form.destino === "STOCK" ? <div className="field-hint">Para selecionar `Obra` e `Fase`, muda primeiro o `Destino` para `CONSUMO`.</div> : null}
-          {form.destino !== "STOCK" && workOptions.length ? <div className="field-hint">O campo `Obra` mostra todas as obras carregadas da Google Sheet.</div> : null}
-          {form.destino !== "STOCK" && availableFases.length ? <div className="field-hint">O campo `Fase` mostra todas as fases carregadas da Google Sheet.</div> : null}
-
-          <div className="assistant-block">
-            <div className="assistant-head">
-              <strong>Sugestoes do catalogo</strong>
-              <span className="muted">Pesquisa assistida com base no fornecedor e na descricao desta linha.</span>
+                {shouldSuggestNewItemOficial && isSuggestedItemOficial ? (
+                  <div className="field-hint">
+                    Sem correspondencia forte no catalogo. Foi sugerido automaticamente o nome {form.item_oficial} para este item novo.
+                  </div>
+                ) : null}
+              </label>
+              <label>
+                Natureza
+                <select name="natureza" value={form.natureza} onChange={(event) => updateField("natureza", event.target.value)}>
+                  <option value="">Selecione</option>
+                  <option value="MATERIAL">MATERIAL</option>
+                  <option value="SERVICO">SERVICO</option>
+                  <option value="ALUGUER">ALUGUER</option>
+                  <option value="TRANSPORTE">TRANSPORTE</option>
+                </select>
+              </label>
+              <label>
+                Unidade
+                <input name="unidade" placeholder="UN, M2, H..." value={form.unidade} onChange={(event) => updateField("unidade", event.target.value)} />
+              </label>
             </div>
-            {suggestions.length ? (
-              <div className="suggestion-list">
-                {suggestions.map(({ item }) => (
-                  <button
-                    className={`suggestion-card ${String(item.id_item ?? "") === form.id_item ? "active" : ""}`}
-                    key={String(item.id_item)}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      applyCatalogItem(item);
-                    }}
-                    type="button"
-                  >
-                    <div className="row-head">
-                      <strong>{String(item.id_item)}</strong>
-                      <span className="tag">{String(item.natureza ?? "-")}</span>
-                    </div>
-                    <div>{String(item.item_oficial ?? "-")}</div>
-                    <div className="muted">{String(item.fornecedor ?? "-")} | {String(item.descricao_original ?? "-")}</div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-note">Ainda nao apareceu nenhuma sugestao relevante. Continua a escrever ou cria um item novo abaixo.</div>
-            )}
           </div>
 
-          <div className="assistant-block">
-            <div className="assistant-head">
-              <strong>Criacao rapida de item oficial</strong>
-              <span className="muted">Se esta linha ainda nao existir no catalogo, podes cria-la sem sair da fatura.</span>
+          <div className="form-section">
+            <div className="section-kicker">Valores da linha</div>
+            <div className="section-copy">Preenche quantidade, custo unitario, descontos e IVA. Os totais resumidos ficam no rail lateral para conferencia rapida.</div>
+            <div className="form-grid">
+              <label>
+                Quantidade
+                <input name="quantidade" type="number" step="0.01" required value={form.quantidade} onChange={(event) => updateField("quantidade", event.target.value)} />
+              </label>
+              <label>
+                Custo Unit
+                <input name="custo_unit" type="number" step="0.0001" required value={form.custo_unit} onChange={(event) => updateField("custo_unit", event.target.value)} />
+              </label>
+              <label>
+                Desconto 1 %
+                <input name="desconto_1" type="number" step="0.01" value={form.desconto_1} onChange={(event) => updateField("desconto_1", event.target.value)} />
+              </label>
+              <label>
+                Desconto 2 %
+                <input name="desconto_2" type="number" step="0.01" value={form.desconto_2} onChange={(event) => updateField("desconto_2", event.target.value)} />
+              </label>
+              <label>
+                IVA %
+                <input name="iva" type="number" step="0.01" value={form.iva} onChange={(event) => updateField("iva", event.target.value)} />
+              </label>
             </div>
-            <div className="quick-create-row">
-              <div className="quick-create-copy">
-                <div><strong>Fornecedor:</strong> {fornecedorAtual || "-"}</div>
-                <div><strong>Descricao:</strong> {form.descricao_original || "-"}</div>
-                <div><strong>Item Oficial:</strong> {form.item_oficial || "-"}</div>
-              </div>
-              <button className="btn secondary" disabled={!canQuickCreate || createCatalog.isPending} onClick={handleQuickCreate} type="button">
-                {createCatalog.isPending ? "A criar..." : "Criar item no catalogo"}
+          </div>
+
+          <div className="form-section">
+            <div className="section-kicker">Destino operacional</div>
+            <div className="section-copy">Define se a linha entra em stock ou se gera consumo direto. Obra e fase so ficam ativas quando o destino for `CONSUMO`.</div>
+            <div className="form-grid">
+              <label>
+                Destino
+                <select name="destino" value={form.destino} onChange={(event) => updateField("destino", event.target.value)}>
+                  <option value="STOCK">STOCK</option>
+                  <option value="CONSUMO">CONSUMO</option>
+                </select>
+              </label>
+              <label>
+                Obra
+                {workOptions.length ? (
+                  <select name="obra" value={form.obra} onChange={(event) => handleObraChange(event.target.value)} disabled={form.destino === "STOCK"}>
+                    <option value="">Selecione</option>
+                    {workOptions.map((item) => (
+                      <option key={String(item.obra)} value={String(item.obra)}>
+                        {String(item.obra)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input name="obra" value={form.obra} onChange={(event) => updateField("obra", event.target.value)} disabled={form.destino === "STOCK"} />
+                )}
+              </label>
+              <label>
+                Fase
+                {availableFases.length ? (
+                  <select name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino === "STOCK"}>
+                    <option value="">Selecione</option>
+                    {availableFases.map((fase) => (
+                      <option key={fase} value={fase}>
+                        {fase}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino === "STOCK"} />
+                )}
+              </label>
+            </div>
+          </div>
+          <label>
+            Observacoes
+            <textarea name="observacoes" rows={3} value={form.observacoes} onChange={(event) => updateField("observacoes", event.target.value)} />
+          </label>
+
+          <div className="form-actions detail-form-actions">
+            <button className="btn secondary" disabled={preview.isPending} onClick={runPreview} type="button">
+              {preview.isPending ? "A analisar..." : "Atualizar preview"}
+            </button>
+            <button className="btn primary" disabled={formBusy} type="submit">
+              {formBusy ? "A guardar..." : editingItemId ? "Guardar alteracoes" : "Adicionar linha"}
+            </button>
+          </div>
+        </form>
+        </section>
+
+        <aside className="detail-side-column">
+          <section className="panel detail-assistant-rail">
+            <div className="assistant-rail-head">
+              <div className="section-kicker">Assistente lateral</div>
+              <h3>Contexto da linha</h3>
+              <div className="muted">Tudo o que ajuda a decidir sem tirar foco ao formulario principal.</div>
+            </div>
+
+            <div className="assistant-tabs" role="tablist" aria-label="Painel lateral de apoio">
+              <button className={`assistant-tab ${assistantTab === "resumo" ? "active" : ""}`} onClick={() => setAssistantTab("resumo")} type="button">
+                Resumo
+              </button>
+              <button className={`assistant-tab ${assistantTab === "catalogo" ? "active" : ""}`} onClick={() => setAssistantTab("catalogo")} type="button">
+                Catalogo
+              </button>
+              <button className={`assistant-tab ${assistantTab === "impacto" ? "active" : ""}`} onClick={() => setAssistantTab("impacto")} type="button">
+                Impacto
               </button>
             </div>
-            <div className="field-hint">
-              Para criar ja o item, preenche `Descricao Original`, `Item Oficial`, `Natureza` e `Unidade`. Se preferires, tambem podes guardar a linha diretamente e deixar o backend criar o catalogo automaticamente.
-            </div>
-            {catalogMessage ? <div className="status-note">{catalogMessage}</div> : null}
-          </div>
 
-          <div className="assistant-block">
-            <div className="assistant-head">
-              <strong>Preview do impacto</strong>
-              <span className="muted">Resumo operacional antes de gravar a linha.</span>
-            </div>
-            <div className="impact-list">
-              {previewImpacts.map((impact, index) => (
-                <div className="impact-row" key={`${impact.entity}-${impact.summary}-${index}`}>
-                  <div className="impact-entity">{impact.entity ?? impact.type ?? "IMPACTO"}</div>
-                  <div>
-                    <div>{impact.summary ?? "Sem resumo"}</div>
-                    <div className="muted">{impact.source ?? "-"}</div>
+            {assistantTab === "resumo" ? (
+              <div className="assistant-tab-panel">
+                <div className="detail-side-summary">
+                  <div className="summary-card accent compact">
+                    <div className="summary-title">Mapeamento</div>
+                    {selectedCatalog ? (
+                      <>
+                        <div className="summary-main">{String(selectedCatalog.id_item)} | {String(selectedCatalog.item_oficial ?? "-")}</div>
+                        <div className="muted">
+                          {String(selectedCatalog.natureza ?? "-")} | {String(selectedCatalog.unidade ?? "-")} | {catalogReferences(selectedCatalog).length} referencia(s)
+                        </div>
+                      </>
+                    ) : needsCatalogCreation ? (
+                      <>
+                        <div className="summary-main">Item novo pronto para catalogo</div>
+                        <div className="muted">Podes criar agora ou deixar o backend cria-lo ao guardar.</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="summary-main">Sem item associado</div>
+                        <div className="muted">Escolhe um item existente ou preenche os dados para criar um novo.</div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="summary-card compact">
+                    <div className="summary-title">Totais da linha</div>
+                    <div className="summary-main">{formatAmount(totalSemIva)} sem IVA</div>
+                    <div className="muted">{formatAmount(totalComIva)} com IVA | {formatAmount(quantidade, 2)} unidades</div>
+                  </div>
+
+                  <div className="summary-card compact">
+                    <div className="summary-title">Impacto previsto</div>
+                    <div className="summary-main">{form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto"}</div>
+                    <div className="muted">{previewImpacts.length} efeitos operacionais previstos</div>
                   </div>
                 </div>
-              ))}
-            </div>
-            {preview.isError ? <div className="status-note">{preview.error instanceof Error ? preview.error.message : "Falha ao gerar preview."}</div> : null}
-          </div>
 
-          <div className="form-actions">
-            <button className="btn secondary" disabled={preview.isPending} onClick={runPreview} type="button">
-              {preview.isPending ? "A analisar..." : "Preview impacto"}
-            </button>
-            <button className="btn primary" disabled={createItems.isPending} type="submit">
-              {createItems.isPending ? "A guardar..." : "Adicionar linha"}
-            </button>
+                {catalogMessage ? <div className="status-note">{catalogMessage}</div> : null}
+
+                <details className="assistant-collapsible" open={Boolean(catalogMessage) || needsCatalogCreation}>
+                  <summary>Criacao rapida de item oficial</summary>
+                  <div className="assistant-note-list">
+                    <div className="quick-create-copy">
+                      <div><strong>Descricao:</strong> {form.descricao_original || "-"}</div>
+                      <div><strong>Item Oficial:</strong> {form.item_oficial || "-"}</div>
+                    </div>
+                    <button className="btn secondary" disabled={!canQuickCreate || createCatalog.isPending} onClick={handleQuickCreate} type="button">
+                      {createCatalog.isPending ? "A criar..." : "Criar item no catalogo"}
+                    </button>
+                    <div className="field-hint">
+                      Se a descricao da linha bater numa referencia conhecida, escolhe o item certo no separador `Catalogo`. Se for um material novo, cria primeiro o item oficial e esta descricao passa a referencia inicial.
+                    </div>
+                  </div>
+                </details>
+              </div>
+            ) : null}
+
+            {assistantTab === "catalogo" ? (
+              <div className="assistant-tab-panel">
+                {catalogMessage ? <div className="status-note">{catalogMessage}</div> : null}
+
+                {shouldSuggestNewItemOficial ? (
+                  <div className="assistant-block">
+                    <div className="assistant-head">
+                      <strong>Sugestao para item novo</strong>
+                      <span className="muted">Nao apareceu correspondencia forte no catalogo para esta descricao.</span>
+                    </div>
+                    <div className="assistant-note-list">
+                      <div className="quick-create-copy">
+                        <div><strong>Descricao:</strong> {form.descricao_original || "-"}</div>
+                        <div><strong>Nome sugerido:</strong> {suggestedItemOficial || "-"}</div>
+                      </div>
+                      {!isSuggestedItemOficial ? (
+                        <button className="btn secondary" onClick={applySuggestedItemOficial} type="button">
+                          Usar nome sugerido
+                        </button>
+                      ) : null}
+                      <div className="field-hint">Ajusta o nome se precisares, mas este ja te deixa o item oficial preparado para criacao rapida.</div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="assistant-block">
+                  <div className="assistant-head">
+                    <strong>Sugestoes do catalogo</strong>
+                    <span className="muted">Confirma rapidamente se ja existe um item certo para esta linha.</span>
+                  </div>
+                  {suggestions.length ? (
+                    <div className="suggestion-list">
+                      {suggestions.map(({ item }) => (
+                        <button
+                          className={`suggestion-card ${String(item.id_item ?? "") === form.id_item ? "active" : ""}`}
+                          key={String(item.id_item)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            applyCatalogItem(item);
+                          }}
+                          type="button"
+                        >
+                          <div className="row-head">
+                            <strong>{String(item.id_item)}</strong>
+                            <span className="tag">{String(item.natureza ?? "-")}</span>
+                          </div>
+                          <div>{String(item.item_oficial ?? "-")}</div>
+                          <div className="muted">
+                            {catalogReferences(item).length
+                              ? catalogReferences(item).slice(0, 3).join(" | ")
+                              : "Sem referencias registadas."}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-note">Ainda nao apareceu nenhuma sugestao relevante. Continua a escrever ou cria um item novo.</div>
+                  )}
+                </div>
+
+                <details className="assistant-collapsible" open={needsCatalogCreation}>
+                  <summary>Novo item oficial</summary>
+                  <div className="assistant-note-list">
+                    <div className="quick-create-copy">
+                      <div><strong>Descricao:</strong> {form.descricao_original || "-"}</div>
+                      <div><strong>Item Oficial:</strong> {form.item_oficial || "-"}</div>
+                    </div>
+                    <button className="btn secondary" disabled={!canQuickCreate || createCatalog.isPending} onClick={handleQuickCreate} type="button">
+                      {createCatalog.isPending ? "A criar..." : "Criar item no catalogo"}
+                    </button>
+                    <div className="field-hint">Usa esta opcao apenas quando tiveres a certeza de que a linha nao corresponde a nenhum item existente. A `Descricao_Original` atual ficara guardada como primeira referencia desse item.</div>
+                  </div>
+                </details>
+              </div>
+            ) : null}
+
+            {assistantTab === "impacto" ? (
+              <div className="assistant-tab-panel">
+                <div className="summary-card compact">
+                  <div className="summary-title">Impacto previsto</div>
+                  <div className="summary-main">{form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto"}</div>
+                  <div className="muted">{previewImpacts.length} efeitos operacionais previstos</div>
+                </div>
+
+                <div className="assistant-block">
+                  <div className="assistant-head">
+                    <strong>Preview do impacto</strong>
+                    <span className="muted">Resumo operacional antes de gravar a linha.</span>
+                  </div>
+                  <div className="impact-list">
+                    {previewImpacts.map((impact, index) => (
+                      <div className="impact-row" key={`${impact.entity}-${impact.summary}-${index}`}>
+                        <div className="impact-entity">{impact.entity ?? impact.type ?? "IMPACTO"}</div>
+                        <div>
+                          <div>{impact.summary ?? "Sem resumo"}</div>
+                          <div className="muted">{impact.source ?? "-"}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {preview.isError ? <div className="status-note">{preview.error instanceof Error ? preview.error.message : "Falha ao gerar preview."}</div> : null}
+                </div>
+
+                {helperNotes.length ? (
+                  <details className="assistant-collapsible">
+                    <summary>Notas operacionais</summary>
+                    <div className="assistant-note-list">
+                      {helperNotes.map((note) => (
+                        <div className="field-hint" key={note}>
+                          {note}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        </aside>
+
+      <section className="panel detail-history-panel">
+          <div className="row-head">
+            <div>
+              <div className="section-kicker">Linhas ja lancadas</div>
+              <h3>{existingItems.length ? `${existingItems.length} linha(s) nesta fatura` : "Ainda sem linhas"}</h3>
+              <div className="muted">Usa esta lista para rever o que ja entrou e abrir rapidamente uma linha em modo de correcao.</div>
+            </div>
           </div>
-          {formMessage ? <div className="status-note">{formMessage}</div> : null}
-        </form>
+          <div className="list detail-history-list">
+            {existingItems.map((item) => {
+              const id = String(item.id_item_fatura ?? "");
+              return (
+                <div className={`list-row list-row-compact ${editingItemId === id ? "list-row-active" : ""}`} key={id}>
+                  <div className="list-row-body">
+                    <div className="list-row-title">
+                      <strong>{String(item.descricao_original)}</strong>
+                      <div className="inline-actions">
+                        <span className="tag">{String(item.destino)}</span>
+                        <span className="tag">{String(item.estado_mapeamento ?? "-")}</span>
+                        {editingItemId === id ? <span className="tag tag-success">Em edicao</span> : null}
+                      </div>
+                    </div>
+                    <div className="list-row-meta">
+                      <span className="mono">{id}</span>
+                      <span>{String(item.id_item ?? "-")} | {String(item.item_oficial ?? "-")}</span>
+                    </div>
+                    <details className="list-row-collapsible">
+                      <summary>Ver detalhe operacional</summary>
+                      <div className="list-row-facts">
+                        <span>{String(item.natureza ?? "-")} | {formatAmount(Number(item.quantidade ?? 0), 2)} {String(item.unidade ?? "")}</span>
+                        <span>{formatAmount(Number(item.custo_total_sem_iva ?? 0))} sem IVA | {formatAmount(Number(item.custo_total_com_iva ?? 0))} com IVA</span>
+                        <span>{String(item.obra ?? "-")} | {String(item.fase ?? "-")}</span>
+                      </div>
+                    </details>
+                  </div>
+                  <div className="list-row-actions">
+                    <button className="btn secondary" type="button" onClick={() => startEdit(item)}>
+                      Editar
+                    </button>
+                    <button
+                      className="btn danger"
+                      type="button"
+                      disabled={deleteItem.isPending}
+                      onClick={() => {
+                        if (!window.confirm(`Apagar a linha ${id}? As afetacoes e movimentos gerados a partir desta linha tambem serao reconciliados.`)) {
+                          return;
+                        }
+                        setFormMessage("");
+                        deleteItem.mutate(id);
+                      }}
+                    >
+                      Apagar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {!existingItems.length ? <div className="empty-note">Ainda nao existem linhas associadas a esta fatura.</div> : null}
+          </div>
       </section>
+      </div>
     </div>
   );
 }

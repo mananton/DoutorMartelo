@@ -11,16 +11,17 @@ from backend.app.config import Settings
 
 
 TABLE_CONFIG: dict[str, dict[str, str]] = {
-    "colaboradores": {"table": "colaboradores_sync", "conflict": "nome"},
-    "registos": {"table": "registos_sync", "conflict": "id_registo"},
-    "deslocacoes": {"table": "deslocacoes_sync", "conflict": "id_viagem"},
-    "legacy_mao_obra": {"table": "legacy_mao_obra_sync", "conflict": "source_key"},
-    "faturas": {"table": "faturas", "conflict": "id_fatura"},
-    "faturas_itens": {"table": "faturas_itens", "conflict": "id_item_fatura"},
-    "materiais_cad": {"table": "materiais_cad", "conflict": "id_item,fornecedor,descricao_original"},
-    "afetacoes_obra": {"table": "afetacoes_obra", "conflict": "id_afetacao"},
-    "materiais_mov": {"table": "materiais_mov", "conflict": "id_mov"},
-    "stock_atual": {"table": "stock_atual", "conflict": "id_item"},
+    "colaboradores": {"table": "colaboradores_sync", "conflict": "nome", "id_field": "nome"},
+    "registos": {"table": "registos_sync", "conflict": "id_registo", "id_field": "id_registo"},
+    "deslocacoes": {"table": "deslocacoes_sync", "conflict": "id_viagem", "id_field": "id_viagem"},
+    "legacy_mao_obra": {"table": "legacy_mao_obra_sync", "conflict": "source_key", "id_field": "source_key"},
+    "faturas": {"table": "faturas", "conflict": "id_fatura", "id_field": "id_fatura"},
+    "faturas_itens": {"table": "faturas_itens", "conflict": "id_item_fatura", "id_field": "id_item_fatura"},
+    "materiais_cad": {"table": "materiais_cad", "conflict": "id_item", "id_field": "id_item"},
+    "materiais_referencias": {"table": "materiais_referencias", "conflict": "id_referencia", "id_field": "id_referencia"},
+    "afetacoes_obra": {"table": "afetacoes_obra", "conflict": "id_afetacao", "id_field": "id_afetacao"},
+    "materiais_mov": {"table": "materiais_mov", "conflict": "id_mov", "id_field": "id_mov"},
+    "stock_atual": {"table": "stock_atual", "conflict": "id_item", "id_field": "id_item"},
 }
 
 
@@ -55,6 +56,25 @@ class LiveSupabaseAdapter(SupabaseAdapter):
                     raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}: {exc}") from exc
                 if response.status_code >= 300:
                     raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}: HTTP {response.status_code} {response.text}")
+
+    def delete_records(self, entity: str, ids: list[str]) -> None:
+        if not ids:
+            return
+        config = TABLE_CONFIG.get(entity)
+        if not config:
+            raise SupabaseAdapterError(f"No Supabase table mapping for {entity}")
+        joined_ids = ",".join(f'"{record_id}"' for record_id in ids)
+        with httpx.Client(timeout=20.0, trust_env=False) as client:
+            try:
+                response = client.delete(
+                    f"{self.base_url}/{config['table']}",
+                    params={config["id_field"]: f"in.({joined_ids})"},
+                    headers=self.headers | {"Accept-Profile": self.settings.supabase_schema, "Content-Profile": self.settings.supabase_schema},
+                )
+            except httpx.HTTPError as exc:
+                raise SupabaseAdapterError(f"Supabase mirror failed for {entity}: {exc}") from exc
+            if response.status_code >= 300:
+                raise SupabaseAdapterError(f"Supabase mirror failed for {entity}: HTTP {response.status_code} {response.text}")
 
     def _json_ready(self, value: Any) -> Any:
         if isinstance(value, datetime):
