@@ -1,246 +1,333 @@
 # Copilot Instructions - Dashboard Doutor Martelo
 
-## Contexto do Projeto
-Dashboard de gestao de obra para empresa de construcao civil portuguesa.
-O backend e Google Apps Script (`main.gs`) e a UI e servida como Web App via `HtmlService`.
-Toda a interface continua concentrada num unico ficheiro `index.html`.
+## Purpose
+This repository is now hybrid and must be treated as two active product surfaces:
 
-O projeto atual integra:
-- AppSheet para input operacional diario
-- Google Sheets como base de dados operacional
-- Google Apps Script para agregacao, saneamento e automacoes
-- Dashboard web em `index.html`
+1. `legacy GAS dashboard`
+2. `materials backoffice (FastAPI + React)`
 
----
+These instructions exist to stop tools and collaborators from applying the wrong stack rules to the wrong part of the repo.
 
-## Stack e Restricoes Absolutas
-- HTML5 + CSS3 + JavaScript ES6 vanilla
-- Nunca sugerir React, Vue, Angular, npm, webpack, import/export ou require()
-- Chart.js v4 via CDN para graficos
-- Font Awesome 6 via CDN para icones
-- Google Fonts: Inter
-- Tudo em funcoes globais, compativel com Apps Script `HtmlService`
-- O frontend nao fala diretamente com Google Sheets; tudo passa pelo GAS
+## First Read Rule
+Before making architecture or implementation decisions, read these files first:
 
----
+1. `docs/DOCS_CATALOG.md`
+2. `docs/PROJECT_STATE.md`
+3. `docs/DECISIONS.md`
+4. `docs/OPEN_ITEMS.md`
+5. `docs/WORKLOG.md`
 
-## Ficheiros do Projeto
-| Ficheiro | Funcao |
-|---|---|
-| `index.html` | UI completa: HTML + CSS + JS |
-| `main.gs` | Backend GAS: leitura de sheets, agregacao, trigger e automacoes |
-| `appsscript.json` | Configuracao do Apps Script |
-| `.clasp.json` | Configuracao do clasp |
-| `REGRAS_DE_NEGOCIO.md` | Documento de regras, estrutura e migracao |
+If there is any conflict:
+- prefer `PROJECT_STATE`
+- then `DECISIONS`
+- then `OPEN_ITEMS`
+- then `WORKLOG`
+- treat older docs as background unless they are still explicitly confirmed by the newer docs
 
----
+## Repo Reality
 
-## Como os Dados Chegam ao Frontend
+### Track A - Legacy GAS Dashboard
+Main area:
+- `src/`
+
+Current stack:
+- Google Apps Script
+- Google Sheets
+- AppSheet for operational input
+- HtmlService frontend split into:
+  - `src/index.html`
+  - `src/css.html`
+  - `src/js.html`
+- GAS backend split into:
+  - `src/main.gs`
+  - `src/Readers.gs`
+  - `src/Composer.gs`
+  - `src/Aggregators.gs`
+  - `src/Sync.gs`
+
+### Track B - Materials Backoffice
+Main areas:
+- `backend/`
+- `frontend/`
+
+Current stack:
+- FastAPI
+- Python service/adapters/schemas structure
+- React + Vite
+- Google Sheets live adapters
+- Supabase mirror
+
+## Scope Routing
+
+### Use the legacy GAS rules when:
+- the task touches `src/`
+- the task is about the current dashboard web app
+- the task is about `google.script.run`
+- the task is about AppSheet input behavior
+- the task is about GAS triggers, sheet readers, dashboard payloads, or `raw_v2`
+
+### Use the materials backoffice rules when:
+- the task touches `backend/`
+- the task touches `frontend/`
+- the task is about:
+  - `FATURAS`
+  - `FATURAS_ITENS`
+  - `MATERIAIS_CAD`
+  - `AFETACOES_OBRA`
+  - `MATERIAIS_MOV`
+  - `STOCK_ATUAL`
+  - sync diagnostics
+  - runtime hydration
+  - FastAPI endpoints
+  - React routes/pages
+
+### If a task spans both tracks:
+- keep boundaries explicit
+- do not force GAS-only constraints onto FastAPI/React work
+- do not force React/backend patterns into the legacy GAS dashboard
+
+## Global Constraints Across Both Tracks
+- Keep UI and business wording in Portuguese PT unless the file already uses English for technical reasons.
+- Do not rename global sheet constants such as `SHEET_REGISTOS` unless explicitly requested.
+- Do not change Supabase sync structure unless explicitly requested.
+- Keep legacy data-handling rules active unless the business owner asks to change them.
+- Prefer incremental, low-risk edits over broad rewrites.
+- When architecture or operational flow changes, update the active docs in `docs/`.
+
+## A. Legacy GAS Dashboard Instructions
+
+### Core Mindset
+Treat the legacy dashboard as an active production surface, not as dead code.
+Changes here must preserve compatibility with:
+- Google Apps Script runtime
+- HtmlService
+- AppSheet operational flow
+- current Google Sheets structure
+
+### Allowed Stack and Patterns
+- HTML5 + CSS3 + vanilla JavaScript
+- global functions compatible with Apps Script HtmlService
+- Chart.js via CDN if already part of the page flow
+- `google.script.run` for frontend -> backend calls
+
+### Do Not Introduce Into `src/`
+- React
+- Vue
+- Angular
+- npm-driven frontend architecture inside the GAS app
+- `fetch` for GAS frontend/backend communication
+- `import` / `export` browser-module structure inside HtmlService files
+- assumptions that the dashboard frontend is a Vite app
+
+### Legacy File Map
+- `src/main.gs`
+  - entrypoints and orchestration
+  - `doGet`
+  - operational helpers
+  - trigger-related behavior
+- `src/Readers.gs`
+  - sheet readers
+  - header normalization
+  - dynamic column mapping
+  - legacy-safe parsing
+- `src/Composer.gs`
+  - raw payload assembly
+- `src/Aggregators.gs`
+  - server-side aggregation
+- `src/Sync.gs`
+  - Supabase sync boundary
+- `src/index.html`
+  - markup
+- `src/css.html`
+  - styles
+- `src/js.html`
+  - client logic, rendering, filtering, charts
+
+### Legacy Runtime Flow
+1. `doGet()` serves `index`
+2. frontend calls `getDashboardData({ mode: 'raw_v2' })`
+3. frontend normalizes raw payload client-side
+4. if needed, frontend falls back to legacy mode
+
+### Legacy Data/Behavior Rules To Preserve
+- `COLABORADORES` remains the source of active workers
+- keep cost-only legacy day handling active
+- keep old labour history separated from operational worker detail
+- keep diagnostics non-blocking
+- preserve current behavior around:
+  - faltas
+  - dispensado
+  - legacy hours/cost fallbacks
+  - date filtering rules
+
+### Legacy Frontend Communication Rule
+For GAS UI work:
+
 ```js
 google.script.run
-  .withSuccessHandler(onDataLoaded)
-  .withFailureHandler(onDataError)
-  .getDashboardData();
-
-function onDataLoaded(jsonStr) {
-  DATA = JSON.parse(jsonStr);
-}
+  .withSuccessHandler(...)
+  .withFailureHandler(...)
+  .someServerFunction(...)
 ```
 
-No frontend, a variavel global principal e `DATA` (nao `dashData`).
+Do not replace this with `fetch`.
 
----
+### Legacy Editing Rules
+- Make surgical edits.
+- Preserve the split include structure:
+  - `index.html`
+  - `css.html`
+  - `js.html`
+- Respect the real Google Sheet column order when touching sheet-driven logic.
+- Trigger-driven logic should remain idempotent whenever possible.
 
-## Estrutura Atual do JSON (`DATA`)
-```js
-DATA = {
-  global: {
-    custo_total,
-    custo_mao_obra,
-    custo_deslocacoes,
-    custo_materiais,
-    horas_total,
-    total_atrasos,
-    obras_ativas,
-    colaboradores,
-    faltas,
-    custo_viagens,
-    total_viagens,
-    last_update
-  },
-  obras: {
-    "Nome da Obra": {
-      custo_mao_obra,
-      custo_deslocacoes,
-      qtd_deslocacoes,
-      custo_materiais,
-      custo_total,
-      horas_total,
-      atraso_total,
-      trabalhadores,
-      faltas,
-      dias,
-      all_dates,
-      daily: [{ DATA_str, Custo, Horas, Atraso, Trabalhadores, Faltas }],
-      weekly: [{ Semana, Custo, Horas }],
-      monthly: [{ Mes, Custo, Horas }],
-      workers: [{ "Nome (auto)", "Funcao (auto)", Fase, Custo, Horas, Atraso, Dias, Faltas }],
-      assiduidade: [{
-        nome,
-        funcao,
-        dias: {
-          "YYYY-MM-DD": { horas, falta, dispensado, custo, atraso_min, motivo, fases }
-        }
-      }],
-      fases: [{ Fase, Custo, Horas, Workers, Dias, Faltas }],
-      materiais_fases: [{ Fase, Custo, Qtd }]
-    }
-  },
-  obras_info: [{ Obra_ID, Local_ID, Ativa }],
-  colaboradores: [{ Nome, Funcao, Eur_h }],
-  viagens: [{ Data_str, DiaSem, V_Padrao, V_Real, V_Efetivas, Viatura, Obra, Custo_Via, custo_dia }],
-  deslocacoes: [{ data, obra, veiculo, motorista, origem, qtd, custo }],
-  ferias: [{ nome, data_admissao, dias_total, ano_ref_inicio, ano_ref_fim, dias_usados, dias_disponiveis }],
-  materiais_mov: [{ id_mov, data, tipo, obra, fase, material, quantidade, custo_total }]
-}
-```
+### Legacy Testing Focus
+- desktop and mobile behavior
+- dashboard boot path
+- date filters
+- assiduidade / dispensado behavior
+- chart interactions
+- AppSheet-sensitive sheet flows when relevant
 
----
+## B. Materials Backoffice Instructions
 
-## Estrutura Atual de `REGISTOS_POR_DIA`
-Ordem real atual das colunas na Google Sheet:
+### Core Mindset
+Treat the materials backoffice as the main forward development path for the unstable materials/purchasing workflow.
+This is not a UI-only wrapper around Sheets.
+It is an app + backend business-logic boundary that still preserves Google Sheets as the operational record.
+It is also a desktop-first office tool, not a mobile-first field dashboard.
 
-1. `DATA_ARQUIVO`
-2. `DATA_REGISTO`
-3. `Nome`
-4. `Funcao`
-5. `Obra`
-6. `Fase de Obra`
-7. `Horas`
-8. `Atraso_Minutos`
-9. `Falta`
-10. `Motivo Falta`
-11. `EUR_h`
-12. `Custo Dia (€)`
-13. `Observacao`
-14. `ID_Registo`
-15. `Dispensado`
-16. `Dispensa_Processada_Em`
+### Read Before Working In This Area
+Read these first:
 
-Notas importantes:
-- `main.gs` le `A:P`
-- `Dispensado` e um `Yes/No` funcional para AppSheet e dashboard
-- `Dispensa_Processada_Em` e tecnico; o GAS usa-o para evitar reprocessar a mesma dispensa
+1. `docs/PROJECT_STATE.md`
+2. `docs/DECISIONS.md`
+3. `docs/OPEN_ITEMS.md`
+4. `docs/MATERIALS_BACKOFFICE_SPEC.md`
+5. `docs/MATERIALS_BACKOFFICE_PLAN.md`
+6. `backend/README.md`
 
----
+### Allowed Stack and Patterns
+In `backend/` and `frontend/`, the following are expected and valid:
+- FastAPI
+- Python modules and schemas
+- React
+- Vite
+- npm
+- HTTP API calls from the React app to the backend
+- typed schemas and service/adapters organization
 
-## Estrutura Atual de `NAO_REGISTADOS_HIST`
-Ordem atual das colunas na Google Sheet:
+Do not apply the old GAS-only prohibitions to this area.
 
-1. `DATA_REF`
-2. `Nome`
-3. `Funcao`
+### Current Product Scope For This Area
+The dedicated materials app is currently centered on:
+- `FATURAS`
+- `FATURAS_ITENS`
+- `MATERIAIS_CAD`
+- `AFETACOES_OBRA`
+- read-only technical visibility for:
+  - `MATERIAIS_MOV`
+  - `STOCK_ATUAL`
+- sync status and diagnostics
 
-Notas importantes:
-- Esta sheet e preenchida apenas pelo GAS
-- O registo e um snapshot do fecho do dia util
-- Guarda os colaboradores que nao tiveram qualquer registo em `REGISTOS_POR_DIA` nessa data
-- `Falta` e `Dispensado` contam como "registado", por isso esses nomes nao entram aqui
+### UX Posture For This Area
+- optimize for office laptop/desktop use first
+- prefer denser desktop layouts over mobile-first stacking
+- use side rails, compact tables/lists, and sticky action areas when they improve scan speed
+- keep responsive behavior as fallback, not as the main design driver
 
----
+### Current Operating Model
+- Google Sheets stays always populated
+- backend writes to Google Sheets first
+- backend mirrors to Supabase second
+- Supabase failure must not block the main Sheets write
+- retry visibility is part of the product
+- backend runtime currently hydrates from Google Sheets on startup
+- direct Sheet edits may exist outside the app, so reload/diagnostic visibility matters
 
-## Comportamento Atual de `Dispensado`
-- O campo `Dispensado` e marcado na mesma linha de `REGISTOS_POR_DIA`
-- Pode coexistir com `Falta = true`
-- Pode coexistir com `Motivo Falta` preenchido
-- Se `Falta = true`, o custo continua a ser `0`, mesmo com `Dispensado = true`
-- Quando `Dispensado = true` e `Dispensa_Processada_Em` esta vazio:
-  - o trigger `onSheetChange(e)` processa a linha
-  - o colaborador e removido fisicamente da sheet `COLABORADORES`
-  - o GAS grava a data/hora em `Dispensa_Processada_Em`
+### Architectural Direction To Preserve
+- keep AppSheet for labour and displacements in the short term
+- keep the new app focused on materials and purchasing flows
+- avoid pushing rich materials logic back into cell-by-cell GAS triggers
+- prefer backend-owned validation, enrichment, and generated-record handling
 
----
+### Backoffice UX Direction
+- guided operational forms over spreadsheet clones
+- assisted selectors where business rules require them
+- visible downstream impact before save when useful
+- technical ledgers visible read-only, not casually editable
+- sync/reload state should be explicit to operators
 
-## Secoes Atuais do Dashboard
-1. `overview` - KPIs globais
-2. `obra-detail` - detalhe de uma obra
-3. `deslocacoes` - custos e tabela de deslocacoes
-4. `equipa` - tabela de colaboradores agregados no periodo
-5. `assiduidade` - lista de faltas e registos com `dispensado`
-6. `ferias` - saldo e calendario de ferias
-7. `comparativa` - comparacao entre obras
+### Materials Business Rules To Preserve
+- `FATURAS_ITENS` is the purchase-line source
+- `AFETACOES_OBRA` is the operational attribution layer
+- `MATERIAIS_MOV` is a technical/generated ledger, not the main manual input sheet
+- `MATERIAIS_CAD` is the current catalog sheet and `MATERIAIS_ALIAS` no longer exists
+- `Natureza` drives valid destination behavior
+- stock outputs snapshot current average cost at processing time
+- generated downstream rows must be reconciled on edit/delete of source rows
 
-Notas:
-- A secao `assiduidade` nao usa heatmap; a implementacao ativa e uma tabela
-- A secao `assiduidade` mostra trabalhadores com faltas ou com registos `dispensado` no periodo
-- Na tabela de assiduidade, um badge `Disp X` aparece ao lado do nome quando existem registos `dispensado`
+### Backend Guidance
+Prefer changes that keep clear separation between:
+- `api`
+- `services`
+- `adapters/google_sheets`
+- `adapters/supabase`
+- `schemas`
 
----
+When changing behavior:
+- keep Sheets-first consistency rules
+- keep retry-safe sync behavior
+- keep hydration behavior in mind
+- preserve diagnostic visibility instead of hiding operational uncertainty
 
-## Variaveis Globais Principais no `index.html`
-```js
-let DATA = null;
-let currentSection = 'overview';
-let currentObraName = null;
-let matMovAll = [];
+### Frontend Guidance
+Treat `frontend/` as a real React app, not as HtmlService.
+Allowed patterns include:
+- component composition
+- route-based pages
+- typed API client utilities
+- stateful forms
 
-let obraCharts = {};
-let deslCharts = {};
-let equipaCharts = {};
-let compCharts = {};
-```
+Do not constrain React work with legacy rules like:
+- "single index.html only"
+- "no npm"
+- "no framework"
+- "no fetch"
 
----
+### Validation Focus For This Area
+Prioritize validation for:
+- create/edit/delete on core materials entities
+- guided selectors and catalog mapping flow
+- generated rows reconciliation
+- reload-from-sheets flow
+- runtime-vs-sheets divergence diagnostics
+- sync retry visibility
+- hydration after backend restart
 
-## Convencoes de Codigo Obrigatorias
+## C. Older Docs and Historical Material
 
-### Edicao do `index.html`
-- Fazer edicoes cirurgicas
-- Nunca reestruturar o ficheiro inteiro sem necessidade
-- Ao adicionar UI nova, preservar o padrao atual de funcoes globais
-- Nunca adicionar dependencias novas sem aprovacao explicita
-- Nao usar `eval()`
-- Nao usar `document.write()`
+### Read With Caution
+These still matter, but they are not the best first source for current implementation choices:
+- `docs/REGRAS_DE_NEGOCIO.md`
+- `docs/SUPABASE_PREP_PLAN.md`
+- `docs/SUPABASE_SCOPE_MAP.md`
+- `docs/SUPABASE_TABLE_MAP.md`
 
-### Edicao do `main.gs`
-- Preservar compatibilidade com o Google Sheets atual
-- Ao mexer em `REGISTOS_POR_DIA`, respeitar sempre a ordem real `A:P`
-- Nao assumir que `VIAGENS_DIARIAS` existe em todas as copias locais; a fonte operacional e a Google Sheet real
-- Automatismos de trigger devem ser idempotentes sempre que possivel
+Use them as:
+- business background
+- migration context
+- schema thinking support
 
-### Formatos
-```js
-// Datas internas: "YYYY-MM-DD"
-// Datas de display: "DD/MM/YYYY" ou "DD/MM"
+Do not treat them as the latest implementation brief when newer docs say otherwise.
 
-// Moeda
-valor.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
-```
+## D. Practical Decision Rule
 
----
+### If the task is in `src/`
+Follow the `legacy GAS dashboard` instructions first.
 
-## Regras de UI e Dados a Preservar
-- Toda a UI em portugues europeu
-- `COLABORADORES` continua a ser a fonte da lista ativa de trabalhadores
-- O AppSheet tem atualmente uma vista de apoio `Por Registar Hoje`
-- O dashboard nao deve depender de escrita local ou `localStorage` para dados de negocio
-- O frontend nao deve recalcular regras de negocio que ja foram decididas no GAS, exceto filtros de data de display
+### If the task is in `backend/` or `frontend/`
+Follow the `materials backoffice` instructions first.
 
----
-
-## O que Nao Fazer
-- Nao separar `index.html` em multiplos ficheiros
-- Nao mover logica de negocio para o frontend se ela ja existir no GAS
-- Nao sugerir trocar AppSheet por outra ferramenta sem pedido explicito
-- Nao reescrever funcoes existentes que estao estaveis; preferir extensao incremental
-
----
-
-## Testes Recomendados
-- Validar sempre desktop e mobile
-- Testar no Chrome mobile como referencia principal
-- Quando houver mudancas em `Dispensado`, testar:
-  - registo com `Falta = true`
-  - registo com `Falta = false`
-  - remocao da `COLABORADORES`
-  - reflexo no dashboard (`assiduidade`)
+### If unsure
+Use `docs/DOCS_CATALOG.md` to decide which documentation set has precedence before coding.

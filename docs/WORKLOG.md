@@ -176,7 +176,7 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-17
 
-### `uncommitted`
+### `d73fc8f`
 - **Type**: refactor / automation
 - **Scope**: `src/main.gs`, spreadsheet operating model for materials
 - **Summary**:
@@ -203,7 +203,26 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-18
 
-### `uncommitted`
+### `d73fc8f`
+- **Type**: feat
+- **Scope**: `backend/app/*`, `frontend/src/*`
+- **Summary**:
+  - Added edit/delete flows for:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - manual `AFETACOES_OBRA`
+  - Added Sheets-first delete support and Supabase delete mirroring in the new materials backend.
+  - Reconciled generated downstream rows when source invoice items / manual stock afetacoes are edited or removed.
+  - Surfaced mixed-mode runtime guidance in the app shell and sync page:
+    - last reload time/source
+    - warning that external Google Sheet edits require explicit reload
+  - Expanded diagnostics to compare selected business fields and show sheet row provenance for mismatches.
+- **Impact**:
+  - The materials backoffice now supports correction and maintenance work, not only first-time entry.
+  - Operators have a clearer runtime model when app state and manual Sheet edits coexist.
+
+### `d73fc8f`
 - **Type**: docs / architecture plan
 - **Scope**: `docs/MATERIALS_BACKOFFICE_PLAN.md`, `docs/PROJECT_STATE.md`, `docs/OPEN_ITEMS.md`
 - **Summary**:
@@ -217,7 +236,7 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - The project now has a documented direction for reducing trigger-driven instability in the materials workflow without abandoning Google Sheets as an always-populated business record.
 
-### `uncommitted`
+### `d73fc8f`
 - **Type**: docs / product-backend specification
 - **Scope**: `docs/MATERIALS_BACKOFFICE_SPEC.md`, `docs/MATERIALS_BACKOFFICE_PLAN.md`, `docs/PROJECT_STATE.md`, `docs/DECISIONS.md`, `docs/OPEN_ITEMS.md`
 - **Summary**:
@@ -235,7 +254,7 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - The migration path is now concrete enough to start backend and screen implementation without improvising entity boundaries or input behavior.
 
-### `uncommitted`
+### `d73fc8f`
 - **Type**: feat / scaffold
 - **Scope**: `src/Sync.gs`, `backend/`, `frontend/`, `.gitignore`, docs
 - **Summary**:
@@ -278,7 +297,7 @@ Purpose: chronological, commit-based project history for fast handoff.
   - The materials backoffice MVP can now operate against the live Google Sheet + Supabase environment.
   - Core sync visibility is now usable in the `Sincronizacao` screen instead of failing silently.
 
-### `uncommitted`
+### `d73fc8f`
 - **Type**: feat
 - **Scope**: `backend/app/adapters/google_sheets/*`, `backend/app/api/deps.py`, `backend/app/services/*`
 - **Summary**:
@@ -326,3 +345,28 @@ Purpose: chronological, commit-based project history for fast handoff.
 - **Impact**:
   - Operators now get consistent obra/fase suggestions straight from the workbook instead of guessing names manually.
   - The new materials UI now reflects the existing Sheets operating model more closely.
+
+## 2026-03-19
+
+### `d73fc8f`
+- **Type**: feat
+- **Scope**: `backend/`, `frontend/`, `backend/sql/003_split_material_catalog_references.sql`
+- **Summary**:
+  - Split the materials catalog into a canonical `MATERIAIS_CAD` model plus `MATERIAIS_REFERENCIAS`.
+  - Added supplier options from `FORNECEDORES`, invoice total parsing fixes, startup hydration hardening, and a safe seeding path for historical references.
+  - Reworked the main materials screens toward a desktop-first operator workflow:
+    - `Faturas`
+    - `Fatura Detail`
+    - `Catalogo`
+    - `Afetacoes`
+    - `Sincronizacao`
+  - Added focused backend diagnostics and tests for:
+    - sheet hydration contract regressions
+    - stock afetacao movement reconciliation
+    - duplicate/overlap inspection in `MATERIAIS_MOV`
+- **Impact**:
+  - The materials backoffice now better matches the real business model:
+    - canonical items
+    - historical recognized descriptions
+    - office-first registration flows
+  - Runtime behavior against live Sheets is more observable and less likely to drift silently under evolving spreadsheet structure.

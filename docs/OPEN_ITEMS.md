@@ -1,6 +1,6 @@
 # Open Items
 
-Last reviewed: 2026-03-18
+Last reviewed: 2026-03-19
 
 ## P1 - Define Materials Backoffice MVP
 - A dedicated materials/purchasing app is now the recommended next step.
@@ -16,10 +16,7 @@ Last reviewed: 2026-03-18
   - `docs/MATERIALS_BACKOFFICE_PLAN.md`
   - `docs/MATERIALS_BACKOFFICE_SPEC.md`
 - Current implementation follow-up:
-  - improve screen UX and guided input for:
-    - `MATERIAIS_CAD`
-    - clearer save/edit workflow for existing records
-  - keep validating real writes and sync retries against production-like sheets
+  - keep validating real writes, edits, deletes, and sync retries against production-like sheets
   - latest delivered UX improvements:
     - `FATURAS_ITENS` now supports guided catalog selection, quick catalog creation, and readable impact preview
     - `AFETACOES_OBRA` now supports guided item selection with stock/cost context before save
@@ -27,6 +24,12 @@ Last reviewed: 2026-03-18
       - `OBRAS.Local_ID`
       - `FASES_DE_OBRA`
     - `Sincronizacao` now shows operational status cards instead of raw JSON
+    - `Sincronizacao` now shows last reload context and selected field mismatches against Google Sheets
+    - the app now supports correction CRUD for:
+      - `FATURAS`
+      - `FATURAS_ITENS`
+      - `MATERIAIS_CAD`
+      - manual `AFETACOES_OBRA`
     - read-only technical view now exists for `STOCK_ATUAL` and `MATERIAIS_MOV`
 
 ## P1 - Harden Materials Backoffice Runtime Hydration
@@ -36,8 +39,18 @@ Last reviewed: 2026-03-18
   - decide whether any entities should later hydrate from Supabase instead of Sheets
   - add safer diagnostics when a row loads but cannot be parsed into the runtime model
   - decide whether to expose a more explicit per-screen refresh indicator after `Recarregar do Sheets`
-  - review whether diagnostics should later compare selected business fields and not only ID presence
   - decide later whether `Fase` should remain a global list or become explicitly constrained per obra in the new app
+
+## P1 - Validate Stock Movement Lineage In Real Sheets
+- The app now has safe diagnostics for:
+  - seeding `MATERIAIS_REFERENCIAS` from historical `FATURAS_ITENS`
+  - detecting exact duplicate or overlapping `STOCK` technical movements in `MATERIAIS_MOV`
+- Next step:
+  - validate recent real business rows where operators perceive duplicated `CONSUMO`
+  - distinguish clearly between:
+    - true duplicate technical rows
+    - separate `STOCK` afetacoes in the same item/date/obra/fase context
+  - decide later whether `Tecnico` should surface these as explicit overlap groups instead of a flat movement list
 
 ## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
 - Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.

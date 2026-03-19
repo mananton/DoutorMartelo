@@ -1,11 +1,15 @@
 # Project State
 
-Last updated: 2026-03-18
+Last updated: 2026-03-19
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
 - Data source: Google Sheets (central workbook).
 - Frontend renders KPIs, obra detail, workers, materials, travel/displacements, attendance, vacations, and comparative analytics.
+- A parallel materials backoffice now exists as a separate product surface in `frontend/` + `backend/`.
+- Product posture is now explicit:
+  - legacy dashboard -> mobile-first
+  - materials backoffice -> desktop-first
 
 ## 2. Current Architecture
 - Backend split by responsibility:
@@ -83,16 +87,23 @@ Last updated: 2026-03-18
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
 - Do not alter Supabase sync structure unless explicitly requested.
 - Materials flow has changed in the spreadsheet model:
-  - `MATERIAIS_CAD` is now a single working sheet with both identity and supplier wording:
+  - `MATERIAIS_CAD` is now the canonical item catalog only:
     - `ID_Item`
-    - `Fornecedor`
-    - `Descricao_Original`
     - `Item_Oficial`
     - `Natureza`
     - `Unidade`
     - `Observacoes`
     - `Estado_Cadastro`
-  - `MATERIAIS_ALIAS` no longer exists in the workbook and code should not depend on it.
+  - `MATERIAIS_REFERENCIAS` now stores recognized original supplier wording separately:
+    - `ID_Referencia`
+    - `Descricao_Original`
+    - `ID_Item`
+    - `Observacoes`
+    - `Estado_Referencia`
+  - The same `Descricao_Original` should map to a single canonical `ID_Item`, independent of supplier.
+  - Supplier identity and purchase price remain operational facts of:
+    - `FATURAS`
+    - `FATURAS_ITENS`
   - `Natureza` current dropdown values:
     - `MATERIAL`
     - `SERVICO`
@@ -110,12 +121,15 @@ Last updated: 2026-03-18
     - `Sugestao_Alias` is now only used when the item is not found in catalog
   - Important implementation detail:
     - GAS was updated to avoid rewriting the full row because that wiped user formulas in total columns
-- `MATERIAIS_MOV` current intended use:
+  - `MATERIAIS_MOV` current intended use:
   - technical ledger only; it should no longer be treated as the main operational input sheet
   - auto-generated for purchase-driven `STOCK` entries coming from `FATURAS_ITENS`
   - auto-generated for `CONSUMO` entries coming from `AFETACOES_OBRA`
   - generated rows are linked back to source sheets via `[SRC_FIT:FIT-xxxxxx]` and `[SRC_AFO:AFO-xxxxxx]` in `Observacoes`
   - generated rows should now be created, updated, and removed automatically from source-sheet edits
+  - technical diagnostics now exist to:
+    - seed `MATERIAIS_REFERENCIAS` safely from historical `FATURAS_ITENS`
+    - inspect possible `AFETACOES_OBRA` / `MATERIAIS_MOV` stock movement duplication or overlap without deleting rows by default
 - `AFETACOES_OBRA` current intended use:
   - operational sheet for cost attribution to `Obra` + `Fase`
   - direct purchases registered in `FATURAS_ITENS` with direct consumption should auto-create generated rows here
@@ -159,18 +173,31 @@ Last updated: 2026-03-18
   - list pages in the new app no longer start empty after backend restart
   - manual `AFETACOES_OBRA` stock rows are now processed on save in the new app; the temporary UI checkbox/process button was removed
   - the new app now exposes a manual `Recarregar do Sheets` action instead of forcing backend restart when operators need to rehydrate runtime state from Google Sheets
-  - `Sincronizacao` now shows the core entity jobs even before any sync attempt happens in the current backend session
-  - `FATURAS_ITENS` now has guided item selection from catalog, quick-create of catalog items, and a readable impact preview before save
-  - `AFETACOES_OBRA` now has guided `ID_Item` lookup, live stock snapshot lookup, and clearer business-error messaging for stock-cost issues
+- `Sincronizacao` now shows the core entity jobs even before any sync attempt happens in the current backend session
+- `FATURAS_ITENS` now has guided item selection from catalog, quick-create of catalog items, and a readable impact preview before save
+- `AFETACOES_OBRA` now has guided `ID_Item` lookup, live stock snapshot lookup, and clearer business-error messaging for stock-cost issues
   - the app now includes a read-only technical view for:
     - `STOCK_ATUAL`
     - `MATERIAIS_MOV`
   - `Sincronizacao` now includes a manual divergence diagnostic comparing runtime IDs vs current Google Sheets IDs for the core material entities
+  - `Sincronizacao` now also reports selected business-field mismatches, including the current sheet row number when a mismatch is found
   - the materials backoffice now exposes sheet-driven work selectors through `/api/options/obras-fases`
   - `Obra` options now come from `OBRAS.Local_ID`
   - `Fase` options now come from the global `FASES_DE_OBRA` list
   - `Adicionar Linha` and `AFETACOES_OBRA` now show guided selectors for `Obra` / `Fase`
   - `Adicionar Linha` only enables `Obra` / `Fase` when `Destino = CONSUMO`, keeping `STOCK` rows free of unnecessary obra/fase attribution
+  - the materials backoffice now supports correction CRUD for the core materials entities:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - manual `AFETACOES_OBRA`
+  - edit/delete actions now reconcile generated downstream rows instead of leaving stale technical records behind
+  - the app shell now shows explicit mixed-mode guidance:
+    - direct edits in Google Sheets require `Recarregar do Sheets`
+    - `Sincronizacao` exposes the last reload timestamp/source
+  - UI direction is now explicitly desktop-first for the materials app:
+    - operator workflows should be optimized for office desktop/laptop usage
+    - mobile responsiveness is fallback support, not the main layout target
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
@@ -180,6 +207,8 @@ Last updated: 2026-03-18
 - Current material automation is mid-rollout and should be treated as active but still under validation on real spreadsheet edits.
 - The new materials backoffice still uses Google Sheets as the operational source of truth; startup hydration currently comes from Sheets, not from Supabase.
 - Manual changes made directly in Google Sheets after backend startup still require explicit reload to appear in the app runtime state.
+- Edit/delete flows are now implemented in the app, but they still need validation on a wider sample of real business rows from the live workbook.
+- `MATERIAIS_MOV` can still look duplicated to operators when two `STOCK` afetacoes hit the same item/date/obra/fase context; this now has a safe diagnostic path but still needs UX clarification.
 - Watch for Apps Script trigger behavior differences between:
   - manual cell edit,
   - pasted ranges,

@@ -276,10 +276,46 @@ Format: short ADR-style records with rationale and impact.
   - A UI-only layer on top of Sheets would improve form experience but would not remove the trigger-timing fragility already observed.
   - Google Sheets must stay fully populated, but business logic needs a more controlled execution boundary.
 - **Impact**:
-  - Future implementation should prioritize a small materials backoffice plus backend adapters over further trigger-heavy spreadsheet automation.
+- Future implementation should prioritize a small materials backoffice plus backend adapters over further trigger-heavy spreadsheet automation.
+
+## D-019: Use app-managed correction CRUD with Sheets-first reconciliation for materials
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `pending`
+- **Decision**:
+  - Allow operators to edit and delete the main materials entities from the new app:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - manual `AFETACOES_OBRA`
+  - Keep Google Sheets as the primary write target and mirror the result to Supabase.
+  - When a source row is changed or deleted, reconcile generated technical rows in the same operation instead of leaving stale data in `AFETACOES_OBRA` / `MATERIAIS_MOV`.
+- **Rationale**:
+  - Daily operation needs a correction path inside the app; falling back to raw Sheets for normal mistakes would keep the process fragile.
+  - The technical ledger must stay derivable from the operational source rows.
+- **Impact**:
+  - The app is now suitable for day-to-day correction work, not only for first registration.
+  - Delete/edit behavior must be treated as business-critical and regression-tested.
+
+## D-020: Mixed app + Sheets mode stays explicit, not real-time
+- **Status**: accepted
+- **Date**: 2026-03-18
+- **Commit**: `pending`
+- **Decision**:
+  - Keep the current mixed operating model:
+    - app writes to Google Sheets first
+    - direct Sheet edits remain allowed
+  - Do not auto-reflect external Sheet edits live in the app runtime.
+  - Surface the last reload time/source and make `Recarregar do Sheets` the explicit operator action for rehydration.
+  - Diagnostics should compare selected business fields, not only ID presence.
+- **Rationale**:
+  - The business still needs Google Sheets as a live operational record, but the app must avoid pretending it is real-time synced when it is not.
+- **Impact**:
+  - Operator expectations are clearer.
+  - Divergences are easier to inspect before continuing work in the app.
   - AppSheet scope stays narrower in the short term, reducing migration risk.
 
-## D-019: Phase 0 materials sync is Sheets-first with live mirror validation
+## D-021: Phase 0 materials sync is Sheets-first with live mirror validation
 - **Status**: accepted
 - **Date**: 2026-03-18
 - **Commit**: `e4d4d74`
@@ -295,7 +331,7 @@ Format: short ADR-style records with rationale and impact.
   - Backoffice writes now remain operational even when Supabase is temporarily unavailable or misaligned.
   - Sync diagnostics become a first-class operational concern.
 
-## D-020: Materials backoffice runtime hydrates from Google Sheets at startup
+## D-022: Materials backoffice runtime hydrates from Google Sheets at startup
 - **Status**: accepted
 - **Date**: 2026-03-18
 - **Commit**: `pending`
@@ -310,7 +346,7 @@ Format: short ADR-style records with rationale and impact.
 - The app reopens with existing data after backend restart.
 - New IDs continue from the current sheet state instead of restarting numbering.
 
-## D-021: Materials backoffice should prefer assisted operational forms over raw sheet-like editing
+## D-023: Materials backoffice should prefer assisted operational forms over raw sheet-like editing
 - **Status**: accepted
 - **Date**: 2026-03-18
 - **Commit**: `c9a078e`
@@ -325,7 +361,7 @@ Format: short ADR-style records with rationale and impact.
   - `FATURAS_ITENS` and `AFETACOES_OBRA` now prioritize assisted selection and readable consequences before save.
   - `Sincronizacao` becomes an operational screen instead of a debugging-only screen.
 
-## D-022: Work selectors in the materials backoffice should follow the workbook master lists
+## D-024: Work selectors in the materials backoffice should follow the workbook master lists
 - **Status**: accepted
 - **Date**: 2026-03-18
 - **Commit**: `b57c4b9`
@@ -340,6 +376,45 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - `Adicionar Linha` and `AFETACOES_OBRA` now show predictable selectors instead of empty or inconsistent free-text fields.
   - The work selector source is now explicit and easier to maintain when workbook structure changes.
+
+## D-025: Materials backoffice UI is desktop-first, while the legacy dashboard remains mobile-first
+- **Status**: accepted
+- **Date**: 2026-03-19
+- **Commit**: `d73fc8f`
+- **Decision**:
+  - Treat the materials backoffice (`frontend/` + `backend/`) as a desktop-first web application.
+  - Optimize the main workflows for office usage on laptop/desktop screens:
+    - invoice entry
+    - invoice-line correction
+    - catalog maintenance
+    - stock attribution and review
+    - sync validation
+  - Keep responsive behavior as a fallback, but do not let mobile-first constraints dominate the materials UI hierarchy.
+  - Keep the legacy GAS dashboard mobile-first, because that product still serves field-friendly consultation and lightweight operational checks.
+- **Rationale**:
+  - The materials workflow is expected to be performed roughly 95% of the time on office computers.
+  - Designing that backoffice primarily for mobile would reduce scan speed, comparison clarity, and operational throughput in the real working environment.
+- **Impact**:
+  - Materials pages should prefer denser desktop layouts, side rails, compact tables/lists, sticky action areas, and progressive disclosure for technical detail.
+- Future UI refactors should optimize first for desktop ergonomics and only second for small-screen fallback.
+- Previous mobile-first assumptions from the legacy dashboard should not be automatically applied to the new materials app.
+
+## D-026: Materials catalog is canonical-by-item, with supplier wording stored as references
+- **Status**: accepted
+- **Date**: 2026-03-19
+- **Commit**: `d73fc8f`
+- **Decision**:
+  - Treat `MATERIAIS_CAD` as the canonical item catalog only.
+  - Store recognized supplier wording in a separate `MATERIAIS_REFERENCIAS` sheet/table.
+  - Keep supplier identity and purchase price attached to invoice records, not to the canonical catalog item.
+  - The same `Descricao_Original` must resolve to a single `ID_Item`, independent of supplier.
+- **Rationale**:
+  - The business needs one stable `ID_Item` / `Item_Oficial` per real product, even when suppliers describe that product differently.
+  - Mixing canonical identity with supplier-specific wording in the same sheet creates ambiguity and weakens stock consistency over time.
+- **Impact**:
+  - `MATERIAIS_CAD` becomes simpler and more stable as the master catalog.
+  - `MATERIAIS_REFERENCIAS` becomes the learning layer that improves future matching/suggestions.
+  - Historical invoice wording can now be seeded and expanded without polluting the canonical item definition.
 
 ## Standing Constraints
 - Do not rename global sheet constants.
