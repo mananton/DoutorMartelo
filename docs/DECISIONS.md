@@ -419,7 +419,7 @@ Format: short ADR-style records with rationale and impact.
 ## D-027: Disable legacy GAS materials automation while the backoffice owns the material flow
 - **Status**: accepted
 - **Date**: 2026-03-20
-- **Commit**: `pending`
+- **Commit**: `720b35f`
 - **Decision**:
   - Keep legacy GAS dashboard code available, but disable the old trigger-driven materials flow by default in `src/main.gs`.
   - The new materials backoffice is now the owning surface for:
@@ -439,7 +439,7 @@ Format: short ADR-style records with rationale and impact.
 ## D-028: Fuel purchases require explicit operational use, and vehicle fuel is attributed by matricula
 - **Status**: accepted
 - **Date**: 2026-03-20
-- **Commit**: `pending`
+- **Commit**: `720b35f`
 - **Decision**:
   - Extend `Natureza` to include:
     - `GASOLEO`
