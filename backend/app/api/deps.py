@@ -29,13 +29,27 @@ class ServiceContainer:
         "materiais_mov": ("id_mov", "movimentos"),
     }
     DIAGNOSTIC_FIELDS = {
-        "faturas": ["fornecedor", "nif", "nr_documento", "data_fatura", "valor_sem_iva", "iva", "valor_com_iva", "estado"],
+        "faturas": [
+            "id_compromisso",
+            "fornecedor",
+            "nif",
+            "nr_documento",
+            "data_fatura",
+            "valor_sem_iva",
+            "iva",
+            "valor_com_iva",
+            "paga",
+            "data_pagamento",
+            "estado",
+        ],
         "faturas_itens": [
             "id_fatura",
             "descricao_original",
             "id_item",
             "item_oficial",
             "natureza",
+            "uso_combustivel",
+            "matricula",
             "unidade",
             "quantidade",
             "custo_unit",
@@ -56,6 +70,7 @@ class ServiceContainer:
             "id_item",
             "item_oficial",
             "natureza",
+            "uso_combustivel",
             "quantidade",
             "unidade",
             "custo_unit",
@@ -71,6 +86,8 @@ class ServiceContainer:
             "data",
             "id_item",
             "item_oficial",
+            "uso_combustivel",
+            "matricula",
             "quantidade",
             "custo_unit",
             "custo_total_sem_iva",
@@ -88,7 +105,11 @@ class ServiceContainer:
         self.state = RuntimeState()
         self.google_sheets = self._build_google_adapter()
         self.supabase = self._build_supabase_adapter()
+        self._work_options_cache: list[dict[str, Any]] | None = None
+        self._supplier_options_cache: list[dict[str, Any]] | None = None
+        self._vehicle_options_cache: list[dict[str, Any]] | None = None
         self._hydrate_runtime_state()
+        self._prime_option_caches()
         self.materials = MaterialsService(self.state, self.google_sheets, self.supabase)
         self.sync = SyncService(self.state, self.supabase)
 
@@ -114,6 +135,7 @@ class ServiceContainer:
     def reload_from_sheets(self) -> dict[str, object]:
         snapshot = self.google_sheets.load_snapshot()
         self.state.hydrate_from_snapshot(snapshot, preserve_sync_state=True, source="google_sheets_manual_reload")
+        self._prime_option_caches()
         return {
             "source": "google_sheets",
             "faturas": len(self.state.faturas),
@@ -178,22 +200,51 @@ class ServiceContainer:
         }
 
     def work_options(self) -> dict[str, Any]:
-        try:
-            obras = self.google_sheets.load_work_options()
-        except Exception:
-            obras = MemoryGoogleSheetsAdapter(self.state).load_work_options()
+        if self._work_options_cache is None:
+            self._work_options_cache = self._load_work_options()
         return {
-            "obras": obras,
+            "obras": self._work_options_cache,
         }
 
     def supplier_options(self) -> dict[str, Any]:
-        try:
-            fornecedores = self.google_sheets.load_supplier_options()
-        except Exception:
-            fornecedores = MemoryGoogleSheetsAdapter(self.state).load_supplier_options()
+        if self._supplier_options_cache is None:
+            self._supplier_options_cache = self._load_supplier_options()
         return {
-            "fornecedores": fornecedores,
+            "fornecedores": self._supplier_options_cache,
         }
+
+    def vehicle_options(self) -> dict[str, Any]:
+        if self._vehicle_options_cache is None:
+            self._vehicle_options_cache = self._load_vehicle_options()
+        return {
+            "veiculos": self._vehicle_options_cache,
+        }
+
+    def _prime_option_caches(self) -> None:
+        self._work_options_cache = self._load_work_options()
+        self._supplier_options_cache = self._load_supplier_options()
+        self._vehicle_options_cache = self._load_vehicle_options()
+
+    def _load_work_options(self) -> list[dict[str, Any]]:
+        try:
+            return self.google_sheets.load_work_options()
+        except Exception:
+            logger.exception("Failed to load work options from Google Sheets")
+            return MemoryGoogleSheetsAdapter(self.state).load_work_options()
+
+    def _load_supplier_options(self) -> list[dict[str, Any]]:
+        try:
+            return self.google_sheets.load_supplier_options()
+        except Exception:
+            logger.exception("Failed to load supplier options from Google Sheets")
+            return MemoryGoogleSheetsAdapter(self.state).load_supplier_options()
+
+    def _load_vehicle_options(self) -> list[dict[str, Any]]:
+        try:
+            return self.google_sheets.load_vehicle_options()
+        except Exception:
+            logger.exception("Failed to load vehicle options from Google Sheets")
+            return MemoryGoogleSheetsAdapter(self.state).load_vehicle_options()
 
     def _diagnostic_value(self, value: Any) -> str:
         if isinstance(value, datetime):

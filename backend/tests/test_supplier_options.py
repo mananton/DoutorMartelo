@@ -35,6 +35,7 @@ class SupplierOptionsApiTests(unittest.TestCase):
             },
         )
         self.assertEqual(create.status_code, 201)
+        self.app.state.container._supplier_options_cache = None
 
         response = self.client.get("/api/options/fornecedores")
         self.assertEqual(response.status_code, 200)
@@ -45,3 +46,16 @@ class SupplierOptionsApiTests(unittest.TestCase):
         assert match is not None
         self.assertEqual(match["nif"], "501234567")
 
+    def test_vehicle_options_use_live_adapter_when_available(self) -> None:
+        container = self.app.state.container
+        container.google_sheets.load_vehicle_options = lambda: [
+            {"veiculo": "Carrinha Oficina", "matricula": "11-AA-22"},
+            {"veiculo": "Mini Giratoria", "matricula": "33-BB-44"},
+        ]
+        container._vehicle_options_cache = None
+
+        response = self.client.get("/api/options/veiculos")
+        self.assertEqual(response.status_code, 200)
+        veiculos = response.json()["veiculos"]
+        self.assertEqual(len(veiculos), 2)
+        self.assertEqual(veiculos[0]["matricula"], "11-AA-22")

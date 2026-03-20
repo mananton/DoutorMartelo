@@ -12,6 +12,8 @@ type FaturaFormState = {
   valor_sem_iva: string;
   iva: string;
   valor_com_iva: string;
+  paga: boolean;
+  data_pagamento: string;
   observacoes: string;
 };
 
@@ -24,6 +26,8 @@ type FaturaRow = Record<string, unknown> & {
   valor_sem_iva?: number;
   iva?: number;
   valor_com_iva?: number;
+  paga?: boolean;
+  data_pagamento?: string;
   observacoes?: string;
 };
 
@@ -41,6 +45,8 @@ const INITIAL_FORM: FaturaFormState = {
   valor_sem_iva: "",
   iva: "23",
   valor_com_iva: "",
+  paga: false,
+  data_pagamento: "",
   observacoes: "",
 };
 
@@ -76,6 +82,8 @@ function toFormState(item: FaturaRow): FaturaFormState {
     valor_sem_iva: String(item.valor_sem_iva ?? ""),
     iva: String(item.iva ?? 23),
     valor_com_iva: String(item.valor_com_iva ?? ""),
+    paga: Boolean(item.paga ?? false),
+    data_pagamento: String(item.data_pagamento ?? ""),
     observacoes: String(item.observacoes ?? ""),
   };
 }
@@ -183,6 +191,15 @@ export function FaturasPage() {
       }
       return next;
     });
+  }
+
+  function updatePagaField(checked: boolean) {
+    setFormMessage("");
+    setForm((current) => ({
+      ...current,
+      paga: checked,
+      data_pagamento: checked ? current.data_pagamento : "",
+    }));
   }
 
   function updateFornecedorField(value: string) {
@@ -308,6 +325,10 @@ export function FaturasPage() {
                     </div>
                     <div className="queue-card-metrics">
                       <span className="tag">{formatAmount(Number(item.valor_com_iva ?? 0))} com IVA</span>
+                      <span className={`tag ${Boolean(item.paga) ? "tag-success" : ""}`}>
+                        {Boolean(item.paga) ? "Paga" : "Por pagar"}
+                      </span>
+                      {item.data_pagamento ? <span className="tag">{String(item.data_pagamento)}</span> : null}
                       {editingId === id ? <span className="tag tag-success">Em edicao</span> : null}
                     </div>
                   </div>
@@ -381,9 +402,9 @@ export function FaturasPage() {
               <div className="muted">{formatAmount(valorComIva)} com IVA | IVA {form.iva || "0"}%</div>
             </div>
             <div className="summary-card">
-              <div className="summary-title">Proximo passo</div>
-              <div className="summary-main">{editingId ? "Guardar e rever linhas" : "Guardar para abrir detalhe"}</div>
-              <div className="muted">O detalhe da fatura continua a ser o workspace das linhas e do mapeamento.</div>
+              <div className="summary-title">Pagamento</div>
+              <div className="summary-main">{form.paga ? "Paga" : "Por pagar"}</div>
+              <div className="muted">{form.data_pagamento || "Sem data de pagamento registada."}</div>
             </div>
           </div>
 
@@ -400,6 +421,8 @@ export function FaturasPage() {
                 valor_sem_iva: toNumber(form.valor_sem_iva),
                 iva: toNumber(form.iva),
                 valor_com_iva: toNumber(form.valor_com_iva),
+                paga: form.paga,
+                data_pagamento: form.paga && form.data_pagamento ? form.data_pagamento : null,
                 observacoes: form.observacoes || null,
               };
               if (editingId) {
@@ -448,6 +471,32 @@ export function FaturasPage() {
                 <label>Valor Sem IVA<input name="valor_sem_iva" type="number" step="0.01" value={form.valor_sem_iva} onChange={(event) => updateField("valor_sem_iva", event.target.value)} /></label>
                 <label>IVA %<input name="iva" type="number" step="0.01" value={form.iva} onChange={(event) => updateField("iva", event.target.value)} /></label>
                 <label>Valor Com IVA<input name="valor_com_iva" type="number" step="0.01" value={form.valor_com_iva} onChange={(event) => updateField("valor_com_iva", event.target.value)} /></label>
+              </div>
+            </div>
+
+            <div className="form-section">
+              <div className="section-kicker">Pagamento</div>
+              <div className="section-copy">Regista se a fatura ja foi paga e, quando aplicavel, a respetiva data de pagamento.</div>
+              <div className="form-grid">
+                <label className="checkbox-field">
+                  <span>Paga?</span>
+                  <input
+                    name="paga"
+                    type="checkbox"
+                    checked={form.paga}
+                    onChange={(event) => updatePagaField(event.target.checked)}
+                  />
+                </label>
+                <label>
+                  Data Pagamento
+                  <input
+                    name="data_pagamento"
+                    type="date"
+                    value={form.data_pagamento}
+                    disabled={!form.paga}
+                    onChange={(event) => updateField("data_pagamento", event.target.value)}
+                  />
+                </label>
               </div>
             </div>
 

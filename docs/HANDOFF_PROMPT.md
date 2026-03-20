@@ -1,6 +1,6 @@
 # Handoff Prompt (Copy/Paste for New Chat)
 
-Last updated: 2026-03-19
+Last updated: 2026-03-20
 
 ## Purpose
 Use this file to start a new agent session without mixing the two active tracks in this repo:
@@ -276,21 +276,33 @@ Expected output format:
   - sync diagnostics and divergence checks
 
 ## Current Materials Workflow Snapshot
-- `MATERIAIS_CAD` is now a single working sheet with:
+- `MATERIAIS_CAD` is now the canonical catalog only:
   - `ID_Item`
-  - `Fornecedor`
-  - `Descricao_Original`
   - `Item_Oficial`
   - `Natureza`
   - `Unidade`
   - `Observacoes`
   - `Estado_Cadastro`
-- `MATERIAIS_ALIAS` no longer exists in the workbook.
+- `MATERIAIS_REFERENCIAS` stores recognized original wording separately:
+  - `ID_Referencia`
+  - `Descricao_Original`
+  - `ID_Item`
+  - `Observacoes`
+  - `Estado_Referencia`
 - `FATURAS_ITENS` is the source sheet for purchase lines.
 - `AFETACOES_OBRA` is the operational bridge for obra/fase attribution.
+- `FATURAS` now also carries:
+  - `Paga?`
+  - `Data Pagamento`
 - `Adicionar Linha` only enables `Obra` / `Fase` when `Destino = CONSUMO`.
 - `Obra` selectors in the new app come from `OBRAS.Local_ID`.
 - `Fase` selectors in the new app come from the global `FASES_DE_OBRA` list.
+- `Matricula` selectors now come from `VEICULOS`.
+- Fuel now has explicit handling:
+  - `Natureza` includes `GASOLEO` and `GASOLINA`
+  - `Unidade` includes `Lt`
+  - `Uso_Combustivel` can be `N/A`, `VIATURA`, `MAQUINA`, or `GERADOR`
+  - `Destino = VIATURA` requires `Matricula`
 - `MATERIAIS_MOV` is expected to be auto-maintained:
   - from `FATURAS_ITENS` for stock-entry rows
   - from `AFETACOES_OBRA` for obra/fase consumption rows
@@ -303,6 +315,7 @@ Expected output format:
 
 ## Current Material Automation Hotspots
 - Read `src/main.gs` carefully before changing materials logic that still lives in the legacy automation layer.
+- Legacy GAS material-flow automation is now disabled by default and should stay disabled unless there is an explicit decision to reactivate it.
 - Functions to inspect first:
   - `processMateriaisCadRow_`
   - `hydrateFaturasItensFromFaturas_`

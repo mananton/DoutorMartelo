@@ -336,6 +336,8 @@ export function CatalogoPage() {
                 <label>Natureza
                   <select name="natureza" value={form.natureza} onChange={(event) => updateField("natureza", event.target.value)}>
                     <option value="MATERIAL">MATERIAL</option>
+                    <option value="GASOLEO">GASOLEO</option>
+                    <option value="GASOLINA">GASOLINA</option>
                     <option value="SERVICO">SERVICO</option>
                     <option value="ALUGUER">ALUGUER</option>
                     <option value="TRANSPORTE">TRANSPORTE</option>

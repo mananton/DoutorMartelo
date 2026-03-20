@@ -8,12 +8,14 @@ from pydantic import Field
 from backend.app.schemas.common import ApiModel, OperationImpact
 
 
-Natureza = Literal["MATERIAL", "SERVICO", "ALUGUER", "TRANSPORTE"]
+Natureza = Literal["MATERIAL", "SERVICO", "ALUGUER", "TRANSPORTE", "GASOLEO", "GASOLINA"]
+UsoCombustivel = Literal["N/A", "VIATURA", "MAQUINA", "GERADOR"]
 OrigemAfetacao = Literal["STOCK", "FATURA_DIRETA"]
 TipoMovimento = Literal["ENTRADA", "CONSUMO"]
 
 
 class FaturaCreate(ApiModel):
+    id_compromisso: str | None = None
     fornecedor: str
     nif: str
     nr_documento: str
@@ -21,10 +23,13 @@ class FaturaCreate(ApiModel):
     valor_sem_iva: float = 0
     iva: float = 0
     valor_com_iva: float = 0
+    paga: bool = False
+    data_pagamento: date | None = None
     observacoes: str | None = None
 
 
 class FaturaUpdate(ApiModel):
+    id_compromisso: str | None = None
     fornecedor: str | None = None
     nif: str | None = None
     nr_documento: str | None = None
@@ -32,12 +37,15 @@ class FaturaUpdate(ApiModel):
     valor_sem_iva: float | None = None
     iva: float | None = None
     valor_com_iva: float | None = None
+    paga: bool | None = None
+    data_pagamento: date | None = None
     observacoes: str | None = None
     estado: str | None = None
 
 
 class FaturaRecord(ApiModel):
     id_fatura: str
+    id_compromisso: str | None = None
     fornecedor: str
     nif: str
     nr_documento: str
@@ -45,6 +53,8 @@ class FaturaRecord(ApiModel):
     valor_sem_iva: float = 0
     iva: float = 0
     valor_com_iva: float = 0
+    paga: bool = False
+    data_pagamento: date | None = None
     observacoes: str | None = None
     estado: str = "ATIVA"
     created_at: datetime
@@ -65,6 +75,8 @@ class FaturaItemCreate(ApiModel):
     item_oficial: str | None = None
     unidade: str | None = None
     natureza: Natureza | None = None
+    uso_combustivel: UsoCombustivel | None = None
+    matricula: str | None = None
     observacoes: str | None = None
 
 
@@ -78,6 +90,8 @@ class FaturaItemUpdate(ApiModel):
     item_oficial: str | None = None
     unidade: str | None = None
     natureza: Natureza | None = None
+    uso_combustivel: UsoCombustivel | None = None
+    matricula: str | None = None
     quantidade: float | None = None
     custo_unit: float | None = None
     iva: float | None = None
@@ -101,6 +115,8 @@ class FaturaItemRecord(ApiModel):
     item_oficial: str | None = None
     unidade: str | None = None
     natureza: Natureza | None = None
+    uso_combustivel: UsoCombustivel | None = None
+    matricula: str | None = None
     quantidade: float
     custo_unit: float
     desconto_1: float = 0
@@ -165,6 +181,7 @@ class AfetacaoCreate(ApiModel):
     iva: float = 0
     obra: str
     fase: str
+    uso_combustivel: UsoCombustivel | None = None
     observacoes: str | None = None
     processar: bool = False
 
@@ -176,6 +193,7 @@ class AfetacaoUpdate(ApiModel):
     iva: float | None = None
     obra: str | None = None
     fase: str | None = None
+    uso_combustivel: UsoCombustivel | None = None
     observacoes: str | None = None
     processar: bool | None = None
 
@@ -188,6 +206,7 @@ class AfetacaoRecord(ApiModel):
     id_item: str
     item_oficial: str | None = None
     natureza: Natureza | None = None
+    uso_combustivel: UsoCombustivel | None = None
     quantidade: float
     unidade: str | None = None
     custo_unit: float = 0
@@ -214,6 +233,8 @@ class MovimentoRecord(ApiModel):
     id_item: str
     item_oficial: str
     unidade: str | None = None
+    uso_combustivel: UsoCombustivel | None = None
+    matricula: str | None = None
     quantidade: float
     custo_unit: float = 0
     custo_total_sem_iva: float = 0

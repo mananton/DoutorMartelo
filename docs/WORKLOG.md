@@ -370,3 +370,36 @@ Purpose: chronological, commit-based project history for fast handoff.
     - historical recognized descriptions
     - office-first registration flows
   - Runtime behavior against live Sheets is more observable and less likely to drift silently under evolving spreadsheet structure.
+
+## 2026-03-20
+
+### `pending`
+- **Type**: feat / fix / stabilization
+- **Scope**: `backend/`, `frontend/`, `src/main.gs`, `docs/*`
+- **Summary**:
+  - Extended the materials backoffice business model to support:
+    - `GASOLEO`
+    - `GASOLINA`
+    - `Lt`
+    - `Uso_Combustivel`
+    - `Destino = VIATURA`
+    - `Matricula` sourced from `VEICULOS`
+  - Added invoice payment support in `FATURAS`:
+    - `Paga?`
+    - `Data Pagamento`
+  - Stabilized Google Sheets parsing/serialization and hydration for:
+    - totals
+    - percentages
+    - payment fields
+    - canonical catalog references
+    - fuel/vehicle fields
+  - Added safer tests and diagnostics around:
+    - sheet hydration contracts
+    - supplier/vehicle option endpoints
+    - stock movement reconciliation / duplicate diagnostics
+  - Disabled legacy GAS material-flow automation by default so the new backoffice owns the material workflow.
+  - Cached work/supplier/vehicle options in the backend to reduce live-sheet latency during operator entry.
+- **Impact**:
+  - The materials backoffice now matches the newer Google Sheet operating model more closely, especially for fuel attribution and payment tracking.
+  - Runtime behavior is less likely to drift because old GAS materials automation no longer rewrites the same rows behind the new app.
+  - Operator entry should be more stable for supplier, obra/fase, and vehicle-assisted dropdown flows.

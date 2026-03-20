@@ -299,6 +299,20 @@ textarea {
   background: #fff;
 }
 
+.checkbox-field {
+  align-content: start;
+}
+
+.checkbox-field input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  accent-color: var(--primary);
+}
+
 .btn {
   border: 0;
   border-radius: 0.9rem;

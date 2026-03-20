@@ -1,6 +1,6 @@
 # Open Items
 
-Last reviewed: 2026-03-19
+Last reviewed: 2026-03-20
 
 ## P1 - Define Materials Backoffice MVP
 - A dedicated materials/purchasing app is now the recommended next step.
@@ -40,6 +40,25 @@ Last reviewed: 2026-03-19
   - add safer diagnostics when a row loads but cannot be parsed into the runtime model
   - decide whether to expose a more explicit per-screen refresh indicator after `Recarregar do Sheets`
   - decide later whether `Fase` should remain a global list or become explicitly constrained per obra in the new app
+  - keep validating cached option sources (`FORNECEDORES`, `VEICULOS`, `OBRAS/FASES`) after backend restart and manual reload
+
+## P1 - Validate Fuel And Vehicle Operating Flow In Real Rows
+- Fuel support now exists in the new backoffice with:
+  - `GASOLEO`
+  - `GASOLINA`
+  - `Uso_Combustivel`
+  - `Destino = VIATURA`
+  - `Matricula` from `VEICULOS`
+- Next step:
+  - validate real invoice lines for:
+    - `VIATURA`
+    - `MAQUINA`
+    - `GERADOR`
+  - confirm generated `MATERIAIS_MOV` rows preserve:
+    - `Uso_Combustivel`
+    - `Matricula`
+    - cost/tax totals
+  - confirm the UI/operator model is clear when fuel is for stock vs direct use
 
 ## P1 - Validate Stock Movement Lineage In Real Sheets
 - The app now has safe diagnostics for:
@@ -53,11 +72,10 @@ Last reviewed: 2026-03-19
   - decide later whether `Tecnico` should surface these as explicit overlap groups instead of a flat movement list
 
 ## P1 - Reduce GAS Trigger Sensitivity in Materials Flow
-- Current sheet automations are improving, but the materials flow still has timing/performance sensitivity under real edits.
+- Legacy GAS materials automation is now disabled by default so the backoffice owns the flow.
 - Next technical goal:
-  - move more materials business logic out of cell-by-cell trigger timing
-  - keep Google Sheets populated, but reduce dependence on reactive GAS for incomplete row edits
-- This item is one of the drivers for the dedicated materials app plan.
+  - keep that ownership boundary explicit and avoid silent reactivation of the old trigger path
+  - validate that remaining legacy dashboard code touching materials is read-only/supportive, not operationally mutating
 
 ## P1 - Implement Monthly Payment Map
 - Functional spec agreed in `docs/MAPA_MENSAL_SPEC.md`.

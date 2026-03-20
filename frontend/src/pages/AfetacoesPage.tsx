@@ -7,6 +7,7 @@ import type { WorkOption } from "../lib/workOptions";
 type AfetacaoFormState = {
   data: string;
   id_item: string;
+  uso_combustivel: string;
   quantidade: string;
   iva: string;
   obra: string;
@@ -28,6 +29,7 @@ type AfetacaoRow = Record<string, unknown> & {
   id_item?: string;
   item_oficial?: string;
   natureza?: string;
+  uso_combustivel?: string;
   unidade?: string;
   quantidade?: number;
   iva?: number;
@@ -40,9 +42,12 @@ type AfetacaoRow = Record<string, unknown> & {
 
 type AssistantTab = "item" | "stock";
 
+const COMBUSTIVEL_USE_OPTIONS = ["MAQUINA", "GERADOR"] as const;
+
 const INITIAL_FORM: AfetacaoFormState = {
   data: new Date().toISOString().slice(0, 10),
   id_item: "",
+  uso_combustivel: "N/A",
   quantidade: "",
   iva: "23",
   obra: "",
@@ -64,6 +69,10 @@ function formatAmount(value: number, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(value);
+}
+
+function isFuelNature(value: string | undefined) {
+  return ["GASOLEO", "GASOLINA"].includes(String(value ?? "").trim().toUpperCase());
 }
 
 function catalogReferences(item: CatalogItem) {
@@ -91,6 +100,7 @@ function toFormState(item: AfetacaoRow): AfetacaoFormState {
   return {
     data: String(item.data ?? new Date().toISOString().slice(0, 10)),
     id_item: String(item.id_item ?? ""),
+    uso_combustivel: String(item.uso_combustivel ?? "N/A"),
     quantidade: String(item.quantidade ?? ""),
     iva: String(item.iva ?? 23),
     obra: String(item.obra ?? ""),
@@ -112,6 +122,7 @@ export function AfetacoesPage() {
   const workOptionsQuery = useQuery({ queryKey: ["work-options"], queryFn: api.getWorkOptions });
 
   const selectedCatalog = ((catalogQuery.data as CatalogItem[] | undefined) ?? []).find((item) => String(item.id_item ?? "") === form.id_item);
+  const fuelNature = isFuelNature(String(selectedCatalog?.natureza ?? ""));
   const workOptions = ((workOptionsQuery.data?.obras as WorkOption[] | undefined) ?? []);
   const availableFases = useMemo(
     () =>
@@ -208,6 +219,7 @@ export function AfetacoesPage() {
   const lowStock = hasStockContext && quantidade > stockAtual;
   const recentAfetacoes = useMemo(() => (((afetacoesQuery.data as AfetacaoRow[] | undefined) ?? []).slice().reverse()), [afetacoesQuery.data]);
   const canSubmit = Boolean(selectedCatalog && form.obra && form.fase && quantidade > 0);
+  const canSubmitWithFuelRules = canSubmit && (!fuelNature || ["MAQUINA", "GERADOR"].includes(form.uso_combustivel));
   const manualAfetacoesCount = useMemo(
     () => recentAfetacoes.filter((item) => String(item.origem ?? "") === "STOCK").length,
     [recentAfetacoes],
@@ -217,6 +229,7 @@ export function AfetacoesPage() {
   const helperNotes = [
     workOptions.length ? "O campo `Obra` usa a lista carregada da Google Sheet." : null,
     availableFases.length ? "O campo `Fase` usa a lista global de fases carregada da Google Sheet." : null,
+    fuelNature ? "Quando o item for combustivel em stock, tens de o classificar como `MAQUINA` ou `GERADOR` antes de gravar a afetacao." : null,
     "As afetacoes manuais usam sempre o custo medio atual do stock no momento da gravacao.",
   ].filter((note): note is string => Boolean(note));
   const formBusy = createMutation.isPending || updateMutation.isPending;
@@ -226,14 +239,24 @@ export function AfetacoesPage() {
     if (field === "id_item") {
       setSelectionMessage("");
     }
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === "id_item" && !value) {
+        next.uso_combustivel = "N/A";
+      }
+      return next;
+    });
   }
 
   function applyCatalogItem(item: CatalogItem) {
     setFormMessage("");
     setAssistantTab("stock");
     setSelectionMessage(`Item ${String(item.id_item)} aplicado a esta afetacao.`);
-    setForm((current) => ({ ...current, id_item: String(item.id_item ?? "") }));
+    setForm((current) => ({
+      ...current,
+      id_item: String(item.id_item ?? ""),
+      uso_combustivel: isFuelNature(String(item.natureza ?? "")) ? current.uso_combustivel : "N/A",
+    }));
   }
 
   function startEdit(item: AfetacaoRow) {
@@ -275,7 +298,10 @@ export function AfetacoesPage() {
             {selectedCatalog ? (
               <>
                 <div className="summary-main">{String(selectedCatalog.id_item)} | {String(selectedCatalog.item_oficial ?? "-")}</div>
-                <div className="muted">{String(selectedCatalog.natureza ?? "-")} | {String(selectedCatalog.unidade ?? "-")}</div>
+                <div className="muted">
+                  {String(selectedCatalog.natureza ?? "-")} | {String(selectedCatalog.unidade ?? "-")}
+                  {fuelNature && form.uso_combustivel !== "N/A" ? ` | ${form.uso_combustivel}` : ""}
+                </div>
               </>
             ) : (
               <>
@@ -332,6 +358,7 @@ export function AfetacoesPage() {
                 origem: "STOCK",
                 data: form.data,
                 id_item: form.id_item,
+                uso_combustivel: fuelNature ? form.uso_combustivel : "N/A",
                 quantidade,
                 iva,
                 obra: form.obra,
@@ -379,6 +406,19 @@ export function AfetacoesPage() {
                 IVA %
                 <input name="iva" type="number" step="0.01" value={form.iva} onChange={(event) => updateField("iva", event.target.value)} />
               </label>
+              {fuelNature ? (
+                <label>
+                  Uso Combustivel
+                  <select name="uso_combustivel" value={form.uso_combustivel} onChange={(event) => updateField("uso_combustivel", event.target.value)}>
+                    <option value="N/A">Selecione</option>
+                    {COMBUSTIVEL_USE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label>
                 Obra
                 {workOptions.length ? (
@@ -420,7 +460,7 @@ export function AfetacoesPage() {
           <div className="field-hint">O rail lateral mostra stock, custo medio e sugestoes do catalogo sem competir com o formulario principal.</div>
 
           <div className="form-actions detail-form-actions">
-            <button className="btn primary" type="submit" disabled={formBusy || !canSubmit}>
+            <button className="btn primary" type="submit" disabled={formBusy || !canSubmitWithFuelRules}>
               {formBusy ? "A guardar..." : editingId ? "Guardar alteracoes" : "Guardar"}
             </button>
           </div>
@@ -525,7 +565,10 @@ export function AfetacoesPage() {
                     <div className="impact-entity">SAIDA</div>
                     <div>
                       <div>{formatAmount(quantidade, 2)} {String(selectedCatalog?.unidade ?? "")} para {form.obra || "-"} / {form.fase || "-"}</div>
-                      <div className="muted">{formatAmount(custoSemIva)} sem IVA | {formatAmount(custoComIva)} com IVA</div>
+                      <div className="muted">
+                        {formatAmount(custoSemIva)} sem IVA | {formatAmount(custoComIva)} com IVA
+                        {fuelNature && form.uso_combustivel !== "N/A" ? ` | ${form.uso_combustivel}` : ""}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -570,6 +613,9 @@ export function AfetacoesPage() {
                     <strong>{String(item.item_oficial ?? item.id_item)}</strong>
                     <div className="inline-actions">
                       <span className="tag">{String(item.origem ?? "-")}</span>
+                      {String(item.uso_combustivel ?? "") && String(item.uso_combustivel ?? "") !== "N/A" ? (
+                        <span className="tag">{String(item.uso_combustivel)}</span>
+                      ) : null}
                       <span className="tag">{String(item.estado ?? "-")}</span>
                       {manual ? null : <span className="tag tag-success">Gerada</span>}
                     </div>

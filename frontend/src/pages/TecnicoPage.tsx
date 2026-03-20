@@ -22,7 +22,7 @@ export function TecnicoPage() {
   const movimentoRows = (movimentosQuery.data ?? []).filter((item) => {
     const term = normalize(deferredSearch);
     if (!term) return true;
-    return [item.id_item, item.item_oficial, item.obra, item.fase, item.source_id, item.tipo].some((value) => normalize(String(value ?? "")).includes(term));
+    return [item.id_item, item.item_oficial, item.obra, item.fase, item.source_id, item.tipo, item.matricula, item.uso_combustivel].some((value) => normalize(String(value ?? "")).includes(term));
   });
 
   return (
@@ -35,7 +35,7 @@ export function TecnicoPage() {
           </div>
           <label style={{ minWidth: "18rem" }}>
             Pesquisa
-            <input placeholder="ID, item oficial, obra, fase..." value={search} onChange={(event) => setSearch(event.target.value)} />
+            <input placeholder="ID, item oficial, obra, fase, matricula..." value={search} onChange={(event) => setSearch(event.target.value)} />
           </label>
         </div>
       </section>
@@ -68,7 +68,12 @@ export function TecnicoPage() {
                   <span className={`tag ${String(item.tipo) === "ENTRADA" ? "tag-success" : ""}`}>{String(item.tipo)}</span>
                 </div>
                 <div>{String(item.item_oficial ?? item.id_item)} | {String(item.quantidade ?? 0)} {String(item.unidade ?? "")}</div>
-                <div className="muted">{String(item.obra ?? "-")} / {String(item.fase ?? "-")} | source {String(item.source_type ?? "-")}:{String(item.source_id ?? "-")}</div>
+                <div className="muted">
+                  {String(item.obra ?? "-")} / {String(item.fase ?? "-")}
+                  {String(item.matricula ?? "") ? ` | viatura ${String(item.matricula)}` : ""}
+                  {String(item.uso_combustivel ?? "") && String(item.uso_combustivel ?? "") !== "N/A" ? ` | ${String(item.uso_combustivel)}` : ""}
+                  {" | "}source {String(item.source_type ?? "-")}:{String(item.source_id ?? "-")}
+                </div>
               </div>
             ))}
             {!movimentoRows.length ? <div className="empty-note">Sem movimentos para a pesquisa atual.</div> : null}

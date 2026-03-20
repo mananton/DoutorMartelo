@@ -413,8 +413,54 @@ Format: short ADR-style records with rationale and impact.
   - Mixing canonical identity with supplier-specific wording in the same sheet creates ambiguity and weakens stock consistency over time.
 - **Impact**:
   - `MATERIAIS_CAD` becomes simpler and more stable as the master catalog.
-  - `MATERIAIS_REFERENCIAS` becomes the learning layer that improves future matching/suggestions.
-  - Historical invoice wording can now be seeded and expanded without polluting the canonical item definition.
+- `MATERIAIS_REFERENCIAS` becomes the learning layer that improves future matching/suggestions.
+- Historical invoice wording can now be seeded and expanded without polluting the canonical item definition.
+
+## D-027: Disable legacy GAS materials automation while the backoffice owns the material flow
+- **Status**: accepted
+- **Date**: 2026-03-20
+- **Commit**: `pending`
+- **Decision**:
+  - Keep legacy GAS dashboard code available, but disable the old trigger-driven materials flow by default in `src/main.gs`.
+  - The new materials backoffice is now the owning surface for:
+    - `FATURAS`
+    - `FATURAS_ITENS`
+    - `MATERIAIS_CAD`
+    - `AFETACOES_OBRA`
+    - generated `MATERIAIS_MOV`
+  - `onEdit` / `onSheetChange` legacy materials automation should not keep reconciling those sheets behind the backoffice unless explicitly re-enabled.
+- **Rationale**:
+  - Old GAS material automation was built around older assumptions (`STOCK` / `CONSUMO`, supplier-driven catalog hydration) and can now interfere with the richer backoffice model.
+  - Leaving both engines active creates hidden rewrites, invalid states, and movement duplication risk.
+- **Impact**:
+  - Material workflow ownership is now explicit.
+  - Debugging gets simpler because Google Sheets rows are no longer being silently rewritten by the old trigger path.
+
+## D-028: Fuel purchases require explicit operational use, and vehicle fuel is attributed by matricula
+- **Status**: accepted
+- **Date**: 2026-03-20
+- **Commit**: `pending`
+- **Decision**:
+  - Extend `Natureza` to include:
+    - `GASOLEO`
+    - `GASOLINA`
+  - Extend `Unidade` to include `Lt`.
+  - Add `Uso_Combustivel` as an explicit business field with:
+    - `N/A`
+    - `VIATURA`
+    - `MAQUINA`
+    - `GERADOR`
+  - Add `Destino = VIATURA`.
+  - When `Uso_Combustivel = VIATURA`, require `Matricula` sourced from the `VEICULOS` sheet and generate direct movement context tied to that vehicle.
+  - When `Uso_Combustivel = MAQUINA` or `GERADOR`, allow:
+    - `STOCK`
+    - direct `CONSUMO` in `Obra` + `Fase`
+- **Rationale**:
+  - Fuel has different fiscal and operational meaning depending on whether it is consumed by vehicles, machines, or generators.
+  - Treating all fuel as generic material weakens cost attribution and tax treatment.
+- **Impact**:
+  - Fuel lines now carry richer context through `FATURAS_ITENS`, generated movement rows, and vehicle attribution.
+  - `VEICULOS` becomes an operational option source for the materials backoffice and must stay stable.
 
 ## Standing Constraints
 - Do not rename global sheet constants.

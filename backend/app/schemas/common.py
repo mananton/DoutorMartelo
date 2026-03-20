@@ -63,3 +63,12 @@ class SupplierOption(ApiModel):
 
 class SupplierOptionsResponse(ApiModel):
     fornecedores: list[SupplierOption]
+
+
+class VehicleOption(ApiModel):
+    veiculo: str
+    matricula: str
+
+
+class VehicleOptionsResponse(ApiModel):
+    veiculos: list[VehicleOption]

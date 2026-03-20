@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-03-19
+Last updated: 2026-03-20
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
@@ -106,9 +106,27 @@ Last updated: 2026-03-19
     - `FATURAS_ITENS`
   - `Natureza` current dropdown values:
     - `MATERIAL`
+    - `GASOLEO`
+    - `GASOLINA`
     - `SERVICO`
     - `ALUGUER`
     - `TRANSPORTE`
+  - `Unidade` now also accepts `Lt`.
+  - `FATURAS` now also carries payment state from the workbook:
+    - `Paga?`
+    - `Data Pagamento`
+  - Fuel lines now use explicit operational context:
+    - `Uso_Combustivel` values:
+      - `N/A`
+      - `VIATURA`
+      - `MAQUINA`
+      - `GERADOR`
+    - `Destino` now also accepts `VIATURA`
+    - `VIATURA` requires `Matricula` sourced from the `VEICULOS` sheet
+    - `MAQUINA` and `GERADOR` may go to:
+      - `STOCK`
+      - direct `CONSUMO` in `Obra` + `Fase`
+  - Vehicle options are now exposed by the backend through `/api/options/veiculos` and served from backend cache for stability after startup/reload.
   - `ID_Item` is now generated in GAS from `Natureza`, not by the generic ID helper path.
 - `FATURAS_ITENS` current operating model:
   - Manual starting point:
@@ -137,6 +155,9 @@ Last updated: 2026-03-19
   - manual stock-consumption rows should snapshot `STOCK_ATUAL.Custo_Medio_Atual` into `Custo_Unit` at registration time
 - Current material rules by `Natureza`:
   - `MATERIAL` can go to `STOCK` or direct `CONSUMO`
+  - `GASOLEO` and `GASOLINA` require explicit `Uso_Combustivel`
+  - fuel with `Uso_Combustivel = VIATURA` must use `Destino = VIATURA` and generate a direct movement with `Matricula`
+  - fuel with `Uso_Combustivel = MAQUINA` or `GERADOR` can use `STOCK` or direct `CONSUMO`
   - `SERVICO`, `ALUGUER`, and `TRANSPORTE` should be direct-to-work only and must not affect `STOCK_ATUAL`
 - `STOCK_ATUAL` current expectation:
   - should depend on `MATERIAIS_MOV`, not `FATURAS_ITENS`, for stock quantities and average-cost logic
@@ -198,6 +219,9 @@ Last updated: 2026-03-19
   - UI direction is now explicitly desktop-first for the materials app:
     - operator workflows should be optimized for office desktop/laptop usage
     - mobile responsiveness is fallback support, not the main layout target
+  - legacy GAS material-trigger automation is now explicitly disabled by default in `src/main.gs`
+    - the new materials backoffice owns the rich materials flow
+    - old trigger-driven reconciliation must stay off unless intentionally reactivated
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
@@ -207,6 +231,10 @@ Last updated: 2026-03-19
 - Current material automation is mid-rollout and should be treated as active but still under validation on real spreadsheet edits.
 - The new materials backoffice still uses Google Sheets as the operational source of truth; startup hydration currently comes from Sheets, not from Supabase.
 - Manual changes made directly in Google Sheets after backend startup still require explicit reload to appear in the app runtime state.
+- Fuel + vehicle handling is now implemented, but still needs more real-row validation for:
+  - `Destino = VIATURA`
+  - movement generation into `MATERIAIS_MOV`
+  - tax/cost interpretation on fuel invoice lines
 - Edit/delete flows are now implemented in the app, but they still need validation on a wider sample of real business rows from the live workbook.
 - `MATERIAIS_MOV` can still look duplicated to operators when two `STOCK` afetacoes hit the same item/date/obra/fase context; this now has a safe diagnostic path but still needs UX clarification.
 - Watch for Apps Script trigger behavior differences between:

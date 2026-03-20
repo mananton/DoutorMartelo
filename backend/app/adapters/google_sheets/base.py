@@ -25,3 +25,6 @@ class GoogleSheetsAdapter(Protocol):
 
     def load_supplier_options(self) -> list[dict[str, Any]]:
         ...
+
+    def load_vehicle_options(self) -> list[dict[str, Any]]:
+        ...

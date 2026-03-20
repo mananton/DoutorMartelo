@@ -34,6 +34,7 @@ const NREG_HOUR        = 23;
 const NREG_MINUTE      = 45;
 const ENABLE_EMPTY_ROW_CLEANUP = true; // limpeza automática reativada
 const ENABLE_AUTO_SUPABASE_SYNC = false;
+const ENABLE_LEGACY_MATERIAL_FLOW = false;
 
 // ════════════════════════════════════════════════════════════
 //  SECÇÃO 1 — DASHBOARD WEB APP
@@ -177,6 +178,7 @@ function assignMissingIdsForSheet_(sheet, spec) {
 function ensureManagedSheetIdsForSheet_(sheet) {
   if (!sheet) return 0;
   if (sheet.getName() === SHEET_MATERIAIS_CAD) {
+    if (!isLegacyMaterialFlowEnabled_()) return 0;
     return processMateriaisCadSheet_(sheet);
   }
   const spec = getAutoIdSpecs_().find(function(item) {
@@ -192,7 +194,9 @@ function ensureManagedSheetIds_() {
   specs.forEach(function(spec) {
     total += assignMissingIdsForSheet_(ss.getSheetByName(spec.sheetName), spec);
   });
-  total += processMateriaisCadSheet_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
+  if (isLegacyMaterialFlowEnabled_()) {
+    total += processMateriaisCadSheet_(ss.getSheetByName(SHEET_MATERIAIS_CAD));
+  }
   return total;
 }
 
@@ -328,6 +332,10 @@ function withMaterialFlowGuard_(callback) {
   } finally {
     props.deleteProperty("MATERIAL_FLOW_BUSY_UNTIL");
   }
+}
+
+function isLegacyMaterialFlowEnabled_() {
+  return !!ENABLE_LEGACY_MATERIAL_FLOW;
 }
 
 function normalizeNature_(value) {
@@ -698,6 +706,7 @@ function processMateriaisCadRow_(sheet, rowNum, ctx) {
 }
 
 function processMateriaisCadSheet_(sheet) {
+  if (!isLegacyMaterialFlowEnabled_()) return 0;
   if (!sheet || sheet.getName() !== SHEET_MATERIAIS_CAD) return 0;
   const ctx = buildMateriaisCadContext_(sheet);
   if (!ctx) return 0;
@@ -964,6 +973,7 @@ function hydrateAfetacoesObraRow_(sheet, rowNum) {
 }
 
 function syncAfetacoesObraFromFaturasItens_() {
+  if (!isLegacyMaterialFlowEnabled_()) return { generated: 0, updated: 0, removed: 0, invalid: 0 };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const itemsSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
   const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
@@ -1177,6 +1187,7 @@ function syncAfetacoesObraFromFaturasItens_() {
 }
 
 function gerarMovimentosAfetacoesObra_() {
+  if (!isLegacyMaterialFlowEnabled_()) return { generated: 0, updated: 0, invalid: 0, totalRows: 0 };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
   const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
@@ -1671,6 +1682,7 @@ function needsAfetacaoFlowForEditedRows_(sheet, startRow, endRow, cols) {
 }
 
 function syncAfetacaoFromFatItemRow_(itemsSheet, rowNum) {
+  if (!isLegacyMaterialFlowEnabled_()) return { action: "disabled" };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
   if (!itemsSheet || !afetSheet || rowNum < 2) return { action: "skipped" };
@@ -1750,6 +1762,7 @@ function syncAfetacaoFromFatItemRow_(itemsSheet, rowNum) {
 }
 
 function syncStockMovementFromFatItemRow_(itemsSheet, rowNum) {
+  if (!isLegacyMaterialFlowEnabled_()) return { action: "disabled" };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
   if (!itemsSheet || !movSheet || rowNum < 2) return { action: "skipped" };
@@ -1813,6 +1826,7 @@ function syncStockMovementFromFatItemRow_(itemsSheet, rowNum) {
 }
 
 function syncMovFromAfetacaoRow_(afetSheet, rowNum) {
+  if (!isLegacyMaterialFlowEnabled_()) return { action: "disabled" };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
   if (!afetSheet || !movSheet || rowNum < 2) return { action: "skipped" };
@@ -1875,6 +1889,7 @@ function syncMovFromAfetacaoRow_(afetSheet, rowNum) {
 }
 
 function reconcileGeneratedMateriaisMovRows_() {
+  if (!isLegacyMaterialFlowEnabled_()) return 0;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const itemsSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
   const afetSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
@@ -1950,6 +1965,9 @@ function reconcileGeneratedMateriaisMovRows_() {
 }
 
 function gerarMovimentosMateriais_() {
+  if (!isLegacyMaterialFlowEnabled_()) {
+    return { generated: 0, updated: 0, existing: 0, invalid: 0, totalRows: 0 };
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const itemsSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
   const movSheet = ss.getSheetByName(SHEET_MATERIAIS_MOV);
@@ -2195,6 +2213,10 @@ function getStatusBackgroundColor_(status) {
 }
 
 function gerarMovimentosMateriaisManual() {
+  if (!isLegacyMaterialFlowEnabled_()) {
+    SpreadsheetApp.getUi().alert("Legacy material flow desativado. O materials.backoffice e agora o responsavel por estas automacoes.");
+    return;
+  }
   const result = gerarMovimentosMateriais_();
   SpreadsheetApp.getUi().alert(
     "Movimentos gerados: " + result.generated +
@@ -2210,15 +2232,18 @@ function onEdit(e) {
   try {
     const sheet = e && e.range ? e.range.getSheet() : null;
     if (sheet && sheet.getName() === SHEET_MATERIAIS_CAD) {
-      const startRow = e.range.getRow();
-      const endRow = startRow + e.range.getNumRows() - 1;
-      const ctx = buildMateriaisCadContext_(sheet);
-      for (let rowNum = Math.max(2, startRow); rowNum <= endRow; rowNum++) {
-        processMateriaisCadRow_(sheet, rowNum, ctx);
+      if (isLegacyMaterialFlowEnabled_()) {
+        const startRow = e.range.getRow();
+        const endRow = startRow + e.range.getNumRows() - 1;
+        const ctx = buildMateriaisCadContext_(sheet);
+        for (let rowNum = Math.max(2, startRow); rowNum <= endRow; rowNum++) {
+          processMateriaisCadRow_(sheet, rowNum, ctx);
+        }
       }
     } else {
       ensureManagedSheetIdsForSheet_(sheet);
     }
+    if (!isLegacyMaterialFlowEnabled_()) return;
     if (sheet && sheet.getName() === SHEET_FATURAS_ITENS) {
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       const idFaturaCol = findHeaderIndexByAliases_(headers, ["ID_Fatura", "ID Fatura"]);
@@ -2316,12 +2341,14 @@ function onSheetChange(e) {
   corrigirCustosRegistos_();
   processarDispensados_();
   ensureManagedSheetIds_();
-  withMaterialFlowGuard_(function() {
-    syncAfetacoesObraFromFaturasItens_();
-    reconcileGeneratedMateriaisMovRows_();
-    gerarMovimentosMateriais_();
-    gerarMovimentosAfetacoesObra_();
-  });
+  if (isLegacyMaterialFlowEnabled_()) {
+    withMaterialFlowGuard_(function() {
+      syncAfetacoesObraFromFaturasItens_();
+      reconcileGeneratedMateriaisMovRows_();
+      gerarMovimentosMateriais_();
+      gerarMovimentosAfetacoesObra_();
+    });
+  }
 
   // Sync para Supabase (migração paralela)
   if (ENABLE_AUTO_SUPABASE_SYNC) {
@@ -2364,6 +2391,11 @@ function limparLinhasVazias_(forceRun) {
  * Verificar em: Editar > Triggers do projecto actual.
  */
 function installOnChangeTrigger() {
+  if (!isLegacyMaterialFlowEnabled_()) {
+    uninstallOnChangeTrigger();
+    Logger.log("Legacy material flow desativado; onChange trigger nao instalado.");
+    return;
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   ScriptApp.getProjectTriggers()

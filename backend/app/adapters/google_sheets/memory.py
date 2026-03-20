@@ -55,3 +55,26 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
                 key=lambda item: str(suppliers_by_name[item].get("fornecedor") or "").lower(),
             )
         ]
+
+    def load_vehicle_options(self) -> list[dict[str, object]]:
+        vehicles_by_matricula: dict[str, dict[str, object]] = {}
+        for collection in (self.state.fatura_items.values(), self.state.movimentos.values()):
+            for record in collection:
+                matricula = str(record.get("matricula") or "").strip()
+                if not matricula:
+                    continue
+                key = matricula.lower()
+                vehicles_by_matricula.setdefault(
+                    key,
+                    {
+                        "veiculo": matricula,
+                        "matricula": matricula,
+                    },
+                )
+        return [
+            vehicles_by_matricula[key]
+            for key in sorted(
+                vehicles_by_matricula.keys(),
+                key=lambda item: str(vehicles_by_matricula[item].get("matricula") or "").lower(),
+            )
+        ]

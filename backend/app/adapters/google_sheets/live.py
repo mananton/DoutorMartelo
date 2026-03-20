@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, date, datetime
+from http.client import IncompleteRead
 import re
+import unicodedata
 from typing import Any
 
 from backend.app.adapters.google_sheets.base import GoogleSheetsAdapter, WriteBatch
@@ -42,10 +44,12 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             return
         last_col = _column_letter(len(headers))
         for row_num in rows_to_clear:
-            self.service.spreadsheets().values().clear(
-                spreadsheetId=self.settings.google_spreadsheet_id,
-                range=f"{sheet_name}!A{row_num}:{last_col}{row_num}",
-            ).execute()
+            self._execute_request(
+                self.service.spreadsheets().values().clear(
+                    spreadsheetId=self.settings.google_spreadsheet_id,
+                    range=f"{sheet_name}!A{row_num}:{last_col}{row_num}",
+                )
+            )
 
     def load_snapshot(self) -> dict[str, list[dict[str, Any]]]:
         snapshot: dict[str, list[dict[str, Any]]] = {}
@@ -59,7 +63,7 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
                 if record:
                     parsed.append(record)
             snapshot[entity] = parsed
-        return snapshot
+        return _enrich_snapshot(snapshot)
 
     def load_work_options(self) -> list[dict[str, Any]]:
         obras_headers = self._read_header_at_row("OBRAS", 3)
@@ -145,6 +149,32 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             )
         ]
 
+    def load_vehicle_options(self) -> list[dict[str, Any]]:
+        headers = self._read_header("VEICULOS")
+        rows = self._read_rows("VEICULOS", headers)
+        vehicles_by_matricula: dict[str, dict[str, Any]] = {}
+        for _, row in rows:
+            veiculo = _read_text(row, ["Veiculos", "Veículos"]) or ""
+            matricula = _read_text(row, ["Matricula", "Matrícula"]) or ""
+            if not veiculo or not matricula:
+                continue
+            key = matricula.strip().lower()
+            if key not in vehicles_by_matricula:
+                vehicles_by_matricula[key] = {
+                    "veiculo": veiculo,
+                    "matricula": matricula,
+                }
+        return [
+            vehicles_by_matricula[key]
+            for key in sorted(
+                vehicles_by_matricula.keys(),
+                key=lambda item: (
+                    str(vehicles_by_matricula[item].get("veiculo") or "").lower(),
+                    str(vehicles_by_matricula[item].get("matricula") or "").lower(),
+                ),
+            )
+        ]
+
     def _load_global_work_phases(self) -> set[str]:
         for header_row, start_row in ((1, 2), (2, 3)):
             try:
@@ -199,38 +229,46 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
                 appends.append(row_values)
 
         for row_num, values in updates:
-            self.service.spreadsheets().values().update(
-                spreadsheetId=self.settings.google_spreadsheet_id,
-                range=f"{sheet_name}!A{row_num}",
-                valueInputOption="USER_ENTERED",
-                body={"values": [values]},
-            ).execute()
+            self._execute_request(
+                self.service.spreadsheets().values().update(
+                    spreadsheetId=self.settings.google_spreadsheet_id,
+                    range=f"{sheet_name}!A{row_num}",
+                    valueInputOption="USER_ENTERED",
+                    body={"values": [values]},
+                )
+            )
 
         if appends:
-            self.service.spreadsheets().values().append(
-                spreadsheetId=self.settings.google_spreadsheet_id,
-                range=f"{sheet_name}!A:A",
-                valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
-                body={"values": appends},
-            ).execute()
+            self._execute_request(
+                self.service.spreadsheets().values().append(
+                    spreadsheetId=self.settings.google_spreadsheet_id,
+                    range=f"{sheet_name}!A:A",
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": appends},
+                )
+            )
 
     def _read_header(self, sheet_name: str) -> list[str]:
         return self._read_header_at_row(sheet_name, 1)
 
     def _read_header_at_row(self, sheet_name: str, row_num: int) -> list[str]:
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.settings.google_spreadsheet_id,
-            range=f"{sheet_name}!{row_num}:{row_num}",
-        ).execute()
+        result = self._execute_request(
+            self.service.spreadsheets().values().get(
+                spreadsheetId=self.settings.google_spreadsheet_id,
+                range=f"{sheet_name}!{row_num}:{row_num}",
+            )
+        )
         rows = result.get("values", [[]])
         return rows[0]
 
     def _read_rows(self, sheet_name: str, headers: list[str], *, start_row: int = 2) -> list[tuple[int, dict[str, Any]]]:
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.settings.google_spreadsheet_id,
-            range=f"{sheet_name}!A{start_row}:ZZ",
-        ).execute()
+        result = self._execute_request(
+            self.service.spreadsheets().values().get(
+                spreadsheetId=self.settings.google_spreadsheet_id,
+                range=f"{sheet_name}!A{start_row}:ZZ",
+            )
+        )
         rows = result.get("values", [])
         parsed: list[tuple[int, dict[str, Any]]] = []
         for offset, row in enumerate(rows, start=start_row):
@@ -238,12 +276,26 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             parsed.append((offset, data))
         return parsed
 
+    def _execute_request(self, request: Any) -> Any:
+        last_error: Exception | None = None
+        for _ in range(3):
+            try:
+                return request.execute()
+            except IncompleteRead as exc:
+                last_error = exc
+                continue
+        if last_error:
+            raise last_error
+        return request.execute()
+
 
 RowParser = Callable[[dict[str, Any], int], dict[str, Any] | None]
 
 
 def _normalize_key(value: str) -> str:
     normalized = (value or "").strip().lower()
+    normalized = unicodedata.normalize("NFD", normalized)
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
     normalized = normalized.replace("º", "o").replace("°", "o")
     normalized = normalized.replace("âº", "o").replace("â", "")
     normalized = normalized.replace("/", "").replace("_", "").replace("-", "").replace(" ", "")
@@ -277,12 +329,18 @@ def _read_text(row: dict[str, Any], aliases: list[str]) -> str | None:
     return text or None
 
 
+def _read_upper_text(row: dict[str, Any], aliases: list[str]) -> str | None:
+    text = _read_text(row, aliases)
+    return text.upper() if text else None
+
+
 def _read_float(row: dict[str, Any], aliases: list[str]) -> float | None:
     value = _pick_value(row, aliases)
     if value in (None, ""):
         return None
     text = str(value).strip()
-    text = text.replace("\xa0", "").replace(" ", "").replace("€", "")
+    has_percent = "%" in text
+    text = text.replace("\xa0", "").replace(" ", "").replace("€", "").replace("%", "")
     if "," in text and "." in text:
         if text.rfind(",") > text.rfind("."):
             text = text.replace(".", "").replace(",", ".")
@@ -291,7 +349,10 @@ def _read_float(row: dict[str, Any], aliases: list[str]) -> float | None:
     elif "," in text:
         text = text.replace(".", "").replace(",", ".")
     try:
-        return float(text)
+        parsed = float(text)
+        if has_percent and parsed > 100:
+            return parsed / 100
+        return parsed
     except ValueError:
         return None
 
@@ -338,6 +399,7 @@ def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     valor_fallback = _read_float(row, ["Valor"])
     return {
         "id_fatura": id_fatura,
+        "id_compromisso": _read_text(row, ["ID_Compromisso", "ID Compromisso"]),
         "fornecedor": _read_text(row, ["Fornecedor"]) or "",
         "nif": _read_text(row, ["NIF"]) or "",
         "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]) or "",
@@ -345,6 +407,8 @@ def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "valor_sem_iva": valor_sem_iva if valor_sem_iva is not None else (valor_fallback or 0.0),
         "iva": _read_float(row, ["IVA"]) or 0.0,
         "valor_com_iva": valor_com_iva if valor_com_iva is not None else (valor_fallback or 0.0),
+        "paga": _read_bool(row, ["Paga?", "Paga"]),
+        "data_pagamento": _read_date(row, ["Data Pagamento"]),
         "observacoes": _read_text(row, ["Observacoes", "Observações"]),
         "estado": _read_text(row, ["Estado"]) or "ATIVA",
         "sheet_row_num": row_num,
@@ -369,7 +433,9 @@ def _parse_fit(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "id_item": _read_text(row, ["ID_Item", "ID Item"]),
         "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]),
         "unidade": _read_text(row, ["Unidade"]),
-        "natureza": _read_text(row, ["Natureza"]),
+        "natureza": _read_upper_text(row, ["Natureza"]),
+        "uso_combustivel": _read_upper_text(row, ["Uso_Combustivel", "Uso Combustivel"]),
+        "matricula": _read_text(row, ["Matricula", "Matrícula"]),
         "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
         "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
         "desconto_1": _read_float(row, ["Desconto 1", "Desconto_1"]) or 0.0,
@@ -397,7 +463,7 @@ def _parse_catalog(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     return {
         "id_item": id_item,
         "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]) or "",
-        "natureza": _read_text(row, ["Natureza"]) or "MATERIAL",
+        "natureza": _read_upper_text(row, ["Natureza"]) or "MATERIAL",
         "unidade": _read_text(row, ["Unidade"]) or "",
         "observacoes": _read_text(row, ["Observacoes", "Observações"]),
         "estado_cadastro": _read_text(row, ["Estado_Cadastro", "Estado Cadastro"]) or "ATIVO",
@@ -436,7 +502,8 @@ def _parse_afetacao(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "data": _read_date(row, ["Data"]) or date.today(),
         "id_item": _read_text(row, ["ID_Item", "ID Item"]) or "",
         "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]),
-        "natureza": _read_text(row, ["Natureza"]),
+        "natureza": _read_upper_text(row, ["Natureza"]),
+        "uso_combustivel": _read_upper_text(row, ["Uso_Combustivel", "Uso Combustivel"]),
         "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
         "unidade": _read_text(row, ["Unidade"]),
         "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
@@ -475,6 +542,8 @@ def _parse_mov(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "id_item": _read_text(row, ["ID_Item", "ID Item"]) or "",
         "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial", "Material"]) or "",
         "unidade": _read_text(row, ["Unidade"]),
+        "uso_combustivel": _read_upper_text(row, ["Uso_Combustivel", "Uso Combustivel"]),
+        "matricula": _read_text(row, ["Matricula", "Matrícula"]),
         "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
         "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
         "custo_total_sem_iva": _read_float(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]) or 0.0,
@@ -498,13 +567,16 @@ def _parse_mov(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
 def _fatura_serializer(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "ID_Fatura": record["id_fatura"],
+        "ID_Compromisso": record.get("id_compromisso", ""),
         "Fornecedor": record["fornecedor"],
         "NIF": record["nif"],
         "Nº Doc/Fatura": record["nr_documento"],
         "Data Fatura": str(record["data_fatura"]),
         "Valor": record["valor_com_iva"],
         "Valor Total Sem IVA": record["valor_sem_iva"],
-        "IVA": record["iva"],
+        "IVA": _format_percentage_input(record.get("iva", 0)),
+        "Paga?": bool(record.get("paga", False)),
+        "Data Pagamento": str(record["data_pagamento"]) if record.get("data_pagamento") else "",
         "Valor Total Com IVA": record["valor_com_iva"],
         "Estado": record.get("estado", ""),
         "Observacoes": record.get("observacoes", ""),
@@ -524,12 +596,14 @@ def _fit_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "Item_Oficial": record.get("item_oficial", ""),
         "Unidade": record.get("unidade", ""),
         "Natureza": record.get("natureza", ""),
+        "Uso_Combustivel": record.get("uso_combustivel", ""),
+        "Matricula": record.get("matricula", ""),
         "Quantidade": record["quantidade"],
         "Custo_Unit": record["custo_unit"],
         "Desconto 1": record.get("desconto_1", 0),
         "Desconto 2": record.get("desconto_2", 0),
         "Custo_Total Sem IVA": record.get("custo_total_sem_iva", 0),
-        "IVA": record.get("iva", 0),
+        "IVA": _format_percentage_input(record.get("iva", 0)),
         "Custo_Total Com IVA": record.get("custo_total_com_iva", 0),
         "Destino": record["destino"],
         "Obra": record.get("obra", ""),
@@ -570,12 +644,13 @@ def _afetacao_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "ID_Item": record["id_item"],
         "Item_Oficial": record.get("item_oficial", ""),
         "Natureza": record.get("natureza", ""),
+        "Uso_Combustivel": record.get("uso_combustivel", ""),
         "Quantidade": record["quantidade"],
         "Unidade": record.get("unidade", ""),
         "Custo_Unit": record.get("custo_unit", 0),
         "Custo_Total": record.get("custo_total", 0),
         "Custo_Total Sem IVA": record.get("custo_total_sem_iva", 0),
-        "IVA": record.get("iva", 0),
+        "IVA": _format_percentage_input(record.get("iva", 0)),
         "Custo_Total Com IVA": record.get("custo_total_com_iva", 0),
         "Obra": record["obra"],
         "Fase": record["fase"],
@@ -597,10 +672,12 @@ def _mov_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "Item_Oficial": record["item_oficial"],
         "Material": record["item_oficial"],
         "Unidade": record.get("unidade", ""),
+        "Uso_Combustivel": record.get("uso_combustivel", ""),
+        "Matricula": record.get("matricula", ""),
         "Quantidade": record["quantidade"],
         "Custo_Unit": record.get("custo_unit", 0),
         "Custo_Total Sem IVA": record.get("custo_total_sem_iva", 0),
-        "IVA": record.get("iva", 0),
+        "IVA": _format_percentage_input(record.get("iva", 0)),
         "Custo_Total Com IVA": record.get("custo_total_com_iva", 0),
         "Obra": record.get("obra", ""),
         "Fase": record.get("fase", ""),
@@ -628,3 +705,33 @@ SHEET_READ_CONFIG: dict[str, dict[str, Any]] = {
     "afetacoes_obra": {"sheet_name": "AFETACOES_OBRA", "parser": _parse_afetacao},
     "materiais_mov": {"sheet_name": "MATERIAIS_MOV", "parser": _parse_mov},
 }
+
+
+def _format_percentage_input(value: Any) -> str:
+    try:
+        numeric = float(value or 0)
+    except (TypeError, ValueError):
+        numeric = 0.0
+    if numeric.is_integer():
+        return f"{int(numeric)}%"
+    return f"{numeric}%"
+
+
+def _enrich_snapshot(snapshot: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    catalog_by_id = {
+        str(record.get("id_item") or "").strip(): record
+        for record in snapshot.get("materiais_cad", [])
+        if str(record.get("id_item") or "").strip()
+    }
+    for entity in ("faturas_itens", "afetacoes_obra", "materiais_mov"):
+        for record in snapshot.get(entity, []):
+            catalog = catalog_by_id.get(str(record.get("id_item") or "").strip())
+            if not catalog:
+                continue
+            if not record.get("item_oficial"):
+                record["item_oficial"] = catalog.get("item_oficial")
+            if "natureza" in record and not record.get("natureza"):
+                record["natureza"] = catalog.get("natureza")
+            if not record.get("unidade"):
+                record["unidade"] = catalog.get("unidade")
+    return snapshot

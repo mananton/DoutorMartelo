@@ -47,6 +47,7 @@ class MaterialsService:
         now = self._now()
         entity = {
             "id_fatura": self.state.next_id("FAT"),
+            "id_compromisso": payload.id_compromisso,
             "fornecedor": payload.fornecedor,
             "nif": payload.nif,
             "nr_documento": payload.nr_documento,
@@ -54,11 +55,14 @@ class MaterialsService:
             "valor_sem_iva": payload.valor_sem_iva,
             "iva": payload.iva,
             "valor_com_iva": payload.valor_com_iva,
+            "paga": payload.paga,
+            "data_pagamento": payload.data_pagamento,
             "observacoes": payload.observacoes,
             "estado": "ATIVA",
             "created_at": now,
             "updated_at": now,
         }
+        self._normalize_fatura_payment_fields(entity)
         self._persist({"faturas": [entity]})
         self.state.faturas[entity["id_fatura"]] = entity
         return self._to_model(FaturaRecord, entity)
@@ -67,6 +71,7 @@ class MaterialsService:
         current = deepcopy(self._require_fatura(id_fatura))
         for field, value in payload.model_dump(exclude_none=True, by_alias=True).items():
             current[field] = value
+        self._normalize_fatura_payment_fields(current)
         current["updated_at"] = self._now()
         dependent_items: list[dict[str, Any]] = []
         dependent_afetacoes: list[dict[str, Any]] = []
@@ -83,10 +88,14 @@ class MaterialsService:
             dependent_items.append(updated_item)
 
             fit_movement = self._find_movement_by_source("FIT", updated_item["id_item_fatura"])
-            if updated_item["destino"] == "STOCK" and fit_movement:
+            if updated_item["destino"] in {"STOCK", "VIATURA"} and fit_movement:
                 dependent_movimentos.append(
                     self._reuse_record_identity(
-                        self._build_fit_movement(updated_item, current, "ENTRADA"),
+                        self._build_fit_movement(
+                            updated_item,
+                            current,
+                            "ENTRADA" if updated_item["destino"] == "STOCK" else "CONSUMO",
+                        ),
                         fit_movement,
                         "id_mov",
                         keep_sequence=True,
@@ -94,7 +103,7 @@ class MaterialsService:
                 )
 
             direct_afetacao = self._find_direct_afetacao_by_source(updated_item["id_item_fatura"])
-            if updated_item["destino"] != "STOCK" and direct_afetacao:
+            if updated_item["destino"] == "CONSUMO" and direct_afetacao:
                 updated_afetacao = self._reuse_record_identity(
                     self._build_direct_afetacao(updated_item, current),
                     direct_afetacao,
@@ -166,6 +175,8 @@ class MaterialsService:
                 "item_oficial": catalog["item_oficial"],
                 "unidade": catalog["unidade"],
                 "natureza": catalog["natureza"],
+                "uso_combustivel": self._normalize_uso_combustivel(item.uso_combustivel, catalog["natureza"]),
+                "matricula": item.matricula,
                 "quantidade": item.quantidade,
                 "custo_unit": item.custo_unit,
                 "desconto_1": item.desconto_1,
@@ -187,6 +198,8 @@ class MaterialsService:
 
             if fit["destino"] == "STOCK":
                 generated_movimentos.append(self._build_fit_movement(fit, fatura, "ENTRADA"))
+            elif fit["destino"] == "VIATURA":
+                generated_movimentos.append(self._build_fit_movement(fit, fatura, "CONSUMO"))
             else:
                 afetacao = self._build_direct_afetacao(fit, fatura)
                 generated_afetacoes.append(afetacao)
@@ -212,6 +225,8 @@ class MaterialsService:
             "item_oficial": current.get("item_oficial"),
             "natureza": current.get("natureza"),
             "unidade": current.get("unidade"),
+            "uso_combustivel": current.get("uso_combustivel"),
+            "matricula": current.get("matricula"),
             "quantidade": current["quantidade"],
             "custo_unit": current["custo_unit"],
             "iva": current["iva"],
@@ -238,6 +253,8 @@ class MaterialsService:
             "item_oficial": catalog["item_oficial"],
             "unidade": catalog["unidade"],
             "natureza": catalog["natureza"],
+            "uso_combustivel": self._normalize_uso_combustivel(item_input.uso_combustivel, catalog["natureza"]),
+            "matricula": item_input.matricula,
             "quantidade": item_input.quantidade,
             "custo_unit": item_input.custo_unit,
             "desconto_1": item_input.desconto_1,
@@ -249,7 +266,7 @@ class MaterialsService:
             "obra": item_input.obra,
             "fase": item_input.fase,
             "observacoes": item_input.observacoes,
-            "estado_mapeamento": current.get("estado_mapeamento", "GUARDADO"),
+            "estado_mapeamento": "GUARDADO",
             "created_at": current["created_at"],
             "updated_at": self._now(),
         }
@@ -267,8 +284,12 @@ class MaterialsService:
 
         upserts: dict[str, list[dict[str, Any]]] = {"faturas_itens": [updated]}
         deletions: dict[str, list[str]] = {}
-        if updated["destino"] == "STOCK":
-            movement = self._build_fit_movement(updated, fatura, "ENTRADA")
+        if updated["destino"] in {"STOCK", "VIATURA"}:
+            movement = self._build_fit_movement(
+                updated,
+                fatura,
+                "ENTRADA" if updated["destino"] == "STOCK" else "CONSUMO",
+            )
             if current_fit_movement:
                 movement = self._reuse_record_identity(movement, current_fit_movement, "id_mov", keep_sequence=True)
             upserts["materiais_mov"] = [movement]
@@ -291,7 +312,7 @@ class MaterialsService:
 
         self._persist(upserts)
         self.state.fatura_items[item_id] = updated
-        if updated["destino"] == "STOCK":
+        if updated["destino"] in {"STOCK", "VIATURA"}:
             for movimento in upserts.get("materiais_mov", []):
                 self.state.movimentos[movimento["id_mov"]] = movimento
             if current_direct_afetacao:
@@ -681,6 +702,7 @@ class MaterialsService:
             "id_item": payload.id_item,
             "item_oficial": catalog["item_oficial"],
             "natureza": catalog["natureza"],
+            "uso_combustivel": self._normalize_uso_combustivel(payload.uso_combustivel, catalog["natureza"]),
             "quantidade": payload.quantidade,
             "unidade": catalog["unidade"],
             "custo_unit": 0.0,
@@ -699,6 +721,7 @@ class MaterialsService:
             "created_at": now,
             "updated_at": now,
         }
+        self._validate_stock_afetacao_business_rules(record)
         batches: dict[str, list[dict[str, Any]]] = {"afetacoes_obra": [record]}
         processed = None
         if should_process:
@@ -722,7 +745,9 @@ class MaterialsService:
         current["item_oficial"] = catalog["item_oficial"]
         current["natureza"] = catalog["natureza"]
         current["unidade"] = catalog["unidade"]
+        current["uso_combustivel"] = self._normalize_uso_combustivel(current.get("uso_combustivel"), catalog["natureza"])
         current["updated_at"] = self._now()
+        self._validate_stock_afetacao_business_rules(current)
         processed = self._process_stock_afetacao(current)
         self._persist({"afetacoes_obra": [processed["afetacao"]], "materiais_mov": [processed["movimento"]]})
         self.state.afetacoes[id_afetacao] = processed["afetacao"]
@@ -830,10 +855,49 @@ class MaterialsService:
         raise HTTPException(status_code=422, detail="Catalog match missing for invoice item")
 
     def _validate_item_business_rules(self, item: dict[str, Any]) -> None:
-        if item["destino"] == "STOCK" and item["natureza"] != "MATERIAL":
+        natureza = str(item.get("natureza") or "").strip().upper()
+        destino = str(item.get("destino") or "").strip().upper()
+        uso_combustivel = self._normalize_uso_combustivel(item.get("uso_combustivel"), natureza)
+        item["uso_combustivel"] = uso_combustivel
+
+        if self._is_fuel_nature(natureza):
+            if uso_combustivel == "N/A":
+                raise HTTPException(status_code=422, detail="Fuel items require uso_combustivel")
+            if uso_combustivel == "VIATURA":
+                if destino != "VIATURA":
+                    raise HTTPException(status_code=422, detail="Fuel assigned to viatura requires destino VIATURA")
+                if not str(item.get("matricula") or "").strip():
+                    raise HTTPException(status_code=422, detail="Fuel assigned to viatura requires matricula")
+                item["obra"] = None
+                item["fase"] = None
+                return
+            item["matricula"] = None
+            if destino == "VIATURA":
+                raise HTTPException(status_code=422, detail="Fuel for maquina or gerador cannot use destino VIATURA")
+            if destino == "STOCK":
+                return
+            if destino == "CONSUMO" and item.get("obra") and item.get("fase"):
+                return
+            raise HTTPException(status_code=422, detail="Fuel direct consumption requires obra and fase")
+
+        item["matricula"] = None
+        item["uso_combustivel"] = "N/A"
+        if destino == "VIATURA":
+            raise HTTPException(status_code=422, detail="Only fuel items can use destino VIATURA")
+        if destino == "STOCK" and natureza != "MATERIAL":
             raise HTTPException(status_code=422, detail="Only MATERIAL items can enter stock")
-        if item["destino"] != "STOCK" and (not item["obra"] or not item["fase"]):
+        if destino == "CONSUMO" and (not item["obra"] or not item["fase"]):
             raise HTTPException(status_code=422, detail="Direct consumption requires obra and fase")
+
+    def _validate_stock_afetacao_business_rules(self, afetacao: dict[str, Any]) -> None:
+        natureza = str(afetacao.get("natureza") or "").strip().upper()
+        uso_combustivel = self._normalize_uso_combustivel(afetacao.get("uso_combustivel"), natureza)
+        if self._is_fuel_nature(natureza):
+            if uso_combustivel not in {"MAQUINA", "GERADOR"}:
+                raise HTTPException(status_code=422, detail="Fuel stock consumption requires MAQUINA or GERADOR")
+        else:
+            uso_combustivel = "N/A"
+        afetacao["uso_combustivel"] = uso_combustivel
 
     def _build_direct_afetacao(self, fit: dict[str, Any], fatura: dict[str, Any]) -> dict[str, Any]:
         now = self._now()
@@ -845,6 +909,7 @@ class MaterialsService:
             "id_item": fit["id_item"],
             "item_oficial": fit["item_oficial"],
             "natureza": fit["natureza"],
+            "uso_combustivel": fit.get("uso_combustivel", "N/A"),
             "quantidade": fit["quantidade"],
             "unidade": fit["unidade"],
             "custo_unit": fit["custo_total_sem_iva"] / fit["quantidade"] if fit["quantidade"] else fit["custo_unit"],
@@ -866,6 +931,7 @@ class MaterialsService:
 
     def _build_fit_movement(self, fit: dict[str, Any], fatura: dict[str, Any], tipo: str) -> dict[str, Any]:
         now = self._now()
+        destination = str(fit.get("destino") or "").strip().upper()
         return {
             "id_mov": self.state.next_id("MOV"),
             "tipo": tipo,
@@ -873,13 +939,15 @@ class MaterialsService:
             "id_item": fit["id_item"],
             "item_oficial": fit["item_oficial"],
             "unidade": fit["unidade"],
+            "uso_combustivel": fit.get("uso_combustivel", "N/A"),
+            "matricula": fit.get("matricula"),
             "quantidade": fit["quantidade"],
             "custo_unit": fit["custo_total_sem_iva"] / fit["quantidade"] if fit["quantidade"] else fit["custo_unit"],
             "custo_total_sem_iva": fit["custo_total_sem_iva"],
             "iva": fit["iva"],
             "custo_total_com_iva": fit["custo_total_com_iva"],
-            "obra": fit["obra"] if tipo == "CONSUMO" else None,
-            "fase": fit["fase"] if tipo == "CONSUMO" else None,
+            "obra": fit["obra"] if tipo == "CONSUMO" and destination == "CONSUMO" else None,
+            "fase": fit["fase"] if tipo == "CONSUMO" and destination == "CONSUMO" else None,
             "fornecedor": fatura["fornecedor"],
             "nif": fatura["nif"],
             "nr_documento": fatura["nr_documento"],
@@ -903,6 +971,8 @@ class MaterialsService:
             "id_item": afetacao["id_item"],
             "item_oficial": afetacao["item_oficial"],
             "unidade": afetacao["unidade"],
+            "uso_combustivel": afetacao.get("uso_combustivel", "N/A"),
+            "matricula": afetacao.get("matricula"),
             "quantidade": afetacao["quantidade"],
             "custo_unit": afetacao["custo_unit"],
             "custo_total_sem_iva": afetacao["custo_total_sem_iva"],
@@ -948,8 +1018,11 @@ class MaterialsService:
         return {"afetacao": afetacao, "movimento": self._build_afo_movement(afetacao)}
 
     def _preview_item_impacts(self, item: FaturaItemCreate) -> list[OperationImpact]:
-        if self._normalize_destino(item.destino) == "STOCK":
+        destino = self._normalize_destino(item.destino)
+        if destino == "STOCK":
             return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar entrada de stock")]
+        if destino == "VIATURA":
+            return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar movimento tecnico associado a viatura")]
         return [
             OperationImpact(type="generated", entity="AFETACOES_OBRA", source="FATURAS_ITENS", summary="Vai gerar afetacao direta"),
             OperationImpact(type="generated", entity="MATERIAIS_MOV", source="AFETACOES_OBRA", summary="Vai gerar movimento tecnico de consumo"),
@@ -963,14 +1036,41 @@ class MaterialsService:
         return round(self._calc_total_sem_iva(item) * (1 + (item.iva / 100)), 6)
 
     def _generate_catalog_id(self, natureza: str) -> str:
-        prefix = {"MATERIAL": "MAT", "SERVICO": "SER", "ALUGUER": "ALQ", "TRANSPORTE": "TRN"}[natureza]
+        prefix = {
+            "MATERIAL": "MAT",
+            "GASOLEO": "MAT",
+            "GASOLINA": "MAT",
+            "SERVICO": "SER",
+            "ALUGUER": "ALQ",
+            "TRANSPORTE": "TRN",
+        }[natureza]
         return self.state.next_id(prefix)
 
     def _normalize_destino(self, value: str) -> str:
         normalized = self._normalize(value).replace(" ", "_")
         if normalized in {"stock", "estoque"}:
             return "STOCK"
+        if normalized == "viatura":
+            return "VIATURA"
         return "CONSUMO"
+
+    def _normalize_uso_combustivel(self, value: Any, natureza: str | None = None) -> str:
+        normalized = self._normalize(str(value or "")).replace(" ", "_")
+        if normalized in {"viatura", "maquina", "gerador", "n/a", "na"}:
+            mapping = {
+                "viatura": "VIATURA",
+                "maquina": "MAQUINA",
+                "gerador": "GERADOR",
+                "n/a": "N/A",
+                "na": "N/A",
+            }
+            return mapping[normalized]
+        if natureza and not self._is_fuel_nature(natureza):
+            return "N/A"
+        return "N/A"
+
+    def _is_fuel_nature(self, natureza: str | None) -> bool:
+        return str(natureza or "").strip().upper() in {"GASOLEO", "GASOLINA"}
 
     def _normalize(self, value: str | None) -> str:
         return " ".join((value or "").strip().lower().split())
@@ -1124,6 +1224,8 @@ class MaterialsService:
             return False
         if self._normalize(str(movement.get("fase") or "")) != self._normalize(str(afetacao.get("fase") or "")):
             return False
+        if self._normalize_uso_combustivel(movement.get("uso_combustivel")) != self._normalize_uso_combustivel(afetacao.get("uso_combustivel")):
+            return False
         if movement.get("data") != afetacao.get("data"):
             return False
         observacoes = str(movement.get("observacoes") or "")
@@ -1149,6 +1251,8 @@ class MaterialsService:
         if self._normalize(str(movement.get("obra") or "")) != self._normalize(str(afetacao.get("obra") or "")):
             return False
         if self._normalize(str(movement.get("fase") or "")) != self._normalize(str(afetacao.get("fase") or "")):
+            return False
+        if self._normalize_uso_combustivel(movement.get("uso_combustivel")) != self._normalize_uso_combustivel(afetacao.get("uso_combustivel")):
             return False
         return True
 
@@ -1214,6 +1318,11 @@ class MaterialsService:
 
     def _now(self) -> datetime:
         return datetime.now(UTC)
+
+    def _normalize_fatura_payment_fields(self, entity: dict[str, Any]) -> None:
+        entity["paga"] = bool(entity.get("paga", False))
+        if not entity["paga"]:
+            entity["data_pagamento"] = None
 
     def _to_model(self, model_cls: type[BaseModel], payload: dict[str, Any]) -> BaseModel:
         allowed = model_cls.model_fields.keys()

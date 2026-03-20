@@ -9,6 +9,13 @@ function translateBusinessDetail(detail: string) {
     CATALOGO_REFERENCIA_DESCRICAO_DUPLICADA: "Esta descricao original ja esta ligada a outro item do catalogo.",
     CATALOGO_REFERENCIADO: "Este item do catalogo ja esta referenciado noutros registos e nao pode ser apagado.",
     AFETACAO_GERADA_SOMENTE_PELA_FATURA: "Esta afetacao foi gerada pela fatura e deve ser corrigida a partir da linha da fatura.",
+    "Fuel items require uso_combustivel": "Combustiveis exigem que escolhas o tipo de uso.",
+    "Fuel assigned to viatura requires destino VIATURA": "Combustivel para viatura exige o destino `VIATURA`.",
+    "Fuel assigned to viatura requires matricula": "Combustivel para viatura exige a selecao de uma matricula.",
+    "Fuel for maquina or gerador cannot use destino VIATURA": "Maquina e gerador nao podem usar o destino `VIATURA`.",
+    "Fuel direct consumption requires obra and fase": "Combustivel para maquina ou gerador exige `Obra` e `Fase` quando o destino for consumo direto.",
+    "Only fuel items can use destino VIATURA": "So combustiveis podem usar o destino `VIATURA`.",
+    "Fuel stock consumption requires MAQUINA or GERADOR": "Consumos de stock de combustivel exigem `MAQUINA` ou `GERADOR`.",
   };
   return known[detail] ?? detail;
 }
@@ -60,6 +67,7 @@ export const api = {
   deleteCatalog: (id: string) => request<void>(`/api/materiais-cad/${id}`, { method: "DELETE" }),
   getWorkOptions: () => request<JsonRecord>("/api/options/obras-fases"),
   getSupplierOptions: () => request<JsonRecord>("/api/options/fornecedores"),
+  getVehicleOptions: () => request<JsonRecord>("/api/options/veiculos"),
   listAfetacoes: () => request<JsonRecord[]>("/api/afetacoes"),
   createAfetacao: (payload: JsonRecord) => request<JsonRecord>("/api/afetacoes", { method: "POST", body: JSON.stringify(payload) }),
   updateAfetacao: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/afetacoes/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),

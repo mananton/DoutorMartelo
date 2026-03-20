@@ -26,7 +26,33 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.catalog = response.json()
 
-    def _create_fatura(self, suffix: str = "001") -> dict[str, object]:
+    def _create_catalog_entry(
+        self,
+        *,
+        descricao_original: str,
+        item_oficial: str,
+        natureza: str,
+        unidade: str,
+    ) -> dict[str, object]:
+        response = self.client.post(
+            "/api/materiais-cad",
+            json={
+                "descricao_original": descricao_original,
+                "item_oficial": item_oficial,
+                "natureza": natureza,
+                "unidade": unidade,
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()
+
+    def _create_fatura(
+        self,
+        suffix: str = "001",
+        *,
+        paga: bool = False,
+        data_pagamento: str | None = None,
+    ) -> dict[str, object]:
         return self.client.post(
             "/api/faturas",
             json={
@@ -37,23 +63,40 @@ class MaterialsApiTests(unittest.TestCase):
                 "valor_sem_iva": 100,
                 "iva": 23,
                 "valor_com_iva": 123,
+                "paga": paga,
+                "data_pagamento": data_pagamento,
             },
         ).json()
 
-    def _create_item(self, id_fatura: str, *, destino: str, obra: str | None = None, fase: str | None = None) -> dict[str, object]:
+    def _create_item(
+        self,
+        id_fatura: str,
+        *,
+        destino: str,
+        descricao_original: str = "Prego 30",
+        obra: str | None = None,
+        fase: str | None = None,
+        id_item: str | None = None,
+        natureza: str | None = None,
+        uso_combustivel: str | None = None,
+        matricula: str | None = None,
+    ) -> dict[str, object]:
         response = self.client.post(
             f"/api/faturas/{id_fatura}/itens",
             json={
                 "items": [
                     {
-                        "descricao_original": "Prego 30",
+                        "descricao_original": descricao_original,
                         "quantidade": 100,
                         "custo_unit": 0.1,
                         "iva": 23,
                         "destino": destino,
                         "obra": obra,
                         "fase": fase,
-                        "id_item": self.catalog["id_item"],
+                        "id_item": id_item or self.catalog["id_item"],
+                        "natureza": natureza,
+                        "uso_combustivel": uso_combustivel,
+                        "matricula": matricula,
                     }
                 ]
             },
@@ -96,6 +139,100 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertGreater(body["custo_unit"], 0)
         stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
         self.assertEqual(stock["stock_atual"], 90)
+
+    def test_create_and_patch_fatura_keep_payment_state_fields(self) -> None:
+        fatura = self._create_fatura("002A", paga=True, data_pagamento="2026-03-20")
+        self.assertTrue(fatura["paga"])
+        self.assertEqual(fatura["data_pagamento"], "2026-03-20")
+
+        patch = self.client.patch(
+            f"/api/faturas/{fatura['id_fatura']}",
+            json={
+                "paga": False,
+            },
+        )
+        self.assertEqual(patch.status_code, 200)
+        self.assertFalse(patch.json()["paga"])
+        self.assertIsNone(patch.json()["data_pagamento"])
+
+    def test_fuel_invoice_item_for_viatura_generates_direct_movement(self) -> None:
+        fuel_catalog = self._create_catalog_entry(
+            descricao_original="Gasoleo simples",
+            item_oficial="GASOLEO_RODOVIARIO",
+            natureza="GASOLEO",
+            unidade="Lt",
+        )
+        fatura = self._create_fatura("002B")
+
+        item = self._create_item(
+            fatura["id_fatura"],
+            destino="VIATURA",
+            descricao_original="Gasoleo simples",
+            id_item=str(fuel_catalog["id_item"]),
+            uso_combustivel="VIATURA",
+            matricula="11-AA-22",
+        )
+        self.assertEqual(item["destino"], "VIATURA")
+        self.assertEqual(item["uso_combustivel"], "VIATURA")
+        self.assertEqual(item["matricula"], "11-AA-22")
+
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 1)
+        self.assertEqual(movimentos[0]["source_type"], "FIT")
+        self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
+        self.assertEqual(movimentos[0]["uso_combustivel"], "VIATURA")
+        self.assertEqual(movimentos[0]["matricula"], "11-AA-22")
+
+    def test_stock_fuel_afetacao_requires_machine_or_generator_usage(self) -> None:
+        fuel_catalog = self._create_catalog_entry(
+            descricao_original="Gasolina simples",
+            item_oficial="GASOLINA_95",
+            natureza="GASOLINA",
+            unidade="Lt",
+        )
+        fatura = self._create_fatura("002C")
+        self._create_item(
+            fatura["id_fatura"],
+            destino="STOCK",
+            descricao_original="Gasolina simples",
+            id_item=str(fuel_catalog["id_item"]),
+            uso_combustivel="GERADOR",
+        )
+
+        invalid = self.client.post(
+            "/api/afetacoes",
+            json={
+                "origem": "STOCK",
+                "data": "2026-03-18",
+                "id_item": fuel_catalog["id_item"],
+                "quantidade": 10,
+                "iva": 23,
+                "obra": "Obra Combustivel",
+                "fase": "Fase Combustivel",
+                "uso_combustivel": "N/A",
+                "processar": True,
+            },
+        )
+        self.assertEqual(invalid.status_code, 422)
+        self.assertEqual(invalid.json()["detail"], "Fuel stock consumption requires MAQUINA or GERADOR")
+
+        valid = self.client.post(
+            "/api/afetacoes",
+            json={
+                "origem": "STOCK",
+                "data": "2026-03-18",
+                "id_item": fuel_catalog["id_item"],
+                "quantidade": 10,
+                "iva": 23,
+                "obra": "Obra Combustivel",
+                "fase": "Fase Combustivel",
+                "uso_combustivel": "MAQUINA",
+                "processar": True,
+            },
+        )
+        self.assertEqual(valid.status_code, 201)
+        self.assertEqual(valid.json()["uso_combustivel"], "MAQUINA")
 
     def test_sync_retry_marks_pending_when_supabase_fails(self) -> None:
         container = self.app.state.container

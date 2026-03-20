@@ -10,6 +10,8 @@ type ItemFormState = {
   id_item: string;
   item_oficial: string;
   natureza: string;
+  uso_combustivel: string;
+  matricula: string;
   unidade: string;
   quantidade: string;
   custo_unit: string;
@@ -44,6 +46,8 @@ type FaturaItemRow = Record<string, unknown> & {
   id_item?: string;
   item_oficial?: string;
   natureza?: string;
+  uso_combustivel?: string;
+  matricula?: string;
   unidade?: string;
   quantidade?: number;
   custo_unit?: number;
@@ -59,13 +63,24 @@ type FaturaItemRow = Record<string, unknown> & {
   estado_mapeamento?: string;
 };
 
-type AssistantTab = "resumo" | "catalogo" | "impacto";
+type AssistantTab = "catalogo" | "impacto";
+
+type VehicleOption = Record<string, unknown> & {
+  veiculo?: string;
+  matricula?: string;
+};
+
+const NATUREZA_OPTIONS = ["MATERIAL", "GASOLEO", "GASOLINA", "SERVICO", "ALUGUER", "TRANSPORTE"] as const;
+const COMBUSTIVEL_USE_OPTIONS = ["N/A", "VIATURA", "MAQUINA", "GERADOR"] as const;
+const UNIT_OPTIONS = ["un", "Kg", "Lt", "m", "m2", "m3"] as const;
 
 const INITIAL_FORM: ItemFormState = {
   descricao_original: "",
   id_item: "",
   item_oficial: "",
   natureza: "",
+  uso_combustivel: "N/A",
+  matricula: "",
   unidade: "",
   quantidade: "",
   custo_unit: "",
@@ -87,6 +102,11 @@ function toNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function toInputNumber(value: number, digits = 4) {
+  if (!Number.isFinite(value)) return "";
+  return String(Number(value.toFixed(digits)));
+}
+
 function formatAmount(value: number, digits = 2) {
   return new Intl.NumberFormat("pt-PT", {
     minimumFractionDigits: digits,
@@ -104,7 +124,12 @@ function suggestItemOficialFromDescription(value: string) {
     .toUpperCase();
 }
 
+function isFuelNature(value: string | undefined) {
+  return ["GASOLEO", "GASOLINA"].includes(String(value ?? "").trim().toUpperCase());
+}
+
 function buildItemPayload(form: ItemFormState, resolvedItemId: string | null) {
+  const fuelNature = isFuelNature(form.natureza);
   return {
     descricao_original: form.descricao_original,
     quantidade: toNumber(form.quantidade),
@@ -113,6 +138,8 @@ function buildItemPayload(form: ItemFormState, resolvedItemId: string | null) {
     destino: form.destino,
     obra: form.destino === "CONSUMO" ? form.obra || null : null,
     fase: form.destino === "CONSUMO" ? form.fase || null : null,
+    uso_combustivel: fuelNature ? form.uso_combustivel || "N/A" : "N/A",
+    matricula: form.destino === "VIATURA" ? form.matricula || null : null,
     desconto_1: toNumber(form.desconto_1),
     desconto_2: toNumber(form.desconto_2),
     observacoes: form.observacoes || null,
@@ -166,6 +193,8 @@ function toFormState(item: FaturaItemRow): ItemFormState {
     id_item: String(item.id_item ?? ""),
     item_oficial: String(item.item_oficial ?? ""),
     natureza: String(item.natureza ?? ""),
+    uso_combustivel: String(item.uso_combustivel ?? "N/A"),
+    matricula: String(item.matricula ?? ""),
     unidade: String(item.unidade ?? ""),
     quantidade: String(item.quantidade ?? ""),
     custo_unit: String(item.custo_unit ?? ""),
@@ -186,7 +215,7 @@ export function FaturaDetailPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<string>("");
   const [catalogMessage, setCatalogMessage] = useState<string>("");
-  const [assistantTab, setAssistantTab] = useState<AssistantTab>("resumo");
+  const [assistantTab, setAssistantTab] = useState<AssistantTab>("catalogo");
 
   const detail = useQuery({
     queryKey: ["fatura", idFatura],
@@ -195,6 +224,13 @@ export function FaturaDetailPage() {
   });
   const catalogQuery = useQuery({ queryKey: ["catalogo"], queryFn: api.listCatalog });
   const workOptionsQuery = useQuery({ queryKey: ["work-options"], queryFn: api.getWorkOptions });
+  const vehicleOptionsQuery = useQuery({
+    queryKey: ["vehicle-options"],
+    queryFn: api.getVehicleOptions,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
 
   const preview = useMutation({ mutationFn: (payload: Record<string, unknown>) => api.previewItems(idFatura, payload) });
   const createCatalog = useMutation({
@@ -219,7 +255,7 @@ export function FaturaDetailPage() {
   const createItems = useMutation({
     mutationFn: (payload: Record<string, unknown>) => api.createItems(idFatura, payload),
     onSuccess: () => {
-      setAssistantTab("resumo");
+      setAssistantTab("catalogo");
       setFormMessage("Item da fatura guardado com sucesso.");
       setCatalogMessage("");
       setForm((current) => resetFormForNextLine(current));
@@ -238,7 +274,7 @@ export function FaturaDetailPage() {
   const updateItem = useMutation({
     mutationFn: ({ itemId, payload }: { itemId: string; payload: Record<string, unknown> }) => api.updateFaturaItem(idFatura, itemId, payload),
     onSuccess: (_, variables) => {
-      setAssistantTab("resumo");
+      setAssistantTab("catalogo");
       setFormMessage(`Linha ${variables.itemId} atualizada com sucesso.`);
       setCatalogMessage("");
       setEditingItemId(null);
@@ -258,7 +294,7 @@ export function FaturaDetailPage() {
   const deleteItem = useMutation({
     mutationFn: (itemId: string) => api.deleteFaturaItem(idFatura, itemId),
     onSuccess: (_, itemId) => {
-      setAssistantTab("resumo");
+      setAssistantTab("catalogo");
       setFormMessage(`Linha ${itemId} apagada com sucesso.`);
       if (editingItemId === itemId) {
         setEditingItemId(null);
@@ -279,6 +315,7 @@ export function FaturaDetailPage() {
 
   const fornecedorAtual = String((detail.data?.fatura as Record<string, unknown> | undefined)?.fornecedor ?? "");
   const workOptions = ((workOptionsQuery.data?.obras as WorkOption[] | undefined) ?? []);
+  const vehicleOptions = ((vehicleOptionsQuery.data?.veiculos as VehicleOption[] | undefined) ?? []);
   const searchTerm = useDeferredValue(form.id_item || form.item_oficial || form.descricao_original);
   const selectedCatalog = ((catalogQuery.data as CatalogItem[] | undefined) ?? []).find((item) => String(item.id_item ?? "") === form.id_item);
   const availableFases = useMemo(
@@ -302,6 +339,8 @@ export function FaturaDetailPage() {
     () => suggestItemOficialFromDescription(form.descricao_original),
     [form.descricao_original],
   );
+  const fuelNature = isFuelNature(form.natureza);
+  const requiresVehicleDestination = fuelNature && form.uso_combustivel === "VIATURA";
   const strongestSuggestionScore = suggestions[0]?.score ?? 0;
   const hasRelevantCatalogSuggestions = strongestSuggestionScore >= 60;
   const shouldSuggestNewItemOficial = !form.id_item && Boolean(form.descricao_original.trim()) && Boolean(suggestedItemOficial) && !hasRelevantCatalogSuggestions;
@@ -314,18 +353,40 @@ export function FaturaDetailPage() {
   const iva = toNumber(form.iva);
   const desconto1 = toNumber(form.desconto_1);
   const desconto2 = toNumber(form.desconto_2);
-  const totalSemIva = quantidade * custoUnit * (1 - desconto1 / 100) * (1 - desconto2 / 100);
-  const totalComIva = totalSemIva * (1 + iva / 100);
+  const localTotalSemIva = quantidade * custoUnit * (1 - desconto1 / 100) * (1 - desconto2 / 100);
+  const localTotalComIva = localTotalSemIva * (1 + iva / 100);
   const localImpacts: ImpactItem[] =
     form.destino === "STOCK"
       ? [{ entity: "MATERIAIS_MOV", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar entrada de stock." }]
+      : form.destino === "VIATURA"
+        ? [{ entity: "MATERIAIS_MOV", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar movimento tecnico associado a viatura." }]
       : [
           { entity: "AFETACOES_OBRA", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar afetacao direta para a obra." },
           { entity: "MATERIAIS_MOV", source: "AFETACOES_OBRA", type: "generated", summary: "Vai gerar movimento tecnico de consumo." },
         ];
   const previewImpacts = ((preview.data?.impacts as ImpactItem[] | undefined) ?? localImpacts);
   const canQuickCreate = Boolean(form.descricao_original && form.item_oficial && form.natureza && form.unidade);
-  const needsCatalogCreation = !form.id_item && Boolean(form.item_oficial && form.natureza && form.unidade);
+  const unitOptions = useMemo(() => {
+    const currentUnit = String(form.unidade ?? "").trim();
+    const hasCurrentUnit = currentUnit && !UNIT_OPTIONS.some((option) => normalize(option) === normalize(currentUnit));
+    return hasCurrentUnit ? [currentUnit, ...UNIT_OPTIONS] : [...UNIT_OPTIONS];
+  }, [form.unidade]);
+  const vehicleSelectOptions = useMemo(() => {
+    const currentMatricula = String(form.matricula ?? "").trim();
+    const baseOptions = vehicleOptions
+      .map((item) => ({
+        matricula: String(item.matricula ?? "").trim(),
+        veiculo: String(item.veiculo ?? "").trim(),
+      }))
+      .filter((item) => item.matricula);
+    const hasCurrentMatricula =
+      currentMatricula &&
+      !baseOptions.some((item) => normalize(item.matricula) === normalize(currentMatricula));
+
+    return hasCurrentMatricula
+      ? [{ matricula: currentMatricula, veiculo: "Matricula atual" }, ...baseOptions]
+      : baseOptions;
+  }, [form.matricula, vehicleOptions]);
 
   useEffect(() => {
     if (!selectedCatalog || !form.id_item) return;
@@ -340,6 +401,9 @@ export function FaturaDetailPage() {
       ...current,
       item_oficial: String(selectedCatalog.item_oficial ?? ""),
       natureza: String(selectedCatalog.natureza ?? ""),
+      uso_combustivel: isFuelNature(String(selectedCatalog.natureza ?? "")) ? current.uso_combustivel || "N/A" : "N/A",
+      matricula: isFuelNature(String(selectedCatalog.natureza ?? "")) ? current.matricula : "",
+      destino: !isFuelNature(String(selectedCatalog.natureza ?? "")) && current.destino === "VIATURA" ? "CONSUMO" : current.destino,
       unidade: String(selectedCatalog.unidade ?? ""),
     }));
   }, [form.id_item, form.item_oficial, form.natureza, form.unidade, selectedCatalog]);
@@ -368,11 +432,63 @@ export function FaturaDetailPage() {
       if ((field === "descricao_original" || field === "item_oficial") && current.id_item) {
         next.id_item = "";
       }
-      if (field === "destino" && value === "STOCK") {
+      if (field === "natureza") {
+        if (!isFuelNature(value)) {
+          next.uso_combustivel = "N/A";
+          next.matricula = "";
+          if (current.destino === "VIATURA") {
+            next.destino = "CONSUMO";
+          }
+        } else if (!current.uso_combustivel) {
+          next.uso_combustivel = "N/A";
+        }
+      }
+      if (field === "uso_combustivel") {
+        if (value === "VIATURA") {
+          next.destino = "VIATURA";
+          next.obra = "";
+          next.fase = "";
+        } else {
+          next.matricula = "";
+          if (current.destino === "VIATURA") {
+            next.destino = "CONSUMO";
+          }
+        }
+      }
+      if (field === "destino" && (value === "STOCK" || value === "VIATURA")) {
         next.obra = "";
         next.fase = "";
       }
+      if (field === "destino" && value !== "VIATURA") {
+        next.matricula = "";
+      }
       return next;
+    });
+  }
+
+  function updateGrossTotal(value: string) {
+    setFormMessage("");
+    setCatalogMessage("");
+    setForm((current) => {
+      const grossTotal = toNumber(value);
+      const quantity = toNumber(current.quantidade);
+      const discount1 = toNumber(current.desconto_1);
+      const discount2 = toNumber(current.desconto_2);
+      const vat = toNumber(current.iva);
+      const factor =
+        quantity *
+        (1 - discount1 / 100) *
+        (1 - discount2 / 100) *
+        (1 + vat / 100);
+
+      if (!quantity || factor <= 0 || !Number.isFinite(factor)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        custo_unit: toInputNumber(grossTotal / factor, 4),
+      };
     });
   }
 
@@ -428,7 +544,7 @@ export function FaturaDetailPage() {
 
   function startEdit(item: FaturaItemRow) {
     setEditingItemId(String(item.id_item_fatura ?? ""));
-    setAssistantTab("resumo");
+    setAssistantTab("catalogo");
     setForm(toFormState(item));
     setFormMessage("");
     setCatalogMessage(`A editar ${String(item.id_item_fatura ?? "")}.`);
@@ -437,7 +553,7 @@ export function FaturaDetailPage() {
 
   function cancelEdit() {
     setEditingItemId(null);
-    setAssistantTab("resumo");
+    setAssistantTab("catalogo");
     setForm(INITIAL_FORM);
     setFormMessage("");
     setCatalogMessage("");
@@ -451,12 +567,20 @@ export function FaturaDetailPage() {
   const valorSemIvaFatura = Number(fatura.valor_sem_iva ?? 0);
   const valorComIvaFatura = Number(fatura.valor_com_iva ?? 0);
   const workspaceModeLabel = editingItemId ? `A editar ${editingItemId}` : "Nova linha";
-  const destinoLabel = form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto";
+  const destinoLabel =
+    form.destino === "STOCK"
+      ? "Entrada em stock"
+      : form.destino === "VIATURA"
+        ? "Consumo em viatura"
+        : "Consumo direto";
   const formBusy = createItems.isPending || updateItem.isPending;
   const helperNotes = [
+    fuelNature ? "Combustiveis exigem a classificacao do `Uso_Combustivel` antes de fechares a linha." : null,
+    fuelNature ? "No combustivel, o campo `Custo Unit` deve ser sem IVA. Se tiveres o preco da bomba com IVA, divide-o por `1 + IVA/100` antes de guardar." : null,
     form.destino === "STOCK" ? "Para selecionar `Obra` e `Fase`, muda primeiro o `Destino` para `CONSUMO`." : null,
-    form.destino !== "STOCK" && workOptions.length ? "O campo `Obra` mostra as obras carregadas da Google Sheet." : null,
-    form.destino !== "STOCK" && availableFases.length ? "O campo `Fase` mostra a lista global de fases carregada da Google Sheet." : null,
+    form.destino === "CONSUMO" && workOptions.length ? "O campo `Obra` mostra as obras carregadas da Google Sheet." : null,
+    form.destino === "CONSUMO" && availableFases.length ? "O campo `Fase` mostra a lista global de fases carregada da Google Sheet." : null,
+    form.destino === "VIATURA" && vehicleOptions.length ? "O campo `Matricula` usa a lista de viaturas carregada da aba `VEICULOS`." : null,
   ].filter((note): note is string => Boolean(note));
 
   return (
@@ -567,29 +691,49 @@ export function FaturaDetailPage() {
                 Natureza
                 <select name="natureza" value={form.natureza} onChange={(event) => updateField("natureza", event.target.value)}>
                   <option value="">Selecione</option>
-                  <option value="MATERIAL">MATERIAL</option>
-                  <option value="SERVICO">SERVICO</option>
-                  <option value="ALUGUER">ALUGUER</option>
-                  <option value="TRANSPORTE">TRANSPORTE</option>
+                  {NATUREZA_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
                 Unidade
-                <input name="unidade" placeholder="UN, M2, H..." value={form.unidade} onChange={(event) => updateField("unidade", event.target.value)} />
+                <select name="unidade" value={form.unidade} onChange={(event) => updateField("unidade", event.target.value)}>
+                  <option value="">Selecione</option>
+                  {unitOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </label>
+              {fuelNature ? (
+                <label>
+                  Uso Combustivel
+                  <select name="uso_combustivel" value={form.uso_combustivel} onChange={(event) => updateField("uso_combustivel", event.target.value)}>
+                    {COMBUSTIVEL_USE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
           </div>
 
           <div className="form-section">
             <div className="section-kicker">Valores da linha</div>
-            <div className="section-copy">Preenche quantidade, custo unitario, descontos e IVA. Os totais resumidos ficam no rail lateral para conferencia rapida.</div>
+            <div className="section-copy">Preenche quantidade, custo unitario, descontos e IVA. O total com IVA e calculado automaticamente para conferencia rapida.</div>
             <div className="form-grid">
               <label>
                 Quantidade
                 <input name="quantidade" type="number" step="0.01" required value={form.quantidade} onChange={(event) => updateField("quantidade", event.target.value)} />
               </label>
               <label>
-                Custo Unit
+                Custo Unit sem IVA
                 <input name="custo_unit" type="number" step="0.0001" required value={form.custo_unit} onChange={(event) => updateField("custo_unit", event.target.value)} />
               </label>
               <label>
@@ -604,24 +748,65 @@ export function FaturaDetailPage() {
                 IVA %
                 <input name="iva" type="number" step="0.01" value={form.iva} onChange={(event) => updateField("iva", event.target.value)} />
               </label>
+              <label>
+                Custo Total com IVA
+                <input
+                  name="custo_total_com_iva"
+                  type="number"
+                  step="0.01"
+                  value={quantidade > 0 ? toInputNumber(localTotalComIva, 2) : ""}
+                  onChange={(event) => updateGrossTotal(event.target.value)}
+                />
+              </label>
             </div>
           </div>
 
           <div className="form-section">
             <div className="section-kicker">Destino operacional</div>
-            <div className="section-copy">Define se a linha entra em stock ou se gera consumo direto. Obra e fase so ficam ativas quando o destino for `CONSUMO`.</div>
+            <div className="section-copy">Define se a linha entra em stock, gera consumo direto numa obra ou fica imputada diretamente a uma viatura.</div>
             <div className="form-grid">
               <label>
                 Destino
                 <select name="destino" value={form.destino} onChange={(event) => updateField("destino", event.target.value)}>
-                  <option value="STOCK">STOCK</option>
-                  <option value="CONSUMO">CONSUMO</option>
+                  {requiresVehicleDestination ? (
+                    <option value="VIATURA">VIATURA</option>
+                  ) : (
+                    <>
+                      <option value="STOCK">STOCK</option>
+                      <option value="CONSUMO">CONSUMO</option>
+                    </>
+                  )}
                 </select>
               </label>
+              {form.destino === "VIATURA" ? (
+                <label>
+                  Matricula
+                  {vehicleOptionsQuery.isPending ? <div className="field-hint">A carregar viaturas da aba `VEICULOS`...</div> : null}
+                  {vehicleSelectOptions.length ? (
+                    <select name="matricula" value={form.matricula} onChange={(event) => updateField("matricula", event.target.value)}>
+                      <option value="">Selecione</option>
+                      {vehicleSelectOptions.map((item) => (
+                        <option key={item.matricula} value={item.matricula}>
+                          {item.veiculo ? `${item.veiculo} | ${item.matricula}` : item.matricula}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {!vehicleSelectOptions.length ? (
+                    <input name="matricula" placeholder="Escreve a matricula" value={form.matricula} onChange={(event) => updateField("matricula", event.target.value)} />
+                  ) : null}
+                  {vehicleOptionsQuery.isError ? (
+                    <div className="field-hint">Nao foi possivel carregar as viaturas da Google Sheet. Podes escrever manualmente a matricula.</div>
+                  ) : null}
+                  {!vehicleOptionsQuery.isPending && !vehicleOptionsQuery.isError ? (
+                    <div className="field-hint">{vehicleSelectOptions.length} matricula(s) disponivel(eis) a partir da aba `VEICULOS`.</div>
+                  ) : null}
+                </label>
+              ) : null}
               <label>
                 Obra
                 {workOptions.length ? (
-                  <select name="obra" value={form.obra} onChange={(event) => handleObraChange(event.target.value)} disabled={form.destino === "STOCK"}>
+                  <select name="obra" value={form.obra} onChange={(event) => handleObraChange(event.target.value)} disabled={form.destino !== "CONSUMO"}>
                     <option value="">Selecione</option>
                     {workOptions.map((item) => (
                       <option key={String(item.obra)} value={String(item.obra)}>
@@ -630,13 +815,13 @@ export function FaturaDetailPage() {
                     ))}
                   </select>
                 ) : (
-                  <input name="obra" value={form.obra} onChange={(event) => updateField("obra", event.target.value)} disabled={form.destino === "STOCK"} />
+                  <input name="obra" value={form.obra} onChange={(event) => updateField("obra", event.target.value)} disabled={form.destino !== "CONSUMO"} />
                 )}
               </label>
               <label>
                 Fase
                 {availableFases.length ? (
-                  <select name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino === "STOCK"}>
+                  <select name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino !== "CONSUMO"}>
                     <option value="">Selecione</option>
                     {availableFases.map((fase) => (
                       <option key={fase} value={fase}>
@@ -645,7 +830,7 @@ export function FaturaDetailPage() {
                     ))}
                   </select>
                 ) : (
-                  <input name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino === "STOCK"} />
+                  <input name="fase" value={form.fase} onChange={(event) => updateField("fase", event.target.value)} disabled={form.destino !== "CONSUMO"} />
                 )}
               </label>
             </div>
@@ -675,9 +860,6 @@ export function FaturaDetailPage() {
             </div>
 
             <div className="assistant-tabs" role="tablist" aria-label="Painel lateral de apoio">
-              <button className={`assistant-tab ${assistantTab === "resumo" ? "active" : ""}`} onClick={() => setAssistantTab("resumo")} type="button">
-                Resumo
-              </button>
               <button className={`assistant-tab ${assistantTab === "catalogo" ? "active" : ""}`} onClick={() => setAssistantTab("catalogo")} type="button">
                 Catalogo
               </button>
@@ -685,64 +867,6 @@ export function FaturaDetailPage() {
                 Impacto
               </button>
             </div>
-
-            {assistantTab === "resumo" ? (
-              <div className="assistant-tab-panel">
-                <div className="detail-side-summary">
-                  <div className="summary-card accent compact">
-                    <div className="summary-title">Mapeamento</div>
-                    {selectedCatalog ? (
-                      <>
-                        <div className="summary-main">{String(selectedCatalog.id_item)} | {String(selectedCatalog.item_oficial ?? "-")}</div>
-                        <div className="muted">
-                          {String(selectedCatalog.natureza ?? "-")} | {String(selectedCatalog.unidade ?? "-")} | {catalogReferences(selectedCatalog).length} referencia(s)
-                        </div>
-                      </>
-                    ) : needsCatalogCreation ? (
-                      <>
-                        <div className="summary-main">Item novo pronto para catalogo</div>
-                        <div className="muted">Podes criar agora ou deixar o backend cria-lo ao guardar.</div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="summary-main">Sem item associado</div>
-                        <div className="muted">Escolhe um item existente ou preenche os dados para criar um novo.</div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="summary-card compact">
-                    <div className="summary-title">Totais da linha</div>
-                    <div className="summary-main">{formatAmount(totalSemIva)} sem IVA</div>
-                    <div className="muted">{formatAmount(totalComIva)} com IVA | {formatAmount(quantidade, 2)} unidades</div>
-                  </div>
-
-                  <div className="summary-card compact">
-                    <div className="summary-title">Impacto previsto</div>
-                    <div className="summary-main">{form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto"}</div>
-                    <div className="muted">{previewImpacts.length} efeitos operacionais previstos</div>
-                  </div>
-                </div>
-
-                {catalogMessage ? <div className="status-note">{catalogMessage}</div> : null}
-
-                <details className="assistant-collapsible" open={Boolean(catalogMessage) || needsCatalogCreation}>
-                  <summary>Criacao rapida de item oficial</summary>
-                  <div className="assistant-note-list">
-                    <div className="quick-create-copy">
-                      <div><strong>Descricao:</strong> {form.descricao_original || "-"}</div>
-                      <div><strong>Item Oficial:</strong> {form.item_oficial || "-"}</div>
-                    </div>
-                    <button className="btn secondary" disabled={!canQuickCreate || createCatalog.isPending} onClick={handleQuickCreate} type="button">
-                      {createCatalog.isPending ? "A criar..." : "Criar item no catalogo"}
-                    </button>
-                    <div className="field-hint">
-                      Se a descricao da linha bater numa referencia conhecida, escolhe o item certo no separador `Catalogo`. Se for um material novo, cria primeiro o item oficial e esta descricao passa a referencia inicial.
-                    </div>
-                  </div>
-                </details>
-              </div>
-            ) : null}
 
             {assistantTab === "catalogo" ? (
               <div className="assistant-tab-panel">
@@ -804,8 +928,11 @@ export function FaturaDetailPage() {
                   )}
                 </div>
 
-                <details className="assistant-collapsible" open={needsCatalogCreation}>
-                  <summary>Novo item oficial</summary>
+                <div className="assistant-block">
+                  <div className="assistant-head">
+                    <strong>Novo item oficial</strong>
+                    <span className="muted">Cria um item novo apenas quando a linha nao corresponder a nenhum item existente.</span>
+                  </div>
                   <div className="assistant-note-list">
                     <div className="quick-create-copy">
                       <div><strong>Descricao:</strong> {form.descricao_original || "-"}</div>
@@ -814,9 +941,9 @@ export function FaturaDetailPage() {
                     <button className="btn secondary" disabled={!canQuickCreate || createCatalog.isPending} onClick={handleQuickCreate} type="button">
                       {createCatalog.isPending ? "A criar..." : "Criar item no catalogo"}
                     </button>
-                    <div className="field-hint">Usa esta opcao apenas quando tiveres a certeza de que a linha nao corresponde a nenhum item existente. A `Descricao_Original` atual ficara guardada como primeira referencia desse item.</div>
+                    <div className="field-hint">A `Descricao_Original` atual ficara guardada como primeira referencia desse item quando o criares no catalogo.</div>
                   </div>
-                </details>
+                </div>
               </div>
             ) : null}
 
@@ -824,7 +951,9 @@ export function FaturaDetailPage() {
               <div className="assistant-tab-panel">
                 <div className="summary-card compact">
                   <div className="summary-title">Impacto previsto</div>
-                  <div className="summary-main">{form.destino === "STOCK" ? "Entrada em stock" : "Consumo direto"}</div>
+                  <div className="summary-main">
+                    {form.destino === "STOCK" ? "Entrada em stock" : form.destino === "VIATURA" ? "Consumo em viatura" : "Consumo direto"}
+                  </div>
                   <div className="muted">{previewImpacts.length} efeitos operacionais previstos</div>
                 </div>
 
@@ -882,6 +1011,9 @@ export function FaturaDetailPage() {
                       <strong>{String(item.descricao_original)}</strong>
                       <div className="inline-actions">
                         <span className="tag">{String(item.destino)}</span>
+                        {String(item.uso_combustivel ?? "") && String(item.uso_combustivel ?? "") !== "N/A" ? (
+                          <span className="tag">{String(item.uso_combustivel)}</span>
+                        ) : null}
                         <span className="tag">{String(item.estado_mapeamento ?? "-")}</span>
                         {editingItemId === id ? <span className="tag tag-success">Em edicao</span> : null}
                       </div>
@@ -896,6 +1028,7 @@ export function FaturaDetailPage() {
                         <span>{String(item.natureza ?? "-")} | {formatAmount(Number(item.quantidade ?? 0), 2)} {String(item.unidade ?? "")}</span>
                         <span>{formatAmount(Number(item.custo_total_sem_iva ?? 0))} sem IVA | {formatAmount(Number(item.custo_total_com_iva ?? 0))} com IVA</span>
                         <span>{String(item.obra ?? "-")} | {String(item.fase ?? "-")}</span>
+                        {String(item.matricula ?? "") ? <span>Matricula: {String(item.matricula)}</span> : null}
                       </div>
                     </details>
                   </div>
