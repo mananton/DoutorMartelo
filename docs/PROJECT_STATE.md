@@ -193,6 +193,10 @@ Last updated: 2026-03-23
   - `Custo_Medio_Atual` should use net movement cost (discount-aware)
   - the operational sheet should stay without formulas and be treated as a backend-managed snapshot
   - stock-affecting writes in the materials backoffice now auto-sync affected `ID_Item` rows into `STOCK_ATUAL`
+  - the backend now writes the workbook-aligned columns:
+    - `Stock_Atual`
+    - `Custo_Medio_Atual`
+    - `Valor_Stock`
   - `backend/scripts/rebuild_stock_atual.py` remains as maintenance/recovery tooling, not the normal day-to-day path
   - `backend/scripts/backfill_consumo_movement_totals.py` now exists to fill missing `CONSUMO` totals safely in old `MATERIAIS_MOV` rows
 - Future input-channel direction now defined:

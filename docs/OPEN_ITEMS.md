@@ -119,6 +119,10 @@ Last reviewed: 2026-03-23
 - Next step:
   - validate real create/edit/delete flows of stock entries over a few business days
   - confirm operators do not reintroduce formulas or manual edits into `STOCK_ATUAL`
+  - confirm workbook columns stay populated on real writes:
+    - `Stock_Atual`
+    - `Custo_Medio_Atual`
+    - `Valor_Stock`
   - confirm the sheet and `Tecnico > Stock Atual` stay aligned after normal office usage
 
 ## P1 - Validate Stock Movement Lineage In Real Sheets

@@ -11,6 +11,22 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-23
 
+### `28d9dbc`
+- **Type**: fix
+- **Scope**: `backend/app/*`, `backend/tests/*`
+- **Summary**:
+  - Fixed the `STOCK_ATUAL` sheet serializer so it writes the workbook-aligned header `Stock_Atual` instead of relying only on `Stock Atual`.
+  - Added backend-calculated `Valor_Stock` to the stock snapshot model, sheet serializer/parser, and API responses.
+  - Added focused tests to cover:
+    - workbook header compatibility for `STOCK_ATUAL`
+    - `Valor_Stock` population in snapshot rebuild and auto-sync flows
+- **Impact**:
+  - `STOCK_ATUAL` rows written by the backend now populate:
+    - `Stock_Atual`
+    - `Custo_Medio_Atual`
+    - `Valor_Stock`
+  - The operational sheet now aligns better with the workbook layout after removing formula-based population.
+
 ### `6abbe61`
 - **Type**: feat / dashboard
 - **Scope**: `src/Readers.gs`, `src/Composer.gs`, `src/Aggregators.gs`, `src/js.html`
