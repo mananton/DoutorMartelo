@@ -658,6 +658,7 @@ def _parse_stock_atual(row: dict[str, Any], row_num: int) -> dict[str, Any] | No
         "unidade": _read_text(row, ["Unidade"]) or "",
         "stock_atual": _read_float(row, ["Stock Atual", "Stock_Atual"]) or 0.0,
         "custo_medio_atual": _read_float(row, ["Custo_Medio_Atual", "Custo Medio Atual"]) or 0.0,
+        "valor_stock": _read_float(row, ["Valor_Stock", "Valor Stock"]) or 0.0,
         "sheet_row_num": row_num,
     }
 
@@ -792,8 +793,10 @@ def _stock_atual_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "Item_Oficial": record.get("item_oficial", ""),
         "Material": record.get("item_oficial", ""),
         "Unidade": record.get("unidade", ""),
+        "Stock_Atual": record.get("stock_atual", 0),
         "Stock Atual": record.get("stock_atual", 0),
         "Custo_Medio_Atual": record.get("custo_medio_atual", 0),
+        "Valor_Stock": record.get("valor_stock", 0),
     }
 
 

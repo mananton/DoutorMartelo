@@ -156,6 +156,39 @@ class LiveGoogleSheetsAdapterTests(unittest.TestCase):
         )
         self.assertEqual(values_api.update_calls[-1]["range"], "FATURAS_ITENS!A10")
 
+    def test_stock_atual_serializer_supports_underscore_headers_and_valor_stock(self) -> None:
+        adapter, values_api = self._build_adapter(
+            {
+                ("get", "STOCK_ATUAL!1:1"): {
+                    "values": [[
+                        "ID_Item",
+                        "Item_Oficial",
+                        "Unidade",
+                        "Stock_Atual",
+                        "Custo_Medio_Atual",
+                        "Valor_Stock",
+                    ]]
+                }
+            }
+        )
+        record = {
+            "id_item": "MAT-000001",
+            "item_oficial": "PREGO_20",
+            "unidade": "UN",
+            "stock_atual": 10,
+            "custo_medio_atual": 2,
+            "valor_stock": 20,
+            "sheet_row_num": 4,
+        }
+
+        adapter.write_batches([WriteBatch(entity="stock_atual", records=[record])])
+
+        self.assertEqual(values_api.update_calls[0]["range"], "STOCK_ATUAL!A4")
+        self.assertEqual(
+            values_api.update_calls[0]["body"]["values"][0],
+            ["MAT-000001", "PREGO_20", "UN", 10, 2, 20],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

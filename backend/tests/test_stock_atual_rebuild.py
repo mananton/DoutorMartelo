@@ -144,6 +144,9 @@ class StockAtualRebuildTests(unittest.TestCase):
         self.assertFalse(report["applied"])
         self.assertEqual(report["rows_selected"], 1)
         self.assertEqual(report["preview"][0]["id_item"], "MAT-000001")
+        self.assertEqual(report["preview"][0]["stock_atual"], 10.0)
+        self.assertEqual(report["preview"][0]["custo_medio_atual"], 2.0)
+        self.assertEqual(report["preview"][0]["valor_stock"], 20.0)
 
     def test_rebuild_stock_snapshot_applies_rows_and_deletes_stale_ids(self) -> None:
         service, state, google, supabase = self._build_service(
@@ -203,6 +206,9 @@ class StockAtualRebuildTests(unittest.TestCase):
         self.assertEqual(state.google_write_log, [WriteBatch(entity="stock_atual", records=state.google_write_log[0].records)])
         self.assertEqual(state.google_write_log[0].entity, "stock_atual")
         self.assertEqual(len(state.google_write_log[0].records), 1)
+        self.assertEqual(state.google_write_log[0].records[0]["stock_atual"], 10.0)
+        self.assertEqual(state.google_write_log[0].records[0]["custo_medio_atual"], 2.0)
+        self.assertEqual(state.google_write_log[0].records[0]["valor_stock"], 20.0)
         self.assertEqual(google.deleted_records, [("stock_atual", ["SER-000001"])])
         self.assertEqual(supabase.deleted_records, [("stock_atual", ["SER-000001"])])
 
@@ -256,6 +262,7 @@ class StockAtualAutoSyncTests(unittest.TestCase):
         self.assertEqual(stock_batches[0].records[0]["id_item"], catalog.id_item)
         self.assertEqual(stock_batches[0].records[0]["stock_atual"], 100.0)
         self.assertEqual(stock_batches[0].records[0]["custo_medio_atual"], 0.1)
+        self.assertEqual(stock_batches[0].records[0]["valor_stock"], 10.0)
 
     def test_delete_stock_invoice_item_auto_deletes_stock_atual(self) -> None:
         service, state, google, supabase = self._build_service()

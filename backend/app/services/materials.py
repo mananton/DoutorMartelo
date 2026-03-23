@@ -910,7 +910,16 @@ class MaterialsService:
                 qty -= mov["quantidade"]
                 value -= amount
         avg = value / qty if qty > 0 else 0.0
-        return StockSnapshot(id_item=id_item, item_oficial=catalog["item_oficial"], unidade=catalog["unidade"], stock_atual=round(qty, 6), custo_medio_atual=round(avg, 6))
+        qty_rounded = round(qty, 6)
+        avg_rounded = round(avg, 6)
+        return StockSnapshot(
+            id_item=id_item,
+            item_oficial=catalog["item_oficial"],
+            unidade=catalog["unidade"],
+            stock_atual=qty_rounded,
+            custo_medio_atual=avg_rounded,
+            valor_stock=round(qty_rounded * avg_rounded, 6),
+        )
 
     def list_stock_snapshots(self) -> list[StockSnapshot]:
         ids = {
@@ -957,6 +966,7 @@ class MaterialsService:
                     "unidade": snapshot.get("unidade"),
                     "stock_atual": snapshot.get("stock_atual"),
                     "custo_medio_atual": snapshot.get("custo_medio_atual"),
+                    "valor_stock": snapshot.get("valor_stock"),
                 }
                 for snapshot in snapshots[:20]
             ],

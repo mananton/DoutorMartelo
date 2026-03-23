@@ -156,6 +156,7 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertGreater(stock_consumo["custo_total_com_iva"], 0)
         stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
         self.assertEqual(stock["stock_atual"], 90)
+        self.assertEqual(stock["valor_stock"], 9.0)
 
     def test_create_and_patch_fatura_keep_payment_state_fields(self) -> None:
         fatura = self._create_fatura("002A", paga=True, data_pagamento="2026-03-20")

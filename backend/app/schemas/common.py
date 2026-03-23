@@ -43,6 +43,7 @@ class StockSnapshot(ApiModel):
     unidade: str | None = None
     stock_atual: float = 0
     custo_medio_atual: float = 0
+    valor_stock: float = 0
 
 
 class WorkOption(ApiModel):
