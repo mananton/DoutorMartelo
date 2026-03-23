@@ -11,6 +11,35 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-23
 
+### `6abbe61`
+- **Type**: feat / dashboard
+- **Scope**: `src/Readers.gs`, `src/Composer.gs`, `src/Aggregators.gs`, `src/js.html`
+- **Summary**:
+  - Updated the legacy dashboard materials read path to accept current backoffice `MATERIAIS_MOV` rows.
+  - Added support for:
+    - `Item_Oficial` when older `Material` naming is absent
+    - current generated movement cost fields
+    - exclusion of non-obra direct destinations such as `VIATURA`, `ESCRITORIO`, and `EMPRESA`
+- **Impact**:
+  - Dashboard material cost can now reflect modern materials-backoffice movements instead of depending only on `LEGACY_MATERIAIS`.
+
+### `d19bc74`
+- **Type**: feat / fix / ops
+- **Scope**: `backend/app/*`, `backend/scripts/*`, `backend/tests/*`, `frontend/src/*`
+- **Summary**:
+  - Added direct `EMPRESA` destination support in invoice-line entry as non-stock company consumption.
+  - Added `Ton` as an accepted unit in invoice-detail entry.
+  - Added safe backfill tooling for old `CONSUMO` rows missing:
+    - `Custo_Total Sem IVA`
+    - `IVA`
+    - `Custo_Total Com IVA`
+  - Added `STOCK_ATUAL` maintenance tooling and backend-owned parser/serializer support.
+  - Added automatic `STOCK_ATUAL` sync for stock-affecting writes so the sheet no longer depends on formulas or manual rebuilds in normal operation.
+- **Impact**:
+  - `STOCK_ATUAL` is now expected to be maintained by the backend, not by spreadsheet formulas.
+  - Old incomplete `CONSUMO` movements can be repaired safely without inventing unrelated values.
+  - Direct company consumption can now be registered in the same operational flow as other invoice lines.
+
 ### `f10c3fa`
 - **Type**: feat / performance / ui
 - **Scope**: `backend/app/*`, `backend/tests/*`, `frontend/src/*`

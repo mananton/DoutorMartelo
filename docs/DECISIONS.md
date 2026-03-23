@@ -523,6 +523,57 @@ Format: short ADR-style records with rationale and impact.
   - The app can now be used by a colleague through the LAN while development continues separately.
   - Operational troubleshooting now includes service state, logs, and Windows Firewall inbound rule checks.
 
+## D-030: `EMPRESA` is a direct non-stock company destination in the materials backoffice
+- **Status**: accepted
+- **Date**: 2026-03-23
+- **Commit**: `d19bc74`
+- **Decision**:
+  - Add `EMPRESA` as a valid direct invoice-line destination.
+  - `EMPRESA` generates direct `MATERIAIS_MOV`.
+  - `EMPRESA` does not generate `AFETACOES_OBRA`.
+  - `EMPRESA` does not affect `STOCK_ATUAL`.
+  - Fuel rows with `Uso_Combustivel = MAQUINA` or `GERADOR` cannot use `EMPRESA`.
+- **Rationale**:
+  - Some purchases belong to the company itself and should not be forced into stock or obra/fase attribution.
+- **Impact**:
+  - Direct operational destinations now include:
+    - `VIATURA`
+    - `ESCRITORIO`
+    - `EMPRESA`
+  - Reporting must keep company costs separate from stock and obra consumption.
+
+## D-031: `STOCK_ATUAL` should be backend-owned, not formula-driven
+- **Status**: accepted
+- **Date**: 2026-03-23
+- **Commit**: `d19bc74`
+- **Decision**:
+  - Treat `STOCK_ATUAL` as a backend-managed snapshot sheet.
+  - Keep the sheet without formulas.
+  - Auto-sync affected `ID_Item` rows after stock-affecting writes in the materials backoffice.
+  - Keep `backend/scripts/rebuild_stock_atual.py` as maintenance/recovery tooling.
+- **Rationale**:
+  - Spreadsheet formulas were too blunt for the current business rules and were pulling in services and direct-consumption rows that should never appear in stock.
+- **Impact**:
+  - `STOCK_ATUAL` now follows the same stock rules as the backoffice runtime.
+  - Operators should avoid manual edits or formula reintroduction in that sheet.
+
+## D-032: Legacy dashboard material cost should accept current `MATERIAIS_MOV` rows
+- **Status**: accepted
+- **Date**: 2026-03-23
+- **Commit**: `6abbe61`
+- **Decision**:
+  - Update the legacy dashboard readers/aggregators to accept current materials-backoffice `MATERIAIS_MOV` rows.
+  - Use `Item_Oficial` when older `Material` naming is absent.
+  - Read current cost totals from the generated movement ledger.
+  - Ignore non-obra direct destinations such as:
+    - `VIATURA`
+    - `ESCRITORIO`
+    - `EMPRESA`
+- **Rationale**:
+  - Current operational materials are now born in the backoffice and were not appearing in the legacy dashboard because the reader logic still assumed older row shapes.
+- **Impact**:
+  - Dashboard material totals can now reflect modern backoffice-generated movements instead of depending only on `LEGACY_MATERIAIS`.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

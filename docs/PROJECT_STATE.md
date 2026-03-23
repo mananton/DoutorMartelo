@@ -92,6 +92,11 @@ Last updated: 2026-03-23
   - generates `MATERIAIS_MOV`
   - does not generate `AFETACOES_OBRA`
   - does not affect `STOCK_ATUAL`
+- The materials backoffice now also supports direct invoice-line destination `EMPRESA`:
+  - valid as direct non-stock company consumption
+  - generates `MATERIAIS_MOV`
+  - does not generate `AFETACOES_OBRA`
+  - does not affect `STOCK_ATUAL`
 - Fuel business rule is now explicit:
   - `GASOLEO` / `GASOLINA` with `Uso_Combustivel = VIATURA` stay non-stock direct vehicle cost
   - `GASOLEO` / `GASOLINA` with `Uso_Combustivel = MAQUINA` or `GERADOR` cannot use `ESCRITORIO`
@@ -134,6 +139,7 @@ Last updated: 2026-03-23
     - `ALUGUER`
     - `TRANSPORTE`
   - `Unidade` now also accepts `Lt`.
+  - `Unidade` now also accepts `Ton`.
   - `FATURAS` now also carries payment state from the workbook:
     - `Paga?`
     - `Data Pagamento`
@@ -185,6 +191,10 @@ Last updated: 2026-03-23
   - should depend on `MATERIAIS_MOV`, not `FATURAS_ITENS`, for stock quantities and average-cost logic
   - `Item_Oficial` and `Unidade` should be read from `MATERIAIS_CAD`
   - `Custo_Medio_Atual` should use net movement cost (discount-aware)
+  - the operational sheet should stay without formulas and be treated as a backend-managed snapshot
+  - stock-affecting writes in the materials backoffice now auto-sync affected `ID_Item` rows into `STOCK_ATUAL`
+  - `backend/scripts/rebuild_stock_atual.py` remains as maintenance/recovery tooling, not the normal day-to-day path
+  - `backend/scripts/backfill_consumo_movement_totals.py` now exists to fill missing `CONSUMO` totals safely in old `MATERIAIS_MOV` rows
 - Future input-channel direction now defined:
   - keep `AppSheet` for labour and displacement flows in the short term
   - plan a dedicated materials/purchasing app for:
@@ -257,6 +267,13 @@ Last updated: 2026-03-23
     - `ALUGUER`
     - `TRANSPORTE`
     - fuel with `Uso_Combustivel = VIATURA`
+  - the legacy dashboard materials read path now accepts current backoffice `MATERIAIS_MOV` rows:
+    - uses `Item_Oficial` when older `Material` naming is absent
+    - reads current cost fields from generated movements
+    - ignores non-obra direct destinations such as:
+      - `VIATURA`
+      - `ESCRITORIO`
+      - `EMPRESA`
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
@@ -266,6 +283,7 @@ Last updated: 2026-03-23
 - Current material automation is mid-rollout and should be treated as active but still under validation on real spreadsheet edits.
 - The new materials backoffice still uses Google Sheets as the operational source of truth; startup hydration currently comes from Sheets, not from Supabase.
 - Manual changes made directly in Google Sheets after backend startup still require explicit reload to appear in the app runtime state.
+- `STOCK_ATUAL` is now backend-owned operationally, but direct manual edits in the spreadsheet can still drift from runtime expectations and should be avoided.
 - Fuel + vehicle handling is now implemented, but still needs more real-row validation for:
   - `Destino = VIATURA`
   - movement generation into `MATERIAIS_MOV`

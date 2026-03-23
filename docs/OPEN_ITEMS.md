@@ -60,26 +60,19 @@ Last reviewed: 2026-03-23
     - frontend rebuild
     - firewall rule verification
 
-## P1 - Surface Backoffice Material Costs In The Dashboard
-- The operational materials backoffice is now creating current rows in:
-  - `FATURAS`
-  - `FATURAS_ITENS`
+## P1 - Validate Current Materials Costs In The Dashboard
+- The legacy dashboard reader was updated to accept current materials-backoffice rows from:
   - `MATERIAIS_MOV`
-- The legacy dashboard still shows material cost only from:
-  - `LEGACY_MATERIAIS`
+- Current expectation:
+  - obra-facing material cost should now include modern generated movements
+  - non-obra direct destinations should stay excluded:
+    - `VIATURA`
+    - `ESCRITORIO`
+    - `EMPRESA`
 - Next step:
-  - decide which dashboard blocks should start reading current materials-backoffice costs
-  - define whether those costs should come from:
-    - `MATERIAIS_MOV`
-    - `FATURAS_ITENS`
-    - or a combined historical/current aggregation boundary
-  - keep stock interpretation safe so:
-    - `SERVICO`
-    - `ALUGUER`
-    - `TRANSPORTE`
-    - direct `VIATURA`
-    - direct `ESCRITORIO`
-    do not get misread as stock entries
+  - validate a few real obras where cost is now coming from the current backoffice flow
+  - confirm how historical `LEGACY_MATERIAIS` and current `MATERIAIS_MOV` should coexist in the same dashboard totals
+  - verify no duplicated counting appears when an obra has both old legacy rows and new movement-ledger rows
 
 ## P1 - Extend `ESCRITORIO` Beyond Invoice-Line Direct Consumption
 - `ESCRITORIO` now exists in invoice-line direct consumption (`FATURAS_ITENS` -> `MATERIAIS_MOV`).
@@ -111,10 +104,22 @@ Last reviewed: 2026-03-23
 - The latest optimization already:
   - caches headers
   - skips full-sheet reads for known `sheet_row_num`
+  - auto-syncs only affected `ID_Item` rows into `STOCK_ATUAL` instead of forcing full manual rebuilds
 - Next step:
   - validate before/after timings with more real office saves
   - reduce unnecessary frontend refetches after successful item save
   - decide later whether the materials flow should eventually become `Supabase-first` with manual/background sheet sync
+
+## P1 - Validate Backend-Owned `STOCK_ATUAL`
+- `STOCK_ATUAL` is now expected to stay without spreadsheet formulas and be maintained by the materials backend.
+- Current tooling:
+  - automatic sync on stock-affecting writes
+  - `backend/scripts/rebuild_stock_atual.py` for maintenance/recovery
+  - `backend/scripts/backfill_consumo_movement_totals.py` for old incomplete `CONSUMO` totals
+- Next step:
+  - validate real create/edit/delete flows of stock entries over a few business days
+  - confirm operators do not reintroduce formulas or manual edits into `STOCK_ATUAL`
+  - confirm the sheet and `Tecnico > Stock Atual` stay aligned after normal office usage
 
 ## P1 - Validate Stock Movement Lineage In Real Sheets
 - The app now has safe diagnostics for:
