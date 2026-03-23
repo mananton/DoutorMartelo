@@ -648,6 +648,20 @@ def _parse_mov(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     }
 
 
+def _parse_stock_atual(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    id_item = _read_text(row, ["ID_Item", "ID Item"])
+    if not id_item:
+        return None
+    return {
+        "id_item": id_item,
+        "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial", "Material"]) or "",
+        "unidade": _read_text(row, ["Unidade"]) or "",
+        "stock_atual": _read_float(row, ["Stock Atual", "Stock_Atual"]) or 0.0,
+        "custo_medio_atual": _read_float(row, ["Custo_Medio_Atual", "Custo Medio Atual"]) or 0.0,
+        "sheet_row_num": row_num,
+    }
+
+
 def _fatura_serializer(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "ID_Fatura": record["id_fatura"],
@@ -772,6 +786,17 @@ def _mov_serializer(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _stock_atual_serializer(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ID_Item": record["id_item"],
+        "Item_Oficial": record.get("item_oficial", ""),
+        "Material": record.get("item_oficial", ""),
+        "Unidade": record.get("unidade", ""),
+        "Stock Atual": record.get("stock_atual", 0),
+        "Custo_Medio_Atual": record.get("custo_medio_atual", 0),
+    }
+
+
 SHEET_WRITE_CONFIG: dict[str, dict[str, Any]] = {
     "faturas": {"sheet_name": "FATURAS", "id_field": "ID_Fatura", "serializer": _fatura_serializer},
     "faturas_itens": {"sheet_name": "FATURAS_ITENS", "id_field": "ID_Item_Fatura", "serializer": _fit_serializer},
@@ -779,6 +804,7 @@ SHEET_WRITE_CONFIG: dict[str, dict[str, Any]] = {
     "materiais_referencias": {"sheet_name": "MATERIAIS_REFERENCIAS", "id_field": "ID_Referencia", "serializer": _catalog_reference_serializer},
     "afetacoes_obra": {"sheet_name": "AFETACOES_OBRA", "id_field": "ID_Afetacao", "serializer": _afetacao_serializer},
     "materiais_mov": {"sheet_name": "MATERIAIS_MOV", "id_field": "ID_Mov", "serializer": _mov_serializer},
+    "stock_atual": {"sheet_name": "STOCK_ATUAL", "id_field": "ID_Item", "serializer": _stock_atual_serializer},
 }
 
 SHEET_READ_CONFIG: dict[str, dict[str, Any]] = {
@@ -788,6 +814,7 @@ SHEET_READ_CONFIG: dict[str, dict[str, Any]] = {
     "materiais_referencias": {"sheet_name": "MATERIAIS_REFERENCIAS", "parser": _parse_catalog_reference},
     "afetacoes_obra": {"sheet_name": "AFETACOES_OBRA", "parser": _parse_afetacao},
     "materiais_mov": {"sheet_name": "MATERIAIS_MOV", "parser": _parse_mov},
+    "stock_atual": {"sheet_name": "STOCK_ATUAL", "parser": _parse_stock_atual},
 }
 
 

@@ -101,7 +101,7 @@ class MaterialsService:
             dependent_items.append(updated_item)
 
             fit_movement = self._find_movement_by_source("FIT", updated_item["id_item_fatura"])
-            if updated_item["destino"] in {"STOCK", "VIATURA", "ESCRITORIO"} and fit_movement:
+            if updated_item["destino"] in {"STOCK", "VIATURA", "ESCRITORIO", "EMPRESA"} and fit_movement:
                 dependent_movimentos.append(
                     self._reuse_record_identity(
                         self._build_fit_movement(
@@ -158,8 +158,10 @@ class MaterialsService:
             if item["id_fatura"] != id_fatura:
                 continue
             self._merge_delete_groups(delete_groups, self._collect_fit_delete_groups(item["id_item_fatura"]))
+        stock_item_ids_to_sync = self._collect_stock_item_ids_from_groups(delete_groups)
         self._delete_records(delete_groups)
         self._delete_runtime_records(delete_groups)
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
 
     def preview_fatura_items(self, id_fatura: str, items: list[FaturaItemCreate]) -> FaturaItemsResponse:
         self._require_fatura(id_fatura)
@@ -212,7 +214,7 @@ class MaterialsService:
 
             if fit["destino"] == "STOCK":
                 generated_movimentos.append(self._build_fit_movement(fit, fatura, "ENTRADA"))
-            elif fit["destino"] in {"VIATURA", "ESCRITORIO"}:
+            elif fit["destino"] in {"VIATURA", "ESCRITORIO", "EMPRESA"}:
                 generated_movimentos.append(self._build_fit_movement(fit, fatura, "CONSUMO"))
             else:
                 afetacao = self._build_direct_afetacao(fit, fatura)
@@ -226,6 +228,13 @@ class MaterialsService:
             self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
         for movimento in generated_movimentos:
             self.state.movimentos[movimento["id_mov"]] = movimento
+        self._sync_stock_atual_for_item_ids(
+            {
+                str(fit.get("id_item") or "").strip()
+                for fit in created_items
+                if str(fit.get("destino") or "").strip().upper() == "STOCK"
+            }
+        )
         logger.info(
             "timing.create_fatura_items id_fatura=%s items=%s generated_afetacoes=%s generated_movimentos=%s duration_ms=%.2f",
             id_fatura,
@@ -304,10 +313,15 @@ class MaterialsService:
             if current_direct_afetacao
             else None
         )
+        stock_item_ids_to_sync = set()
+        if str(current.get("destino") or "").strip().upper() == "STOCK":
+            stock_item_ids_to_sync.add(str(current.get("id_item") or "").strip())
+        if str(updated.get("destino") or "").strip().upper() == "STOCK":
+            stock_item_ids_to_sync.add(str(updated.get("id_item") or "").strip())
 
         upserts: dict[str, list[dict[str, Any]]] = {"faturas_itens": [updated]}
         deletions: dict[str, list[str]] = {}
-        if updated["destino"] in {"STOCK", "VIATURA", "ESCRITORIO"}:
+        if updated["destino"] in {"STOCK", "VIATURA", "ESCRITORIO", "EMPRESA"}:
             movement = self._build_fit_movement(
                 updated,
                 fatura,
@@ -335,7 +349,7 @@ class MaterialsService:
 
         self._persist(upserts)
         self.state.fatura_items[item_id] = updated
-        if updated["destino"] in {"STOCK", "VIATURA", "ESCRITORIO"}:
+        if updated["destino"] in {"STOCK", "VIATURA", "ESCRITORIO", "EMPRESA"}:
             for movimento in upserts.get("materiais_mov", []):
                 self.state.movimentos[movimento["id_mov"]] = movimento
             if current_direct_afetacao:
@@ -350,6 +364,7 @@ class MaterialsService:
         if deletions:
             self._delete_records(deletions)
             self._delete_runtime_records(deletions)
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
         logger.info(
             "timing.update_fatura_item id_fatura=%s item_id=%s destino=%s deleted_groups=%s duration_ms=%.2f",
             id_fatura,
@@ -365,8 +380,10 @@ class MaterialsService:
         if not current or current["id_fatura"] != id_fatura:
             raise HTTPException(status_code=404, detail="Invoice item not found")
         delete_groups = self._collect_fit_delete_groups(item_id)
+        stock_item_ids_to_sync = self._collect_stock_item_ids_from_groups(delete_groups)
         self._delete_records(delete_groups)
         self._delete_runtime_records(delete_groups)
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
 
     def list_catalog(self) -> list[CatalogEntryRecord]:
         return [self._to_catalog_model(item) for item in self.state.catalog.values()]
@@ -445,6 +462,7 @@ class MaterialsService:
             self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
         for movimento in dependent_mov_updates:
             self.state.movimentos[movimento["id_mov"]] = movimento
+        self._sync_stock_atual_for_item_ids({id_item})
         return self._to_catalog_model(current)
 
     def delete_catalog_entry(self, id_item: str) -> None:
@@ -718,6 +736,70 @@ class MaterialsService:
             "unreconciled_preview": unreconciled_afetacoes[:10],
         }
 
+    def backfill_incomplete_consumo_movement_totals(
+        self,
+        *,
+        apply: bool = False,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        movements = sorted(
+            self.state.movimentos.values(),
+            key=lambda item: (int(item.get("sequence") or 0), str(item.get("id_mov") or "")),
+        )
+        candidates: list[dict[str, Any]] = []
+        unresolved: list[dict[str, Any]] = []
+
+        for movement in movements:
+            prepared = self._prepare_consumo_movement_total_backfill(movement)
+            if not prepared:
+                continue
+            if prepared.get("updated_record") is None:
+                unresolved.append(prepared)
+                continue
+            candidates.append(prepared)
+
+        selected = candidates[:limit] if limit and limit > 0 else candidates
+        updated_records = [candidate["updated_record"] for candidate in selected]
+        applied_ids: list[str] = []
+
+        if apply and updated_records:
+            self._persist({"materiais_mov": updated_records})
+            for record in updated_records:
+                self.state.movimentos[str(record["id_mov"])] = record
+                applied_ids.append(str(record["id_mov"]))
+
+        return {
+            "applied": apply,
+            "scanned_rows": len(movements),
+            "candidate_count_total": len(candidates),
+            "candidate_count_selected": len(selected),
+            "updated_count": len(applied_ids),
+            "updated_id_movs": applied_ids,
+            "unresolved_count": len(unresolved),
+            "candidates_preview": [
+                {
+                    "id_mov": candidate["id_mov"],
+                    "source_type": candidate["source_type"],
+                    "source_id": candidate["source_id"],
+                    "id_item": candidate["id_item"],
+                    "missing_fields": candidate["missing_fields"],
+                    "current": candidate["current"],
+                    "updated": candidate["updated"],
+                }
+                for candidate in selected[:10]
+            ],
+            "unresolved_preview": [
+                {
+                    "id_mov": candidate["id_mov"],
+                    "source_type": candidate["source_type"],
+                    "source_id": candidate["source_id"],
+                    "id_item": candidate["id_item"],
+                    "missing_fields": candidate["missing_fields"],
+                }
+                for candidate in unresolved[:10]
+            ],
+        }
+
     def list_afetacoes(self) -> list[AfetacaoRecord]:
         return [self._to_model(AfetacaoRecord, item) for item in self.state.afetacoes.values()]
 
@@ -764,6 +846,7 @@ class MaterialsService:
         self.state.afetacoes[record["id_afetacao"]] = record
         if processed:
             self.state.movimentos[processed["movimento"]["id_mov"]] = processed["movimento"]
+            self._sync_stock_atual_for_item_ids({str(record.get("id_item") or "").strip()})
         return self._to_model(AfetacaoRecord, record)
 
     def patch_afetacao(self, id_afetacao: str, payload: AfetacaoUpdate) -> AfetacaoRecord:
@@ -779,10 +862,15 @@ class MaterialsService:
         current["uso_combustivel"] = self._normalize_uso_combustivel(current.get("uso_combustivel"), catalog["natureza"])
         current["updated_at"] = self._now()
         self._validate_stock_afetacao_business_rules(current)
+        stock_item_ids_to_sync = {
+            str(self._require_afetacao(id_afetacao).get("id_item") or "").strip(),
+            str(current.get("id_item") or "").strip(),
+        }
         processed = self._process_stock_afetacao(current)
         self._persist({"afetacoes_obra": [processed["afetacao"]], "materiais_mov": [processed["movimento"]]})
         self.state.afetacoes[id_afetacao] = processed["afetacao"]
         self.state.movimentos[processed["movimento"]["id_mov"]] = processed["movimento"]
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
         return self._to_model(AfetacaoRecord, processed["afetacao"])
 
     def delete_afetacao(self, id_afetacao: str) -> None:
@@ -790,8 +878,10 @@ class MaterialsService:
         if current["origem"] != "STOCK":
             raise HTTPException(status_code=422, detail="AFETACAO_GERADA_SOMENTE_PELA_FATURA")
         delete_groups = self._collect_afetacao_delete_groups(id_afetacao)
+        stock_item_ids_to_sync = self._collect_stock_item_ids_from_groups(delete_groups)
         self._delete_records(delete_groups)
         self._delete_runtime_records(delete_groups)
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
 
     def process_afetacao(self, id_afetacao: str) -> AfetacaoRecord:
         current = deepcopy(self._require_afetacao(id_afetacao))
@@ -799,6 +889,7 @@ class MaterialsService:
         self._persist({"afetacoes_obra": [processed["afetacao"]], "materiais_mov": [processed["movimento"]]})
         self.state.afetacoes[id_afetacao] = processed["afetacao"]
         self.state.movimentos[processed["movimento"]["id_mov"]] = processed["movimento"]
+        self._sync_stock_atual_for_item_ids({str(processed["afetacao"].get("id_item") or "").strip()})
         return self._to_model(AfetacaoRecord, processed["afetacao"])
 
     def get_stock_snapshot(self, id_item: str) -> StockSnapshot:
@@ -823,23 +914,97 @@ class MaterialsService:
 
     def list_stock_snapshots(self) -> list[StockSnapshot]:
         ids = {
-            id_item
-            for id_item, catalog in self.state.catalog.items()
-            if self._natureza_tracks_stock(catalog.get("natureza"))
-        }
-        ids.update(
             movement["id_item"]
             for movement in self.state.movimentos.values()
             if movement.get("id_item") and self._movement_affects_stock(movement)
-        )
+        }
         snapshots = [self.get_stock_snapshot(id_item) for id_item in sorted(ids)]
         return sorted(snapshots, key=lambda item: item.id_item)
+
+    def rebuild_stock_atual_snapshot(self, *, apply: bool = False) -> dict[str, Any]:
+        snapshots = [snapshot.model_dump() for snapshot in self.list_stock_snapshots()]
+        current_ids = {str(snapshot.get("id_item") or "").strip() for snapshot in snapshots if str(snapshot.get("id_item") or "").strip()}
+
+        existing_rows: list[dict[str, Any]] = []
+        try:
+            existing_rows = self.google_sheets.load_snapshot().get("stock_atual", [])
+        except Exception:
+            logger.exception("Failed to read STOCK_ATUAL before rebuild")
+
+        existing_ids = {
+            str(row.get("id_item") or "").strip()
+            for row in existing_rows
+            if str(row.get("id_item") or "").strip()
+        }
+        stale_ids = sorted(existing_ids - current_ids)
+
+        if apply and snapshots:
+            self._persist({"stock_atual": snapshots})
+        if apply and stale_ids:
+            self._delete_records({"stock_atual": stale_ids})
+
+        return {
+            "applied": apply,
+            "rows_selected": len(snapshots),
+            "existing_rows": len(existing_ids),
+            "deleted_count": len(stale_ids) if apply else 0,
+            "stale_count": len(stale_ids),
+            "stale_id_items": stale_ids,
+            "preview": [
+                {
+                    "id_item": snapshot["id_item"],
+                    "item_oficial": snapshot.get("item_oficial"),
+                    "unidade": snapshot.get("unidade"),
+                    "stock_atual": snapshot.get("stock_atual"),
+                    "custo_medio_atual": snapshot.get("custo_medio_atual"),
+                }
+                for snapshot in snapshots[:20]
+            ],
+        }
+
+    def _sync_stock_atual_for_item_ids(self, item_ids: set[str] | list[str] | tuple[str, ...]) -> None:
+        normalized_ids = sorted({str(item_id or "").strip() for item_id in item_ids if str(item_id or "").strip()})
+        if not normalized_ids:
+            return
+
+        started_at = perf_counter()
+        has_history = {id_item: self._item_has_stock_history(id_item) for id_item in normalized_ids}
+        upserts = [
+            self.get_stock_snapshot(id_item).model_dump()
+            for id_item in normalized_ids
+            if has_history[id_item]
+        ]
+        stale_ids = [id_item for id_item in normalized_ids if not has_history[id_item]]
+
+        if upserts:
+            self._persist({"stock_atual": upserts})
+        if stale_ids:
+            self._delete_records({"stock_atual": stale_ids})
+
+        logger.info(
+            "timing.stock_atual_sync items=%s upserts=%s deletes=%s duration_ms=%.2f",
+            ",".join(normalized_ids),
+            len(upserts),
+            len(stale_ids),
+            (perf_counter() - started_at) * 1000,
+        )
+
+    def _item_has_stock_history(self, id_item: str) -> bool:
+        normalized_id = str(id_item or "").strip()
+        if not normalized_id:
+            return False
+        return any(
+            str(movement.get("id_item") or "").strip() == normalized_id and self._movement_affects_stock(movement)
+            for movement in self.state.movimentos.values()
+        )
 
     def list_movimentos(self) -> list[MovimentoRecord]:
         movements = sorted(self.state.movimentos.values(), key=lambda item: item["sequence"], reverse=True)
         return [self._to_model(MovimentoRecord, movement) for movement in movements]
 
     def _persist(self, groups: dict[str, list[dict[str, Any]]]) -> None:
+        for movement in groups.get("materiais_mov", []):
+            self._normalize_movimento_financials(movement)
         batches = [WriteBatch(entity=entity, records=records) for entity, records in groups.items() if records]
         if not batches:
             return
@@ -943,6 +1108,8 @@ class MaterialsService:
                 raise HTTPException(status_code=422, detail="Fuel for maquina or gerador cannot use destino VIATURA")
             if destino == "ESCRITORIO":
                 raise HTTPException(status_code=422, detail="Fuel for maquina or gerador cannot use destino ESCRITORIO")
+            if destino == "EMPRESA":
+                raise HTTPException(status_code=422, detail="Fuel for maquina or gerador cannot use destino EMPRESA")
             if destino == "STOCK":
                 return
             if destino == "CONSUMO" and item.get("obra") and item.get("fase"):
@@ -956,6 +1123,10 @@ class MaterialsService:
         if destino == "STOCK" and natureza != "MATERIAL":
             raise HTTPException(status_code=422, detail="Only MATERIAL items can enter stock")
         if destino == "ESCRITORIO":
+            item["obra"] = None
+            item["fase"] = None
+            return
+        if destino == "EMPRESA":
             item["obra"] = None
             item["fase"] = None
             return
@@ -1012,6 +1183,8 @@ class MaterialsService:
             movement_fase = fit["fase"]
         elif tipo == "CONSUMO" and destination == "ESCRITORIO":
             movement_obra = "ESCRITORIO"
+        elif tipo == "CONSUMO" and destination == "EMPRESA":
+            movement_obra = "EMPRESA"
         return {
             "id_mov": self.state.next_id("MOV"),
             "tipo": tipo,
@@ -1105,6 +1278,8 @@ class MaterialsService:
             return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar movimento tecnico associado a viatura")]
         if destino == "ESCRITORIO":
             return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar movimento tecnico de consumo para ESCRITORIO")]
+        if destino == "EMPRESA":
+            return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar movimento tecnico de consumo para EMPRESA")]
         return [
             OperationImpact(type="generated", entity="AFETACOES_OBRA", source="FATURAS_ITENS", summary="Vai gerar afetacao direta"),
             OperationImpact(type="generated", entity="MATERIAIS_MOV", source="AFETACOES_OBRA", summary="Vai gerar movimento tecnico de consumo"),
@@ -1136,6 +1311,8 @@ class MaterialsService:
             return "VIATURA"
         if normalized in {"escritorio", "escritorio_", "office"}:
             return "ESCRITORIO"
+        if normalized in {"empresa", "company"}:
+            return "EMPRESA"
         return "CONSUMO"
 
     def _normalize_uso_combustivel(self, value: Any, natureza: str | None = None) -> str:
@@ -1409,6 +1586,28 @@ class MaterialsService:
             target.setdefault(entity, [])
             target[entity].extend(ids)
 
+    def _collect_stock_item_ids_from_groups(self, groups: dict[str, list[str]]) -> set[str]:
+        item_ids: set[str] = set()
+        for item_id in groups.get("faturas_itens", []):
+            fit = self.state.fatura_items.get(item_id)
+            if fit and str(fit.get("destino") or "").strip().upper() == "STOCK":
+                normalized_id = str(fit.get("id_item") or "").strip()
+                if normalized_id:
+                    item_ids.add(normalized_id)
+        for afetacao_id in groups.get("afetacoes_obra", []):
+            afetacao = self.state.afetacoes.get(afetacao_id)
+            if afetacao and str(afetacao.get("origem") or "").strip().upper() == "STOCK":
+                normalized_id = str(afetacao.get("id_item") or "").strip()
+                if normalized_id:
+                    item_ids.add(normalized_id)
+        for movimento_id in groups.get("materiais_mov", []):
+            movement = self.state.movimentos.get(movimento_id)
+            if movement and self._movement_affects_stock(movement):
+                normalized_id = str(movement.get("id_item") or "").strip()
+                if normalized_id:
+                    item_ids.add(normalized_id)
+        return item_ids
+
     def _delete_runtime_records(self, groups: dict[str, list[str]]) -> None:
         mapping = {
             "faturas": self.state.faturas,
@@ -1448,6 +1647,170 @@ class MaterialsService:
         entity["paga"] = bool(entity.get("paga", False))
         if not entity["paga"]:
             entity["data_pagamento"] = None
+
+    def _normalize_movimento_financials(self, movement: dict[str, Any]) -> None:
+        quantity = float(movement.get("quantidade") or 0.0)
+        unit_cost = float(movement.get("custo_unit") or 0.0)
+        sem_iva = movement.get("custo_total_sem_iva")
+        iva = movement.get("iva")
+        com_iva = movement.get("custo_total_com_iva")
+
+        if sem_iva in (None, ""):
+            sem_iva = round(quantity * unit_cost, 6)
+        else:
+            sem_iva = float(sem_iva or 0.0)
+
+        if iva in (None, ""):
+            iva = 0.0
+        else:
+            iva = float(iva or 0.0)
+
+        if com_iva in (None, ""):
+            com_iva = round(sem_iva * (1 + (iva / 100)), 6)
+        else:
+            com_iva = float(com_iva or 0.0)
+
+        movement["custo_unit"] = unit_cost
+        movement["custo_total_sem_iva"] = sem_iva
+        movement["iva"] = iva
+        movement["custo_total_com_iva"] = com_iva
+
+    def _prepare_consumo_movement_total_backfill(self, movement: dict[str, Any]) -> dict[str, Any] | None:
+        if str(movement.get("tipo") or "").strip().upper() != "CONSUMO":
+            return None
+
+        source_type = str(movement.get("source_type") or "").strip().upper()
+        source_id = str(movement.get("source_id") or "").strip()
+        source_record: dict[str, Any] | None = None
+        if source_type == "FIT" and source_id:
+            source_record = self.state.fatura_items.get(source_id)
+        elif source_type == "AFO" and source_id:
+            source_record = self.state.afetacoes.get(source_id)
+
+        current_sem_iva = movement.get("custo_total_sem_iva")
+        current_iva = movement.get("iva")
+        current_com_iva = movement.get("custo_total_com_iva")
+        quantity = float(movement.get("quantidade") or 0.0)
+        unit_cost = float(movement.get("custo_unit") or 0.0)
+
+        source_sem_iva = source_record.get("custo_total_sem_iva") if source_record else None
+        source_iva = source_record.get("iva") if source_record else None
+        source_com_iva = source_record.get("custo_total_com_iva") if source_record else None
+
+        inferred_sem_iva = self._coerce_optional_float(source_sem_iva)
+        if inferred_sem_iva is None and quantity > 0 and unit_cost > 0:
+            inferred_sem_iva = round(quantity * unit_cost, 6)
+
+        source_sem_iva_value = self._coerce_optional_float(source_sem_iva)
+        source_com_iva_value = self._coerce_optional_float(source_com_iva)
+
+        inferred_iva = self._normalize_legacy_iva_value(
+            self._coerce_optional_float(source_iva),
+            sem_iva=source_sem_iva_value,
+            com_iva=source_com_iva_value,
+        )
+        if inferred_iva is None:
+            inferred_iva = self._coerce_optional_float(current_iva)
+        if inferred_iva is None:
+            inferred_iva = 0.0
+
+        inferred_com_iva = source_com_iva_value
+        if inferred_com_iva is None and inferred_sem_iva is not None:
+            inferred_com_iva = round(inferred_sem_iva * (1 + (inferred_iva / 100)), 6)
+
+        current_sem_iva_value = self._coerce_optional_float(current_sem_iva)
+        current_iva_value = self._coerce_optional_float(current_iva)
+        current_com_iva_value = self._coerce_optional_float(current_com_iva)
+        source_iva_value = inferred_iva
+
+        missing_fields: list[str] = []
+        sem_iva_missing = current_sem_iva in (None, "") or (
+            (current_sem_iva_value or 0.0) <= 0 and (inferred_sem_iva or 0.0) > 0
+        )
+        iva_missing = current_iva in (None, "") or (
+            (current_iva_value or 0.0) <= 0 and (source_iva_value or 0.0) > 0
+        )
+        com_iva_missing = current_com_iva in (None, "") or (
+            (current_com_iva_value or 0.0) <= 0 and (inferred_com_iva or 0.0) > 0
+        )
+
+        if sem_iva_missing:
+            missing_fields.append("custo_total_sem_iva")
+        if iva_missing:
+            missing_fields.append("iva")
+        if com_iva_missing:
+            missing_fields.append("custo_total_com_iva")
+
+        if not missing_fields:
+            return None
+
+        if (sem_iva_missing and inferred_sem_iva is None) or (com_iva_missing and inferred_com_iva is None):
+            return {
+                "id_mov": str(movement.get("id_mov") or ""),
+                "source_type": source_type or None,
+                "source_id": source_id or None,
+                "id_item": str(movement.get("id_item") or ""),
+                "missing_fields": missing_fields,
+                "updated_record": None,
+            }
+
+        updated = deepcopy(movement)
+        if sem_iva_missing:
+            updated["custo_total_sem_iva"] = inferred_sem_iva
+        if iva_missing:
+            updated["iva"] = inferred_iva
+        if com_iva_missing:
+            updated["custo_total_com_iva"] = inferred_com_iva
+        updated["updated_at"] = self._now()
+
+        return {
+            "id_mov": str(movement.get("id_mov") or ""),
+            "source_type": source_type or None,
+            "source_id": source_id or None,
+            "id_item": str(movement.get("id_item") or ""),
+            "missing_fields": missing_fields,
+            "current": {
+                "custo_total_sem_iva": current_sem_iva_value,
+                "iva": current_iva_value,
+                "custo_total_com_iva": current_com_iva_value,
+            },
+            "updated": {
+                "custo_total_sem_iva": updated.get("custo_total_sem_iva"),
+                "iva": updated.get("iva"),
+                "custo_total_com_iva": updated.get("custo_total_com_iva"),
+            },
+            "updated_record": updated,
+        }
+
+    def _coerce_optional_float(self, value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _normalize_legacy_iva_value(
+        self,
+        value: float | None,
+        *,
+        sem_iva: float | None = None,
+        com_iva: float | None = None,
+    ) -> float | None:
+        if value is None:
+            return None
+        if value < 0 or value > 1:
+            return value
+        if sem_iva is None or sem_iva <= 0 or com_iva is None or com_iva <= 0:
+            return value
+
+        expected_from_percent = sem_iva * (1 + (value / 100))
+        expected_from_decimal = sem_iva * (1 + value)
+        percent_distance = abs(expected_from_percent - com_iva)
+        decimal_distance = abs(expected_from_decimal - com_iva)
+        if decimal_distance <= 0.02 and decimal_distance < percent_distance:
+            return round(value * 100, 6)
+        return value
 
     def _to_model(self, model_cls: type[BaseModel], payload: dict[str, Any]) -> BaseModel:
         allowed = model_cls.model_fields.keys()

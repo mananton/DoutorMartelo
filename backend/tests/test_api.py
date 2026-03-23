@@ -147,6 +147,13 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(afetacao.status_code, 201)
         body = afetacao.json()
         self.assertGreater(body["custo_unit"], 0)
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 2)
+        stock_consumo = next(mov for mov in movimentos if mov["source_type"] == "AFO")
+        self.assertEqual(stock_consumo["tipo"], "CONSUMO")
+        self.assertGreater(stock_consumo["custo_total_sem_iva"], 0)
+        self.assertGreaterEqual(stock_consumo["iva"], 0)
+        self.assertGreater(stock_consumo["custo_total_com_iva"], 0)
         stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
         self.assertEqual(stock["stock_atual"], 90)
 
@@ -193,6 +200,9 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
         self.assertEqual(movimentos[0]["uso_combustivel"], "VIATURA")
         self.assertEqual(movimentos[0]["matricula"], "11-AA-22")
+        self.assertGreater(movimentos[0]["custo_total_sem_iva"], 0)
+        self.assertGreaterEqual(movimentos[0]["iva"], 0)
+        self.assertGreater(movimentos[0]["custo_total_com_iva"], 0)
         stock = self.client.get(f"/api/stock-atual/{fuel_catalog['id_item']}").json()
         self.assertEqual(stock["stock_atual"], 0)
 
@@ -238,11 +248,39 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
         self.assertEqual(movimentos[0]["obra"], "ESCRITORIO")
         self.assertIsNone(movimentos[0]["fase"])
+        self.assertGreater(movimentos[0]["custo_total_sem_iva"], 0)
+        self.assertGreaterEqual(movimentos[0]["iva"], 0)
+        self.assertGreater(movimentos[0]["custo_total_com_iva"], 0)
         stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
         self.assertEqual(stock["stock_atual"], 0)
         stock_list = self.client.get("/api/stock-atual").json()
-        office_entry = next(entry for entry in stock_list if entry["id_item"] == self.catalog["id_item"])
-        self.assertEqual(office_entry["stock_atual"], 0)
+        self.assertFalse(any(entry["id_item"] == self.catalog["id_item"] for entry in stock_list))
+
+    def test_direct_company_invoice_item_generates_movement_without_stock_or_afetacao(self) -> None:
+        fatura = self._create_fatura("002B-COMP")
+
+        item = self._create_item(
+            fatura["id_fatura"],
+            destino="EMPRESA",
+            descricao_original="Prego 30 empresa",
+            id_item=str(self.catalog["id_item"]),
+        )
+        self.assertEqual(item["destino"], "EMPRESA")
+
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 1)
+        self.assertEqual(movimentos[0]["source_type"], "FIT")
+        self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
+        self.assertEqual(movimentos[0]["obra"], "EMPRESA")
+        self.assertIsNone(movimentos[0]["fase"])
+        self.assertGreater(movimentos[0]["custo_total_sem_iva"], 0)
+        self.assertGreaterEqual(movimentos[0]["iva"], 0)
+        self.assertGreater(movimentos[0]["custo_total_com_iva"], 0)
+        stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 0)
+        stock_list = self.client.get("/api/stock-atual").json()
+        self.assertFalse(any(entry["id_item"] == self.catalog["id_item"] for entry in stock_list))
 
     def test_stock_fuel_afetacao_requires_machine_or_generator_usage(self) -> None:
         fuel_catalog = self._create_catalog_entry(
@@ -321,6 +359,34 @@ class MaterialsApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "Fuel for maquina or gerador cannot use destino ESCRITORIO")
+
+    def test_fuel_machine_or_generator_cannot_use_company_destino(self) -> None:
+        fuel_catalog = self._create_catalog_entry(
+            descricao_original="Gasoleo empresa",
+            item_oficial="GASOLEO_EMPRESA",
+            natureza="GASOLEO",
+            unidade="Lt",
+        )
+        fatura = self._create_fatura("002C-COMP")
+
+        response = self.client.post(
+            f"/api/faturas/{fatura['id_fatura']}/itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Gasoleo empresa",
+                        "quantidade": 30,
+                        "custo_unit": 1.2,
+                        "iva": 23,
+                        "destino": "EMPRESA",
+                        "id_item": fuel_catalog["id_item"],
+                        "uso_combustivel": "GERADOR",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "Fuel for maquina or gerador cannot use destino EMPRESA")
 
     def test_sync_retry_marks_pending_when_supabase_fails(self) -> None:
         container = self.app.state.container
@@ -433,6 +499,32 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(movimentos[0]["source_type"], "FIT")
         self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
         self.assertEqual(movimentos[0]["obra"], "ESCRITORIO")
+        self.assertIsNone(movimentos[0]["fase"])
+
+    def test_patch_invoice_item_to_company_reconciles_generated_records(self) -> None:
+        fatura = self._create_fatura("005-COMP")
+        item = self._create_item(fatura["id_fatura"], destino="STOCK")
+
+        response = self.client.patch(
+            f"/api/faturas/{fatura['id_fatura']}/itens/{item['id_item_fatura']}",
+            json={
+                "destino": "EMPRESA",
+                "quantidade": 25,
+                "custo_unit": 0.3,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["destino"], "EMPRESA")
+
+        detail = self.client.get(f"/api/faturas/{fatura['id_fatura']}").json()
+        self.assertEqual(detail["items"][0]["destino"], "EMPRESA")
+
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 1)
+        self.assertEqual(movimentos[0]["source_type"], "FIT")
+        self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
+        self.assertEqual(movimentos[0]["obra"], "EMPRESA")
         self.assertIsNone(movimentos[0]["fase"])
 
     def test_delete_invoice_item_cleans_generated_records(self) -> None:

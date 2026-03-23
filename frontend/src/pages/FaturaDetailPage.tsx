@@ -72,7 +72,7 @@ type VehicleOption = Record<string, unknown> & {
 
 const NATUREZA_OPTIONS = ["MATERIAL", "GASOLEO", "GASOLINA", "SERVICO", "ALUGUER", "TRANSPORTE"] as const;
 const COMBUSTIVEL_USE_OPTIONS = ["N/A", "VIATURA", "MAQUINA", "GERADOR"] as const;
-const UNIT_OPTIONS = ["un", "Kg", "Lt", "m", "m2", "m3"] as const;
+const UNIT_OPTIONS = ["un", "Kg", "Lt", "Ton", "m", "m2", "m3"] as const;
 
 const INITIAL_FORM: ItemFormState = {
   descricao_original: "",
@@ -378,6 +378,8 @@ export function FaturaDetailPage() {
         ? [{ entity: "MATERIAIS_MOV", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar movimento tecnico associado a viatura." }]
         : form.destino === "ESCRITORIO"
           ? [{ entity: "MATERIAIS_MOV", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar movimento tecnico de consumo para ESCRITORIO." }]
+          : form.destino === "EMPRESA"
+            ? [{ entity: "MATERIAIS_MOV", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar movimento tecnico de consumo para EMPRESA." }]
       : [
           { entity: "AFETACOES_OBRA", source: "FATURAS_ITENS", type: "generated", summary: "Vai gerar afetacao direta para a obra." },
           { entity: "MATERIAIS_MOV", source: "AFETACOES_OBRA", type: "generated", summary: "Vai gerar movimento tecnico de consumo." },
@@ -419,18 +421,18 @@ export function FaturaDetailPage() {
       ...current,
       item_oficial: String(selectedCatalog.item_oficial ?? ""),
       natureza: String(selectedCatalog.natureza ?? ""),
-      uso_combustivel: isFuelNature(String(selectedCatalog.natureza ?? "")) ? current.uso_combustivel || "N/A" : "N/A",
-      matricula: isFuelNature(String(selectedCatalog.natureza ?? "")) ? current.matricula : "",
-      destino:
-        !isFuelNature(String(selectedCatalog.natureza ?? ""))
-          ? current.destino === "VIATURA"
-            ? "CONSUMO"
-            : current.destino
-          : current.destino === "ESCRITORIO"
+        uso_combustivel: isFuelNature(String(selectedCatalog.natureza ?? "")) ? current.uso_combustivel || "N/A" : "N/A",
+        matricula: isFuelNature(String(selectedCatalog.natureza ?? "")) ? current.matricula : "",
+        destino:
+          !isFuelNature(String(selectedCatalog.natureza ?? ""))
+            ? current.destino === "VIATURA"
+              ? "CONSUMO"
+              : current.destino
+          : current.destino === "ESCRITORIO" || current.destino === "EMPRESA"
             ? "CONSUMO"
             : current.destino,
-      unidade: String(selectedCatalog.unidade ?? ""),
-    }));
+        unidade: String(selectedCatalog.unidade ?? ""),
+      }));
   }, [form.id_item, form.item_oficial, form.natureza, form.unidade, selectedCatalog]);
 
   function updateField(field: keyof ItemFormState, value: string) {
@@ -467,10 +469,10 @@ export function FaturaDetailPage() {
           }
         } else if (!current.uso_combustivel) {
           next.uso_combustivel = "N/A";
-          if (current.destino === "ESCRITORIO") {
+          if (current.destino === "ESCRITORIO" || current.destino === "EMPRESA") {
             next.destino = "CONSUMO";
           }
-        } else if (current.destino === "ESCRITORIO") {
+        } else if (current.destino === "ESCRITORIO" || current.destino === "EMPRESA") {
           next.destino = "CONSUMO";
         }
       }
@@ -486,7 +488,7 @@ export function FaturaDetailPage() {
           }
         }
       }
-      if (field === "destino" && (value === "STOCK" || value === "VIATURA" || value === "ESCRITORIO")) {
+      if (field === "destino" && (value === "STOCK" || value === "VIATURA" || value === "ESCRITORIO" || value === "EMPRESA")) {
         next.obra = "";
         next.fase = "";
       }
@@ -621,6 +623,8 @@ export function FaturaDetailPage() {
         ? "Consumo em viatura"
         : form.destino === "ESCRITORIO"
           ? "Consumo em escritorio"
+          : form.destino === "EMPRESA"
+            ? "Consumo da empresa"
         : "Consumo direto";
   const formBusy = createItems.isPending || updateItem.isPending;
   const helperNotes = [
@@ -631,6 +635,7 @@ export function FaturaDetailPage() {
     form.destino === "CONSUMO" && availableFases.length ? "O campo `Fase` mostra a lista global de fases carregada da Google Sheet." : null,
     form.destino === "VIATURA" && vehicleOptions.length ? "O campo `Matricula` usa a lista de viaturas carregada da aba `VEICULOS`." : null,
     form.destino === "ESCRITORIO" ? "O destino `ESCRITORIO` gera consumo direto sem passar por `Obra` e `Fase`." : null,
+    form.destino === "EMPRESA" ? "O destino `EMPRESA` gera consumo direto da empresa sem passar por `Stock`, `Obra` e `Fase`." : null,
   ].filter((note): note is string => Boolean(note));
 
   return (
@@ -814,7 +819,7 @@ export function FaturaDetailPage() {
 
           <div className="form-section">
             <div className="section-kicker">Destino operacional</div>
-            <div className="section-copy">Define se a linha entra em stock, gera consumo direto numa obra, fica imputada diretamente a uma viatura ou segue como despesa direta de escritorio.</div>
+            <div className="section-copy">Define se a linha entra em stock, gera consumo direto numa obra, fica imputada diretamente a uma viatura ou segue como despesa direta de escritorio ou empresa.</div>
             <div className="form-grid">
               <label>
                 Destino
@@ -831,6 +836,7 @@ export function FaturaDetailPage() {
                       <option value="STOCK">STOCK</option>
                       <option value="CONSUMO">CONSUMO</option>
                       <option value="ESCRITORIO">ESCRITORIO</option>
+                      <option value="EMPRESA">EMPRESA</option>
                     </>
                   )}
                 </select>
@@ -1009,7 +1015,7 @@ export function FaturaDetailPage() {
                 <div className="summary-card compact">
                   <div className="summary-title">Impacto previsto</div>
                   <div className="summary-main">
-                    {form.destino === "STOCK" ? "Entrada em stock" : form.destino === "VIATURA" ? "Consumo em viatura" : form.destino === "ESCRITORIO" ? "Consumo em escritorio" : "Consumo direto"}
+                    {form.destino === "STOCK" ? "Entrada em stock" : form.destino === "VIATURA" ? "Consumo em viatura" : form.destino === "ESCRITORIO" ? "Consumo em escritorio" : form.destino === "EMPRESA" ? "Consumo da empresa" : "Consumo direto"}
                   </div>
                   <div className="muted">{previewImpacts.length} efeitos operacionais previstos</div>
                 </div>
@@ -1091,7 +1097,7 @@ export function FaturaDetailPage() {
                       <div className="list-row-facts">
                         <span>{String(item.natureza ?? "-")} | {formatAmount(Number(item.quantidade ?? 0), 2)} {String(item.unidade ?? "")}</span>
                         <span>{formatAmount(Number(item.custo_total_sem_iva ?? 0))} sem IVA | {formatAmount(Number(item.custo_total_com_iva ?? 0))} com IVA</span>
-                        <span>{String(item.destino ?? "") === "ESCRITORIO" ? "ESCRITORIO | -" : `${String(item.obra ?? "-")} | ${String(item.fase ?? "-")}`}</span>
+                        <span>{String(item.destino ?? "") === "ESCRITORIO" || String(item.destino ?? "") === "EMPRESA" ? `${String(item.destino ?? "")} | -` : `${String(item.obra ?? "-")} | ${String(item.fase ?? "-")}`}</span>
                         {String(item.matricula ?? "") ? <span>Matricula: {String(item.matricula)}</span> : null}
                       </div>
                     </details>
