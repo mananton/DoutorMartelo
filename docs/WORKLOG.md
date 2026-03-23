@@ -11,6 +11,31 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-23
 
+### `f10c3fa`
+- **Type**: feat / performance / ui
+- **Scope**: `backend/app/*`, `backend/tests/*`, `frontend/src/*`
+- **Summary**:
+  - Added direct `ESCRITORIO` destination support in the materials backoffice invoice-line workflow.
+  - Kept `ESCRITORIO` as direct non-stock consumption:
+    - generates `MATERIAIS_MOV`
+    - does not generate `AFETACOES_OBRA`
+    - does not affect `STOCK_ATUAL`
+  - Added timing instrumentation for invoice-line saves across:
+    - Google Sheets writes
+    - Supabase mirror
+    - total request duration
+  - Optimized Google Sheets live upserts by:
+    - caching headers
+    - reusing `sheet_row_num`
+    - avoiding full-sheet reads on known-row updates
+  - Improved invoice-detail UX:
+    - launched-line totals are visible in the history card header
+    - `Custo Total com IVA` can now be edited without losing decimal input mid-typing
+- **Impact**:
+  - Office-expense rows can now be registered directly in the materials backoffice without polluting stock logic.
+  - Operators have better visibility into launched-line totals inside invoice details.
+  - Save latency diagnosis is now evidence-based, and known-row writes should be faster under the current `Sheets-first` model.
+
 ### `552d7e7`
 - **Type**: feat / operations
 - **Scope**: `backend/app/*`, `frontend/src/*`, `backend/ops/*`, `backend/tests/*`

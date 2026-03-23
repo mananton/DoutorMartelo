@@ -60,19 +60,33 @@ Last reviewed: 2026-03-23
     - frontend rebuild
     - firewall rule verification
 
-## P1 - Add Direct `ESCRITORIO` Consumption Destination
-- The next materials-flow extension is to allow direct consumption to `ESCRITORIO`.
-- This should expand the current destination model beyond:
-  - `STOCK`
-  - `VIATURA`
-  - `Obra` + `Fase`
-- Expected follow-up:
-  - define where `ESCRITORIO` is valid in:
+## P1 - Surface Backoffice Material Costs In The Dashboard
+- The operational materials backoffice is now creating current rows in:
+  - `FATURAS`
+  - `FATURAS_ITENS`
+  - `MATERIAIS_MOV`
+- The legacy dashboard still shows material cost only from:
+  - `LEGACY_MATERIAIS`
+- Next step:
+  - decide which dashboard blocks should start reading current materials-backoffice costs
+  - define whether those costs should come from:
+    - `MATERIAIS_MOV`
     - `FATURAS_ITENS`
-    - generated `MATERIAIS_MOV`
-    - reporting / stock interpretation
-  - confirm which `Natureza` values may use this destination
-  - keep `ESCRITORIO` as non-stock direct consumption
+    - or a combined historical/current aggregation boundary
+  - keep stock interpretation safe so:
+    - `SERVICO`
+    - `ALUGUER`
+    - `TRANSPORTE`
+    - direct `VIATURA`
+    - direct `ESCRITORIO`
+    do not get misread as stock entries
+
+## P1 - Extend `ESCRITORIO` Beyond Invoice-Line Direct Consumption
+- `ESCRITORIO` now exists in invoice-line direct consumption (`FATURAS_ITENS` -> `MATERIAIS_MOV`).
+- Follow-up:
+  - decide whether manual stock consumption should later support `ESCRITORIO` in `AFETACOES_OBRA` or a separate office-consumption path
+  - confirm how dashboard/reporting should group office costs separately from obra/fase costs
+  - validate real office-expense rows after a few business days of use
 
 ## P1 - Validate Fuel And Vehicle Operating Flow In Real Rows
 - Fuel support now exists in the new backoffice with:
@@ -91,6 +105,16 @@ Last reviewed: 2026-03-23
     - `Matricula`
     - cost/tax totals
   - confirm the UI/operator model is clear when fuel is for stock vs direct use
+
+## P1 - Keep Improving Materials Save Performance
+- Save timings now show the main bottleneck is still Google Sheets write latency, especially when multiple sheets are touched in one invoice-line save.
+- The latest optimization already:
+  - caches headers
+  - skips full-sheet reads for known `sheet_row_num`
+- Next step:
+  - validate before/after timings with more real office saves
+  - reduce unnecessary frontend refetches after successful item save
+  - decide later whether the materials flow should eventually become `Supabase-first` with manual/background sheet sync
 
 ## P1 - Validate Stock Movement Lineage In Real Sheets
 - The app now has safe diagnostics for:

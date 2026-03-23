@@ -165,6 +165,11 @@ Logs are written to:
 - `backend/logs/service.stdout.log`
 - `backend/logs/service.stderr.log`
 
+Performance timing diagnostics for the materials write path are also written to `service.stderr.log`, for example:
+- Google Sheets upsert timings
+- Supabase mirror timings
+- total invoice-line save timings
+
 Important:
 - do not use the Microsoft Store Python / `WindowsApps` alias for the Windows service
 - use a normal Python executable outside `WindowsApps`

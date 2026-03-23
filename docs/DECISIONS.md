@@ -215,9 +215,51 @@ Format: short ADR-style records with rationale and impact.
 - **Date**: 2026-03-17
 - **Commit**: `pending`
 - **Decision**:
-  - When generating `MATERIAIS_MOV` from `FATURAS_ITENS`, write `Custo_Unit` as the net unit cost.
-  - Priority:
-    - `Custo_Total Sem IVA / Quantidade`, when available.
+- When generating `MATERIAIS_MOV` from `FATURAS_ITENS`, write `Custo_Unit` as the net unit cost.
+- Priority:
+  - `Custo_Total Sem IVA / Quantidade`, when available.
+
+## D-016: `ESCRITORIO` is a direct non-stock destination in the materials backoffice
+- **Status**: accepted
+- **Date**: 2026-03-23
+- **Commit**: `f10c3fa`
+- **Decision**:
+  - Add `ESCRITORIO` as a valid direct destination in invoice-line entry.
+  - `ESCRITORIO` generates direct `MATERIAIS_MOV`.
+  - `ESCRITORIO` does not generate `AFETACOES_OBRA`.
+  - `ESCRITORIO` does not affect `STOCK_ATUAL`.
+  - `ESCRITORIO` is allowed for all `Natureza` values except fuel rows with:
+    - `Uso_Combustivel = MAQUINA`
+    - `Uso_Combustivel = GERADOR`
+- **Rationale**:
+  - Office expenses need to be recorded operationally in the same backoffice flow without pretending they belong to stock or to an obra/fase context.
+  - Stock calculations must remain reserved for real stock entries and stock-origin consumptions.
+- **Impact**:
+  - The destination model in the materials backoffice is now broader than:
+    - `STOCK`
+    - `VIATURA`
+    - `CONSUMO` to obra/fase
+  - Future reporting must decide how `ESCRITORIO` costs appear in dashboard totals and breakdowns.
+
+## D-017: Keep the materials backoffice `Sheets-first` for now, and optimize the write path before any architectural migration
+- **Status**: accepted
+- **Date**: 2026-03-23
+- **Commit**: `f10c3fa`
+- **Decision**:
+  - Keep Google Sheets as the first write target for the operational materials backoffice.
+  - Keep Supabase as the second mirror target.
+  - Do not switch yet to a `Supabase-first` runtime just for performance.
+  - Improve the current write path by:
+    - adding request/write timing instrumentation
+    - caching sheet headers
+    - reusing `sheet_row_num` to avoid unnecessary full-sheet reads on updates
+- **Rationale**:
+  - The app is already in active office use and the current operating model is stable and understood by the team.
+  - A `Supabase-first` move would help performance, but it is an architectural migration, not a small optimization.
+  - The safer immediate step is to reduce latency inside the current `Sheets-first` design.
+- **Impact**:
+  - Operators get faster known-row updates without changing the ownership boundary of business data.
+  - Timing logs now provide evidence for future performance decisions instead of relying on guesswork.
     - Otherwise calculate from `Custo_Unit` applying `Desconto 1` and `Desconto 2`.
 - **Rationale**:
   - Gross invoice unit price produces incorrect average stock cost.

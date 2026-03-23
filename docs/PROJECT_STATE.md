@@ -25,8 +25,9 @@ Last updated: 2026-03-23
 - New migration scaffolding now exists in parallel:
   - `backend/`: FastAPI materials backoffice + sync target skeleton
   - `frontend/`: React + Vite materials backoffice skeleton
-  - the backend can now also serve the built `frontend/dist` directly for operational same-origin use
-  - the materials backoffice is now also validated behind a Windows service (`MaterialsBackoffice`) via `NSSM`
+- the backend can now also serve the built `frontend/dist` directly for operational same-origin use
+- the materials backoffice is now also validated behind a Windows service (`MaterialsBackoffice`) via `NSSM`
+- the current operational host has already been validated on the internal LAN through `http://192.168.1.81:8000/`
 - HTML includes:
   - `<?!= include('css'); ?>` in `<head>`
   - `<?!= include('js'); ?>` before `</body>`
@@ -86,6 +87,25 @@ Last updated: 2026-03-23
   - `LEGACY_MATERIAIS` is reserved for old material cost history only.
 - Supabase sync now keeps immediate send as the first attempt and stores failed sheets for automatic retry every 10 minutes (up to 6 retries).
 - `LEGACY_MAO_OBRA` is now also included in the active Supabase sync flow via `src/Sync.gs`.
+- The materials backoffice now supports direct invoice-line destination `ESCRITORIO`:
+  - valid as direct non-stock consumption
+  - generates `MATERIAIS_MOV`
+  - does not generate `AFETACOES_OBRA`
+  - does not affect `STOCK_ATUAL`
+- Fuel business rule is now explicit:
+  - `GASOLEO` / `GASOLINA` with `Uso_Combustivel = VIATURA` stay non-stock direct vehicle cost
+  - `GASOLEO` / `GASOLINA` with `Uso_Combustivel = MAQUINA` or `GERADOR` cannot use `ESCRITORIO`
+- The invoice-item workspace now includes:
+  - launched-line totals (`sem IVA` / `com IVA`) in the history card header
+  - editable `Custo Total com IVA` that updates `Custo Unit sem IVA` without stripping decimal input mid-typing
+- Save-path timing instrumentation now exists in the materials backend:
+  - Google Sheets write timings
+  - Supabase mirror timings
+  - total request timings for invoice-line create/update flows
+- Google Sheets live writes were optimized for known rows:
+  - reuse cached sheet headers
+  - skip full-sheet reads when `sheet_row_num` is already known
+  - persist `sheet_row_num` back into runtime state after append/update
 - Keep global sheet constant names unchanged (`SHEET_REGISTOS`, etc.).
 - Do not alter Supabase sync structure unless explicitly requested.
 - Materials flow has changed in the spreadsheet model:
