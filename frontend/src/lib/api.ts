@@ -52,6 +52,7 @@ function translateBusinessDetail(detail: string) {
     "Fuel assigned to viatura requires destino VIATURA": "Combustivel para viatura exige o destino `VIATURA`.",
     "Fuel assigned to viatura requires matricula": "Combustivel para viatura exige a selecao de uma matricula.",
     "Fuel for maquina or gerador cannot use destino VIATURA": "Maquina e gerador nao podem usar o destino `VIATURA`.",
+    "Fuel for maquina or gerador cannot use destino ESCRITORIO": "Maquina e gerador nao podem usar o destino `ESCRITORIO`.",
     "Fuel direct consumption requires obra and fase": "Combustivel para maquina ou gerador exige `Obra` e `Fase` quando o destino for consumo direto.",
     "Only fuel items can use destino VIATURA": "So combustiveis podem usar o destino `VIATURA`.",
     "Fuel stock consumption requires MAQUINA or GERADOR": "Consumos de stock de combustivel exigem `MAQUINA` ou `GERADOR`.",

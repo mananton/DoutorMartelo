@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from http.client import IncompleteRead
+import logging
+from time import perf_counter
 import re
 import unicodedata
 from typing import Any
@@ -12,6 +14,7 @@ from backend.app.config import Settings
 
 
 Serializer = Callable[[dict[str, Any]], dict[str, Any]]
+logger = logging.getLogger("uvicorn.error")
 
 
 class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
@@ -20,6 +23,7 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.service = self._build_service()
+        self._header_cache: dict[tuple[str, int], list[str]] = {}
 
     def write_batches(self, batches: list[WriteBatch]) -> None:
         for batch in batches:
@@ -203,32 +207,53 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
         return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
     def _upsert_batch(self, batch: WriteBatch) -> None:
+        started_at = perf_counter()
         cfg = SHEET_WRITE_CONFIG[batch.entity]
         sheet_name = cfg["sheet_name"]
         id_field = cfg["id_field"]
         serializer: Serializer = cfg["serializer"]
 
+        header_started_at = perf_counter()
         headers = self._read_header(sheet_name)
-        current_rows = self._read_rows(sheet_name, headers)
-        index_by_id = {
-            str(row.get(id_field) or "").strip(): row_num
-            for row_num, row in current_rows
-            if str(row.get(id_field) or "").strip()
-        }
-
-        updates: list[tuple[int, list[Any]]] = []
-        appends: list[list[Any]] = []
+        header_duration_ms = (perf_counter() - header_started_at) * 1000
+        updates: list[tuple[int, list[Any], dict[str, Any]]] = []
+        unresolved: list[tuple[str, list[Any], dict[str, Any]]] = []
 
         for record in batch.records:
             values = serializer(record)
             row_values = [values.get(header, "") for header in headers]
             row_id = str(values.get(id_field) or "").strip()
-            if row_id and row_id in index_by_id:
-                updates.append((index_by_id[row_id], row_values))
+            sheet_row_num = self._coerce_sheet_row_num(record.get("sheet_row_num"))
+            if row_id and sheet_row_num:
+                updates.append((sheet_row_num, row_values, record))
             else:
-                appends.append(row_values)
+                unresolved.append((row_id, row_values, record))
 
-        for row_num, values in updates:
+        current_rows: list[tuple[int, dict[str, Any]]] = []
+        rows_duration_ms = 0.0
+        if unresolved:
+            rows_started_at = perf_counter()
+            current_rows = self._read_rows(sheet_name, headers)
+            rows_duration_ms = (perf_counter() - rows_started_at) * 1000
+            index_by_id = {
+                str(row.get(id_field) or "").strip(): row_num
+                for row_num, row in current_rows
+                if str(row.get(id_field) or "").strip()
+            }
+        else:
+            index_by_id = {}
+
+        appends: list[tuple[list[Any], dict[str, Any]]] = []
+
+        for row_id, row_values, record in unresolved:
+            if row_id and row_id in index_by_id:
+                record["sheet_row_num"] = index_by_id[row_id]
+                updates.append((index_by_id[row_id], row_values, record))
+            else:
+                appends.append((row_values, record))
+
+        write_started_at = perf_counter()
+        for row_num, values, record in updates:
             self._execute_request(
                 self.service.spreadsheets().values().update(
                     spreadsheetId=self.settings.google_spreadsheet_id,
@@ -237,22 +262,48 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
                     body={"values": [values]},
                 )
             )
+            record["sheet_row_num"] = row_num
+        update_duration_ms = (perf_counter() - write_started_at) * 1000
 
         if appends:
-            self._execute_request(
+            append_started_at = perf_counter()
+            append_result = self._execute_request(
                 self.service.spreadsheets().values().append(
                     spreadsheetId=self.settings.google_spreadsheet_id,
                     range=f"{sheet_name}!A:A",
                     valueInputOption="USER_ENTERED",
                     insertDataOption="INSERT_ROWS",
-                    body={"values": appends},
+                    body={"values": [values for values, _ in appends]},
                 )
             )
+            append_duration_ms = (perf_counter() - append_started_at) * 1000
+            self._assign_append_row_numbers(sheet_name, append_result, appends)
+        else:
+            append_duration_ms = 0.0
+
+        logger.info(
+            "timing.google_sheets.upsert entity=%s sheet=%s records=%s existing_rows=%s updates=%s appends=%s header_ms=%.2f rows_ms=%.2f update_ms=%.2f append_ms=%.2f total_ms=%.2f",
+            batch.entity,
+            sheet_name,
+            len(batch.records),
+            len(current_rows),
+            len(updates),
+            len(appends),
+            header_duration_ms,
+            rows_duration_ms,
+            update_duration_ms,
+            append_duration_ms,
+            (perf_counter() - started_at) * 1000,
+        )
 
     def _read_header(self, sheet_name: str) -> list[str]:
         return self._read_header_at_row(sheet_name, 1)
 
     def _read_header_at_row(self, sheet_name: str, row_num: int) -> list[str]:
+        cache_key = (sheet_name, row_num)
+        cached = self._header_cache.get(cache_key)
+        if cached is not None:
+            return list(cached)
         result = self._execute_request(
             self.service.spreadsheets().values().get(
                 spreadsheetId=self.settings.google_spreadsheet_id,
@@ -260,7 +311,9 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
             )
         )
         rows = result.get("values", [[]])
-        return rows[0]
+        header = rows[0]
+        self._header_cache[cache_key] = list(header)
+        return header
 
     def _read_rows(self, sheet_name: str, headers: list[str], *, start_row: int = 2) -> list[tuple[int, dict[str, Any]]]:
         result = self._execute_request(
@@ -287,6 +340,37 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
         if last_error:
             raise last_error
         return request.execute()
+
+    def _coerce_sheet_row_num(self, value: Any) -> int | None:
+        try:
+            parsed = int(value or 0)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 1 else None
+
+    def _assign_append_row_numbers(
+        self,
+        sheet_name: str,
+        result: dict[str, Any],
+        appended_rows: list[tuple[list[Any], dict[str, Any]]],
+    ) -> None:
+        updates = result.get("updates") or {}
+        updated_range = str(updates.get("updatedRange") or "")
+        match = re.search(rf"^{re.escape(sheet_name)}![A-Z]+(\d+):[A-Z]+(\d+)$", updated_range)
+        if not match:
+            match = re.search(rf"^{re.escape(sheet_name)}![A-Z]+(\d+)$", updated_range)
+            if not match:
+                return
+            start_row = int(match.group(1))
+            end_row = start_row
+        else:
+            start_row = int(match.group(1))
+            end_row = int(match.group(2))
+        expected_count = end_row - start_row + 1
+        if expected_count != len(appended_rows):
+            return
+        for offset, (_, record) in enumerate(appended_rows):
+            record["sheet_row_num"] = start_row + offset
 
 
 RowParser = Callable[[dict[str, Any], int], dict[str, Any] | None]

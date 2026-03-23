@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
+import logging
+from time import perf_counter
 from typing import Any
 
 from fastapi import HTTPException
@@ -27,6 +29,9 @@ from backend.app.schemas.materials import (
     MovimentoRecord,
 )
 from backend.app.services.state import RuntimeState
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class MaterialsService:
@@ -96,7 +101,7 @@ class MaterialsService:
             dependent_items.append(updated_item)
 
             fit_movement = self._find_movement_by_source("FIT", updated_item["id_item_fatura"])
-            if updated_item["destino"] in {"STOCK", "VIATURA"} and fit_movement:
+            if updated_item["destino"] in {"STOCK", "VIATURA", "ESCRITORIO"} and fit_movement:
                 dependent_movimentos.append(
                     self._reuse_record_identity(
                         self._build_fit_movement(
@@ -162,6 +167,7 @@ class MaterialsService:
         return FaturaItemsResponse(items=[], impacts=impacts)
 
     def create_fatura_items(self, id_fatura: str, items: list[FaturaItemCreate]) -> FaturaItemsResponse:
+        started_at = perf_counter()
         fatura = self._require_fatura(id_fatura)
         created_items: list[dict[str, Any]] = []
         generated_afetacoes: list[dict[str, Any]] = []
@@ -206,7 +212,7 @@ class MaterialsService:
 
             if fit["destino"] == "STOCK":
                 generated_movimentos.append(self._build_fit_movement(fit, fatura, "ENTRADA"))
-            elif fit["destino"] == "VIATURA":
+            elif fit["destino"] in {"VIATURA", "ESCRITORIO"}:
                 generated_movimentos.append(self._build_fit_movement(fit, fatura, "CONSUMO"))
             else:
                 afetacao = self._build_direct_afetacao(fit, fatura)
@@ -220,9 +226,18 @@ class MaterialsService:
             self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
         for movimento in generated_movimentos:
             self.state.movimentos[movimento["id_mov"]] = movimento
+        logger.info(
+            "timing.create_fatura_items id_fatura=%s items=%s generated_afetacoes=%s generated_movimentos=%s duration_ms=%.2f",
+            id_fatura,
+            len(created_items),
+            len(generated_afetacoes),
+            len(generated_movimentos),
+            (perf_counter() - started_at) * 1000,
+        )
         return FaturaItemsResponse(items=[self._to_model(FaturaItemRecord, item) for item in created_items], impacts=impacts)
 
     def update_fatura_item(self, id_fatura: str, item_id: str, payload: dict[str, Any]) -> FaturaItemRecord:
+        started_at = perf_counter()
         current = self.state.fatura_items.get(item_id)
         if not current or current["id_fatura"] != id_fatura:
             raise HTTPException(status_code=404, detail="Invoice item not found")
@@ -292,7 +307,7 @@ class MaterialsService:
 
         upserts: dict[str, list[dict[str, Any]]] = {"faturas_itens": [updated]}
         deletions: dict[str, list[str]] = {}
-        if updated["destino"] in {"STOCK", "VIATURA"}:
+        if updated["destino"] in {"STOCK", "VIATURA", "ESCRITORIO"}:
             movement = self._build_fit_movement(
                 updated,
                 fatura,
@@ -320,7 +335,7 @@ class MaterialsService:
 
         self._persist(upserts)
         self.state.fatura_items[item_id] = updated
-        if updated["destino"] in {"STOCK", "VIATURA"}:
+        if updated["destino"] in {"STOCK", "VIATURA", "ESCRITORIO"}:
             for movimento in upserts.get("materiais_mov", []):
                 self.state.movimentos[movimento["id_mov"]] = movimento
             if current_direct_afetacao:
@@ -335,6 +350,14 @@ class MaterialsService:
         if deletions:
             self._delete_records(deletions)
             self._delete_runtime_records(deletions)
+        logger.info(
+            "timing.update_fatura_item id_fatura=%s item_id=%s destino=%s deleted_groups=%s duration_ms=%.2f",
+            id_fatura,
+            item_id,
+            updated["destino"],
+            ",".join(sorted(deletions.keys())) if deletions else "-",
+            (perf_counter() - started_at) * 1000,
+        )
         return self._to_model(FaturaItemRecord, updated)
 
     def delete_fatura_item(self, id_fatura: str, item_id: str) -> None:
@@ -820,11 +843,27 @@ class MaterialsService:
         batches = [WriteBatch(entity=entity, records=records) for entity, records in groups.items() if records]
         if not batches:
             return
+        summary = ",".join(f"{batch.entity}:{len(batch.records)}" for batch in batches)
+        total_started_at = perf_counter()
+        google_started_at = perf_counter()
         self.google_sheets.write_batches(batches)
+        google_duration_ms = (perf_counter() - google_started_at) * 1000
+        logger.info(
+            "timing.persist.google batches=%s duration_ms=%.2f",
+            summary,
+            google_duration_ms,
+        )
         try:
+            supabase_started_at = perf_counter()
             self.supabase.write_batches(batches)
+            supabase_duration_ms = (perf_counter() - supabase_started_at) * 1000
             for batch in batches:
                 self.state.touch_sync_job(batch.entity, pending_retry=False, upserted=len(batch.records))
+            logger.info(
+                "timing.persist.supabase batches=%s duration_ms=%.2f",
+                summary,
+                supabase_duration_ms,
+            )
         except SupabaseAdapterError as exc:
             for batch in batches:
                 self.state.touch_sync_job(
@@ -833,6 +872,16 @@ class MaterialsService:
                     error=str(exc),
                     payload={"operation": "upsert", "rows": batch.records},
                 )
+            logger.warning(
+                "timing.persist.supabase_failed batches=%s error=%s",
+                summary,
+                exc,
+            )
+        logger.info(
+            "timing.persist.total batches=%s duration_ms=%.2f",
+            summary,
+            (perf_counter() - total_started_at) * 1000,
+        )
 
     def _delete_records(self, groups: dict[str, list[str]]) -> None:
         delete_groups = {entity: sorted({record_id for record_id in ids if record_id}) for entity, ids in groups.items() if ids}
@@ -892,6 +941,8 @@ class MaterialsService:
             item["matricula"] = None
             if destino == "VIATURA":
                 raise HTTPException(status_code=422, detail="Fuel for maquina or gerador cannot use destino VIATURA")
+            if destino == "ESCRITORIO":
+                raise HTTPException(status_code=422, detail="Fuel for maquina or gerador cannot use destino ESCRITORIO")
             if destino == "STOCK":
                 return
             if destino == "CONSUMO" and item.get("obra") and item.get("fase"):
@@ -904,6 +955,10 @@ class MaterialsService:
             raise HTTPException(status_code=422, detail="Only fuel items can use destino VIATURA")
         if destino == "STOCK" and natureza != "MATERIAL":
             raise HTTPException(status_code=422, detail="Only MATERIAL items can enter stock")
+        if destino == "ESCRITORIO":
+            item["obra"] = None
+            item["fase"] = None
+            return
         if destino == "CONSUMO" and (not item["obra"] or not item["fase"]):
             raise HTTPException(status_code=422, detail="Direct consumption requires obra and fase")
 
@@ -950,6 +1005,13 @@ class MaterialsService:
     def _build_fit_movement(self, fit: dict[str, Any], fatura: dict[str, Any], tipo: str) -> dict[str, Any]:
         now = self._now()
         destination = str(fit.get("destino") or "").strip().upper()
+        movement_obra = None
+        movement_fase = None
+        if tipo == "CONSUMO" and destination == "CONSUMO":
+            movement_obra = fit["obra"]
+            movement_fase = fit["fase"]
+        elif tipo == "CONSUMO" and destination == "ESCRITORIO":
+            movement_obra = "ESCRITORIO"
         return {
             "id_mov": self.state.next_id("MOV"),
             "tipo": tipo,
@@ -964,8 +1026,8 @@ class MaterialsService:
             "custo_total_sem_iva": fit["custo_total_sem_iva"],
             "iva": fit["iva"],
             "custo_total_com_iva": fit["custo_total_com_iva"],
-            "obra": fit["obra"] if tipo == "CONSUMO" and destination == "CONSUMO" else None,
-            "fase": fit["fase"] if tipo == "CONSUMO" and destination == "CONSUMO" else None,
+            "obra": movement_obra,
+            "fase": movement_fase,
             "fornecedor": fatura["fornecedor"],
             "nif": fatura["nif"],
             "nr_documento": fatura["nr_documento"],
@@ -1041,6 +1103,8 @@ class MaterialsService:
             return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar entrada de stock")]
         if destino == "VIATURA":
             return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar movimento tecnico associado a viatura")]
+        if destino == "ESCRITORIO":
+            return [OperationImpact(type="generated", entity="MATERIAIS_MOV", source="FATURAS_ITENS", summary="Vai gerar movimento tecnico de consumo para ESCRITORIO")]
         return [
             OperationImpact(type="generated", entity="AFETACOES_OBRA", source="FATURAS_ITENS", summary="Vai gerar afetacao direta"),
             OperationImpact(type="generated", entity="MATERIAIS_MOV", source="AFETACOES_OBRA", summary="Vai gerar movimento tecnico de consumo"),
@@ -1070,6 +1134,8 @@ class MaterialsService:
             return "STOCK"
         if normalized == "viatura":
             return "VIATURA"
+        if normalized in {"escritorio", "escritorio_", "office"}:
+            return "ESCRITORIO"
         return "CONSUMO"
 
     def _normalize_uso_combustivel(self, value: Any, natureza: str | None = None) -> str:

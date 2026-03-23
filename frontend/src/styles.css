@@ -394,6 +394,41 @@ textarea {
   align-items: center;
 }
 
+.history-totals-card {
+  min-width: 15.5rem;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(215, 224, 242, 0.9);
+  border-radius: 1rem;
+  background: rgba(245, 248, 255, 0.92);
+  text-align: right;
+}
+
+.history-totals-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.history-totals-values {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.history-totals-values strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.history-totals-values span {
+  color: var(--primary);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

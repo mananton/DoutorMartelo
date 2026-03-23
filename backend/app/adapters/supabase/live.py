@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import logging
+from time import perf_counter
 from typing import Any
 
 import httpx
@@ -23,6 +25,7 @@ TABLE_CONFIG: dict[str, dict[str, str]] = {
     "materiais_mov": {"table": "materiais_mov", "conflict": "id_mov", "id_field": "id_mov"},
     "stock_atual": {"table": "stock_atual", "conflict": "id_item", "id_field": "id_item"},
 }
+logger = logging.getLogger("uvicorn.error")
 
 
 class LiveSupabaseAdapter(SupabaseAdapter):
@@ -45,6 +48,7 @@ class LiveSupabaseAdapter(SupabaseAdapter):
                 if not config:
                     raise SupabaseAdapterError(f"No Supabase table mapping for {batch.entity}")
                 payload = [self._json_ready(record) for record in batch.records]
+                started_at = perf_counter()
                 try:
                     response = client.post(
                         f"{self.base_url}/{config['table']}",
@@ -56,6 +60,14 @@ class LiveSupabaseAdapter(SupabaseAdapter):
                     raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}: {exc}") from exc
                 if response.status_code >= 300:
                     raise SupabaseAdapterError(f"Supabase mirror failed for {batch.entity}: HTTP {response.status_code} {response.text}")
+                logger.info(
+                    "timing.supabase.upsert entity=%s table=%s records=%s duration_ms=%.2f status=%s",
+                    batch.entity,
+                    config["table"],
+                    len(batch.records),
+                    (perf_counter() - started_at) * 1000,
+                    response.status_code,
+                )
 
     def delete_records(self, entity: str, ids: list[str]) -> None:
         if not ids:

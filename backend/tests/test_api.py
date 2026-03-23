@@ -220,6 +220,30 @@ class MaterialsApiTests(unittest.TestCase):
         stock_list = self.client.get("/api/stock-atual").json()
         self.assertFalse(any(entry["id_item"] == service_catalog["id_item"] for entry in stock_list))
 
+    def test_direct_office_invoice_item_generates_movement_without_stock_or_afetacao(self) -> None:
+        fatura = self._create_fatura("002B-OFF")
+
+        item = self._create_item(
+            fatura["id_fatura"],
+            destino="ESCRITORIO",
+            descricao_original="Prego 30",
+            id_item=str(self.catalog["id_item"]),
+        )
+        self.assertEqual(item["destino"], "ESCRITORIO")
+
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 1)
+        self.assertEqual(movimentos[0]["source_type"], "FIT")
+        self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
+        self.assertEqual(movimentos[0]["obra"], "ESCRITORIO")
+        self.assertIsNone(movimentos[0]["fase"])
+        stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 0)
+        stock_list = self.client.get("/api/stock-atual").json()
+        office_entry = next(entry for entry in stock_list if entry["id_item"] == self.catalog["id_item"])
+        self.assertEqual(office_entry["stock_atual"], 0)
+
     def test_stock_fuel_afetacao_requires_machine_or_generator_usage(self) -> None:
         fuel_catalog = self._create_catalog_entry(
             descricao_original="Gasolina simples",
@@ -269,6 +293,34 @@ class MaterialsApiTests(unittest.TestCase):
         )
         self.assertEqual(valid.status_code, 201)
         self.assertEqual(valid.json()["uso_combustivel"], "MAQUINA")
+
+    def test_fuel_machine_or_generator_cannot_use_office_destino(self) -> None:
+        fuel_catalog = self._create_catalog_entry(
+            descricao_original="Gasoleo escritorio",
+            item_oficial="GASOLEO_TESTE",
+            natureza="GASOLEO",
+            unidade="Lt",
+        )
+        fatura = self._create_fatura("002C-OFF")
+
+        response = self.client.post(
+            f"/api/faturas/{fatura['id_fatura']}/itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Gasoleo escritorio",
+                        "quantidade": 30,
+                        "custo_unit": 1.2,
+                        "iva": 23,
+                        "destino": "ESCRITORIO",
+                        "id_item": fuel_catalog["id_item"],
+                        "uso_combustivel": "GERADOR",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "Fuel for maquina or gerador cannot use destino ESCRITORIO")
 
     def test_sync_retry_marks_pending_when_supabase_fails(self) -> None:
         container = self.app.state.container
@@ -356,6 +408,32 @@ class MaterialsApiTests(unittest.TestCase):
         movimentos = self.client.get("/api/materiais-mov").json()
         self.assertEqual(len(movimentos), 1)
         self.assertEqual(movimentos[0]["source_type"], "AFO")
+
+    def test_patch_invoice_item_to_office_reconciles_generated_records(self) -> None:
+        fatura = self._create_fatura("005-OFF")
+        item = self._create_item(fatura["id_fatura"], destino="STOCK")
+
+        response = self.client.patch(
+            f"/api/faturas/{fatura['id_fatura']}/itens/{item['id_item_fatura']}",
+            json={
+                "destino": "ESCRITORIO",
+                "quantidade": 25,
+                "custo_unit": 0.3,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["destino"], "ESCRITORIO")
+
+        detail = self.client.get(f"/api/faturas/{fatura['id_fatura']}").json()
+        self.assertEqual(detail["items"][0]["destino"], "ESCRITORIO")
+
+        self.assertEqual(self.client.get("/api/afetacoes").json(), [])
+        movimentos = self.client.get("/api/materiais-mov").json()
+        self.assertEqual(len(movimentos), 1)
+        self.assertEqual(movimentos[0]["source_type"], "FIT")
+        self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
+        self.assertEqual(movimentos[0]["obra"], "ESCRITORIO")
+        self.assertIsNone(movimentos[0]["fase"])
 
     def test_delete_invoice_item_cleans_generated_records(self) -> None:
         fatura = self._create_fatura("006")
