@@ -209,6 +209,16 @@ function isoWeekClient_(dateStr) {
   return d.getFullYear() + '-S' + String(weekNum).padStart(2, '0');
 }
 
+function isDashboardMaterialMov_(item) {
+  const row = item || {};
+  if (Object.prototype.hasOwnProperty.call(row, 'dashboard_consumo')) {
+    return !!row.dashboard_consumo;
+  }
+  const tipo = String(row.tipo || '').trim().toUpperCase();
+  const obra = String(row.obra || '').trim();
+  return tipo === 'CONSUMO' && !!obra && obra !== '-' && obra.toUpperCase() !== 'ESCRITORIO';
+}
+
 function buildDashboardFromRaw_(raw) {
   const registos = Array.isArray(raw.registos) ? raw.registos : [];
   const legacyMaoObra = Array.isArray(raw.legacy_mao_obra) ? raw.legacy_mao_obra : [];
@@ -363,9 +373,8 @@ function buildDashboardFromRaw_(raw) {
   let custoMateriais = 0;
   for (let i = 0; i < materiaisMov.length; i++) {
     const m = materiaisMov[i] || {};
-    if (String(m.tipo || '').trim().toUpperCase() !== 'CONSUMO') continue;
+    if (!isDashboardMaterialMov_(m)) continue;
     const obra = String(m.obra || '').trim();
-    if (!obra) continue;
     const fase = String(m.fase || '-').trim() || '-';
     const custo = Number(m.custo) || 0;
     const qtd = Number(m.qtd) || 0;
@@ -4256,7 +4265,7 @@ function clearGlobalFilter() {
 /* ── MATERIAIS HELPERS ──────────────────────────────────── */
 function filterMateriaisByDate() {
   return matMovAll.filter(m =>
-    m.tipo && m.tipo.toUpperCase() === 'CONSUMO' && dateInRange(m.data)
+    isDashboardMaterialMov_(m) && dateInRange(m.data)
   );
 }
 function filterLegacyMateriaisByDate() {

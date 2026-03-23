@@ -37,7 +37,7 @@ function buildRawData_(ss) {
     viagens: readViagens_(viaSheet),
     deslocacoes: readDeslocacoes_(deslocSheet),
     ferias: readFerias_(feriasSheet),
-    materiais_mov: readMateriaisMov_(matSheet),
+    materiais_mov: readMateriaisMovDashboard_(matSheet),
     legacy_mao_obra: readLegacyMaoObra_(legacyMaoObraSheet),
     legacy_materiais: readLegacyMateriais_(legacyMateriaisSheet)
   };

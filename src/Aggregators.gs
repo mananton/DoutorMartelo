@@ -27,7 +27,7 @@ function buildData_(ss) {
   const viagens = readViagens_(viaSheet);
   const deslocacoes = readDeslocacoes_(deslocSheet);
   const ferias = readFerias_(feriasSheet);
-  const materiaisMov = readMateriaisMov_(matSheet);
+  const materiaisMov = readMateriaisMovDashboard_(matSheet);
   const legacyMaoObra = readLegacyMaoObra_(legacyMaoObraSheet);
   const legacyMateriais = readLegacyMateriais_(legacyMateriaisSheet);
 
@@ -190,10 +190,9 @@ function buildData_(ss) {
   let custoMateriais = 0;
   for (let i = 0; i < (materiaisMov || []).length; i++) {
     const m = materiaisMov[i] || {};
-    if (String(m.tipo || "").trim().toUpperCase() !== "CONSUMO") continue;
+    if (!m.dashboard_consumo) continue;
 
     const obra = String(m.obra || "").trim();
-    if (!obra) continue;
 
     const fase = String(m.fase || "\u2014").trim() || "\u2014";
     const custo = parseFloat(m.custo) || 0;

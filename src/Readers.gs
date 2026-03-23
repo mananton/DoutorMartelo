@@ -587,6 +587,108 @@ function readMateriaisMov_(sheet) {
   return out;
 }
 
+function readMateriaisMovDashboard_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  const colMap = getColMap_(sheet, 1);
+  const cId = pickCol_(colMap, ["ID_Mov", "ID_Movimento", "ID"], -1);
+  const cData = pickCol_(colMap, ["Data"], -1);
+  const cTipo = pickCol_(colMap, ["Tipo"], -1);
+  const cObra = pickCol_(colMap, ["Obra"], -1);
+  const cFase = pickCol_(colMap, ["Fase"], -1);
+  const cMaterial = pickCol_(colMap, ["Material", "Item_Oficial", "Item Oficial", "Descricao_Original", "Descricao Original"], -1);
+  const cIdItem = pickCol_(colMap, ["ID_Item", "Id_Item"], -1);
+  const cUnidade = pickCol_(colMap, ["Unidade", "Unidade_Material", "Unidade Material"], -1);
+  const cQtd = pickCol_(colMap, ["Quantidade"], -1);
+  const cCustoTotComIva = pickCol_(colMap, ["Custo_Total Com IVA", "Custo Total Com IVA", "Custo_Com_IVA", "Custo Com IVA"], -1);
+  const cCustoTotSemIva = pickCol_(colMap, ["Custo_Total Sem IVA", "Custo Total Sem IVA", "Custo_Sem_IVA", "Custo Sem IVA"], -1);
+  const cCustoTotLegacy = pickCol_(colMap, ["Custo_Total", "Custo Total"], -1);
+  const cCustoUnit = pickCol_(colMap, ["Custo_Unit", "Custo Unit", "Custo Unitario", "Custo Unitário"], -1);
+  const cDesc1 = pickCol_(colMap, ["Desconto 1", "Desconto_1", "Desconto1"], -1);
+  const cDesc2 = pickCol_(colMap, ["Desconto 2", "Desconto_2", "Desconto2"], -1);
+  const cIva = pickCol_(colMap, ["IVA"], -1);
+  const cFornecedor = pickCol_(colMap, ["Fornecedor"], -1);
+  const cNif = pickCol_(colMap, ["NIF"], -1);
+  const cEntrega = pickCol_(colMap, ["Entrega?", "Entrega"], -1);
+  const cDocFatura = pickCol_(colMap, ["Nº Doc/Fatura", "N Doc/Fatura", "Doc_Fatura", "Doc/Fatura"], -1);
+  const cLote = pickCol_(colMap, ["Lote"], -1);
+  const cObs = pickCol_(colMap, ["Observação", "Observacoes", "Observacao", "Obs"], -1);
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    const s = String(v || "")
+      .replace(/\s/g, "")
+      .replace(/€/g, "")
+      .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+      .replace(",", ".");
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const out = [];
+
+  rows.forEach(function(r, i) {
+    const tipo = cTipo >= 0 ? String(r[cTipo] || "").trim().toUpperCase() : "";
+    if (!tipo) return;
+
+    const dateStr = formatDateValue_(cData >= 0 ? r[cData] : null, false);
+    if (!dateStr) return;
+
+    const obra = cObra >= 0 ? String(r[cObra] || "").trim() : "";
+    const normalizedObra = normalizeHeader_(obra);
+    const dashboardConsumo = tipo === "CONSUMO" && !!obra && obra !== "-" && normalizedObra !== "escritorio";
+    const id = (cId >= 0 && r[cId]) ? String(r[cId]).trim() : ("MOV-" + (i + 2));
+    const idItem = cIdItem >= 0 ? String(r[cIdItem] || "").trim() : "";
+    const material = cMaterial >= 0 ? String(r[cMaterial] || "").trim() : "";
+    const qtd = cQtd >= 0 ? num_(r[cQtd]) : 0;
+    const custoUnit = cCustoUnit >= 0 ? num_(r[cCustoUnit]) : 0;
+    const custoTotComIva = cCustoTotComIva >= 0 ? num_(r[cCustoTotComIva]) : 0;
+    const custoTotSemIva = cCustoTotSemIva >= 0 ? num_(r[cCustoTotSemIva]) : 0;
+
+    let custoTot = 0;
+    if (cCustoTotComIva >= 0) custoTot = custoTotComIva;
+    else if (cCustoTotLegacy >= 0) custoTot = num_(r[cCustoTotLegacy]);
+    else if (cCustoTotSemIva >= 0) custoTot = custoTotSemIva;
+    else custoTot = qtd * custoUnit;
+
+    out.push({
+      id_mov: id,
+      id: id,
+      data: dateStr,
+      tipo: tipo,
+      obra: obra,
+      fase: cFase >= 0 ? String(r[cFase] || "").trim() : "",
+      id_item: idItem,
+      material: material || idItem || "\u2014",
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      quantidade: qtd,
+      qtd: qtd,
+      custo_unit: custoUnit,
+      custo_total: custoTot,
+      custo_total_com_iva: cCustoTotComIva >= 0 ? custoTotComIva : custoTot,
+      custo_total_sem_iva: cCustoTotSemIva >= 0 ? custoTotSemIva : 0,
+      custo: custoTot,
+      iva: cIva >= 0 ? num_(r[cIva]) : 0,
+      desconto_1: cDesc1 >= 0 ? num_(r[cDesc1]) : 0,
+      desconto_2: cDesc2 >= 0 ? num_(r[cDesc2]) : 0,
+      fornecedor: cFornecedor >= 0 ? String(r[cFornecedor] || "").trim() : "",
+      nif: cNif >= 0 ? String(r[cNif] || "").trim() : "",
+      entrega: cEntrega >= 0 ? String(r[cEntrega] || "").trim() : "",
+      doc_fatura: cDocFatura >= 0 ? String(r[cDocFatura] || "").trim() : "",
+      lote: cLote >= 0 ? String(r[cLote] || "").trim() : "",
+      observacao: cObs >= 0 ? String(r[cObs] || "").trim() : "",
+      dashboard_consumo: dashboardConsumo,
+      source: "materiais_mov"
+    });
+  });
+
+  return out;
+}
+
 function readFerias_(sheet) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
