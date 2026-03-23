@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-03-20
+Last updated: 2026-03-23
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
@@ -25,6 +25,8 @@ Last updated: 2026-03-20
 - New migration scaffolding now exists in parallel:
   - `backend/`: FastAPI materials backoffice + sync target skeleton
   - `frontend/`: React + Vite materials backoffice skeleton
+  - the backend can now also serve the built `frontend/dist` directly for operational same-origin use
+  - the materials backoffice is now also validated behind a Windows service (`MaterialsBackoffice`) via `NSSM`
 - HTML includes:
   - `<?!= include('css'); ?>` in `<head>`
   - `<?!= include('js'); ?>` before `</body>`
@@ -195,6 +197,8 @@ Last updated: 2026-03-20
   - manual `AFETACOES_OBRA` stock rows are now processed on save in the new app; the temporary UI checkbox/process button was removed
   - the new app now exposes a manual `Recarregar do Sheets` action instead of forcing backend restart when operators need to rehydrate runtime state from Google Sheets
 - `Sincronizacao` now shows the core entity jobs even before any sync attempt happens in the current backend session
+- The built frontend now resolves API base safely for LAN access:
+  - if the app is opened from another machine through `http://<IP-DO-PC>:8000/`, it no longer falls back to `127.0.0.1`
 - `FATURAS_ITENS` now has guided item selection from catalog, quick-create of catalog items, and a readable impact preview before save
 - `AFETACOES_OBRA` now has guided `ID_Item` lookup, live stock snapshot lookup, and clearer business-error messaging for stock-cost issues
   - the app now includes a read-only technical view for:
@@ -222,6 +226,17 @@ Last updated: 2026-03-20
   - legacy GAS material-trigger automation is now explicitly disabled by default in `src/main.gs`
     - the new materials backoffice owns the rich materials flow
     - old trigger-driven reconciliation must stay off unless intentionally reactivated
+  - the current operational hosting model is now validated:
+    - built frontend served by FastAPI
+    - FastAPI hosted by the `MaterialsBackoffice` Windows service
+    - LAN access through the host machine IP on TCP `8000`
+    - Windows Firewall inbound rule required for that LAN access
+  - `FATURAS` list order in the new app is now descending by newest registration first
+  - `STOCK_ATUAL` now ignores non-stock direct expenses:
+    - `SERVICO`
+    - `ALUGUER`
+    - `TRANSPORTE`
+    - fuel with `Uso_Combustivel = VIATURA`
 
 ## 7. Current Risks / Watchpoints
 - Some source comments/UI labels still show encoding artifacts in parts of the codebase (non-blocking but noisy).
@@ -235,6 +250,15 @@ Last updated: 2026-03-20
   - `Destino = VIATURA`
   - movement generation into `MATERIAIS_MOV`
   - tax/cost interpretation on fuel invoice lines
+- The materials backoffice now supports an operational same-origin mode:
+  - build `frontend/dist`
+  - serve it from FastAPI
+  - keep `vite dev` only for development sessions
+- Windows operational helpers now exist under `backend/ops/`:
+  - `Run-MaterialsBackoffice.ps1`
+  - `Update-MaterialsBackoffice.ps1`
+  - `Install-MaterialsBackofficeService.ps1`
+  - the recommended Windows service wrapper is `NSSM`
 - Edit/delete flows are now implemented in the app, but they still need validation on a wider sample of real business rows from the live workbook.
 - `MATERIAIS_MOV` can still look duplicated to operators when two `STOCK` afetacoes hit the same item/date/obra/fase context; this now has a safe diagnostic path but still needs UX clarification.
 - Watch for Apps Script trigger behavior differences between:

@@ -1,6 +1,6 @@
 # Open Items
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-03-23
 
 ## P1 - Define Materials Backoffice MVP
 - A dedicated materials/purchasing app is now the recommended next step.
@@ -31,6 +31,7 @@ Last reviewed: 2026-03-20
       - `MATERIAIS_CAD`
       - manual `AFETACOES_OBRA`
     - read-only technical view now exists for `STOCK_ATUAL` and `MATERIAIS_MOV`
+    - the app can now be served operationally by FastAPI itself once `frontend/dist` is built
 
 ## P1 - Harden Materials Backoffice Runtime Hydration
 - The backend now hydrates startup state from Google Sheets.
@@ -41,6 +42,37 @@ Last reviewed: 2026-03-20
   - decide whether to expose a more explicit per-screen refresh indicator after `Recarregar do Sheets`
   - decide later whether `Fase` should remain a global list or become explicitly constrained per obra in the new app
   - keep validating cached option sources (`FORNECEDORES`, `VEICULOS`, `OBRAS/FASES`) after backend restart and manual reload
+
+## P1 - Operationalize Materials Backoffice Access
+- The app now runs in a single-URL operational mode for internal office use:
+  - build `frontend/dist`
+  - serve it from FastAPI
+  - host FastAPI behind the `MaterialsBackoffice` Windows service
+- Windows helper scripts now exist for:
+  - operational run
+  - build/test/update
+  - service installation through `NSSM`
+- Next step:
+  - add minimal access control before broader office rollout
+  - keep the service host/recovery steps documented for the office
+  - formalize a short recovery checklist for:
+    - service restart
+    - frontend rebuild
+    - firewall rule verification
+
+## P1 - Add Direct `ESCRITORIO` Consumption Destination
+- The next materials-flow extension is to allow direct consumption to `ESCRITORIO`.
+- This should expand the current destination model beyond:
+  - `STOCK`
+  - `VIATURA`
+  - `Obra` + `Fase`
+- Expected follow-up:
+  - define where `ESCRITORIO` is valid in:
+    - `FATURAS_ITENS`
+    - generated `MATERIAIS_MOV`
+    - reporting / stock interpretation
+  - confirm which `Natureza` values may use this destination
+  - keep `ESCRITORIO` as non-stock direct consumption
 
 ## P1 - Validate Fuel And Vehicle Operating Flow In Real Rows
 - Fuel support now exists in the new backoffice with:

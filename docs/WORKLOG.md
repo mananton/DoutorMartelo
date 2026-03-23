@@ -9,6 +9,25 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ---
 
+## 2026-03-23
+
+### `552d7e7`
+- **Type**: feat / operations
+- **Scope**: `backend/app/*`, `frontend/src/*`, `backend/ops/*`, `backend/tests/*`
+- **Summary**:
+  - Finalized same-origin operational serving so a colleague can open the materials backoffice through the host machine URL instead of `vite dev`.
+  - Added Windows operation scripts for:
+    - service installation
+    - safe update/build/test
+    - operational backend launch
+  - Fixed stock interpretation so direct `SERVICO`, `ALUGUER`, `TRANSPORTE`, and fuel for `VIATURA` do not pollute `STOCK_ATUAL`.
+  - Changed `FATURAS` listing to show the most recently created invoices first.
+  - Hardened the service installer to reject Microsoft Store / `WindowsApps` Python for Windows service use.
+- **Impact**:
+  - The materials backoffice is now usable on the internal LAN through a Windows service on a stable machine.
+  - Day-to-day operation no longer depends on a manually kept backend terminal plus Vite dev server.
+  - Technical stock views now align better with the business meaning of direct-service and vehicle-fuel expenses.
+
 ## 2026-03-10
 
 ## 2026-03-13
@@ -372,6 +391,21 @@ Purpose: chronological, commit-based project history for fast handoff.
   - Runtime behavior against live Sheets is more observable and less likely to drift silently under evolving spreadsheet structure.
 
 ## 2026-03-20
+
+### Working tree
+- **Type**: ops / docs / hardening
+- **Scope**: `backend/ops/*`, `backend/README.md`, `docs/PROJECT_STATE.md`, `docs/OPEN_ITEMS.md`
+- **Summary**:
+  - Added Windows operational scripts for the materials backoffice:
+    - foreground operational run
+    - build/test/update flow
+    - Windows service installation via `NSSM`
+  - Documented the safe office-hours update pattern:
+    - prepare build/tests without restart
+    - restart only in a short maintenance pause
+- **Impact**:
+  - The project is now closer to a stable internal-office deployment model.
+  - The manual terminal workflow can be replaced later by a more predictable Windows service setup.
 
 ### `720b35f`
 - **Type**: feat / fix / stabilization

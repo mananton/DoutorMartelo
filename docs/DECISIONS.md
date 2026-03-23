@@ -462,6 +462,25 @@ Format: short ADR-style records with rationale and impact.
   - Fuel lines now carry richer context through `FATURAS_ITENS`, generated movement rows, and vehicle attribution.
   - `VEICULOS` becomes an operational option source for the materials backoffice and must stay stable.
 
+## D-029: Internal office operation uses a single FastAPI-served URL backed by a Windows service
+- **Status**: accepted
+- **Date**: 2026-03-23
+- **Commit**: `552d7e7`
+- **Decision**:
+  - Serve the built React materials backoffice from FastAPI itself in operational use.
+  - Run FastAPI on the host machine through the `MaterialsBackoffice` Windows service using `NSSM`.
+  - Treat the host machine IP plus TCP `8000` as the current internal access path for office users.
+  - Keep development mode separate from operational mode:
+    - development -> `uvicorn --reload` + Vite dev server
+    - operational -> built frontend + Windows service
+- **Rationale**:
+  - Office users need one stable URL and should not depend on two local dev processes.
+  - The same-origin deployment avoids the earlier failure mode where a built frontend still targeted `127.0.0.1` from another machine.
+  - A Windows service is a better operational fit than a manually kept terminal.
+- **Impact**:
+  - The app can now be used by a colleague through the LAN while development continues separately.
+  - Operational troubleshooting now includes service state, logs, and Windows Firewall inbound rule checks.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.
