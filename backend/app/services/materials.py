@@ -36,7 +36,15 @@ class MaterialsService:
         self.supabase = supabase
 
     def list_faturas(self) -> list[FaturaRecord]:
-        return [self._to_model(FaturaRecord, item) for item in self.state.faturas.values()]
+        ordered = sorted(
+            self.state.faturas.values(),
+            key=lambda item: (
+                item.get("created_at") or datetime.min.replace(tzinfo=UTC),
+                str(item.get("id_fatura") or ""),
+            ),
+            reverse=True,
+        )
+        return [self._to_model(FaturaRecord, item) for item in ordered]
 
     def get_fatura(self, id_fatura: str) -> FaturaDetail:
         fatura = self._require_fatura(id_fatura)
@@ -778,6 +786,8 @@ class MaterialsService:
         for mov in movimentos:
             if mov["id_item"] != id_item:
                 continue
+            if not self._movement_affects_stock(mov):
+                continue
             amount = mov["quantidade"] * mov["custo_unit"]
             if mov["tipo"] == "ENTRADA":
                 qty += mov["quantidade"]
@@ -789,8 +799,16 @@ class MaterialsService:
         return StockSnapshot(id_item=id_item, item_oficial=catalog["item_oficial"], unidade=catalog["unidade"], stock_atual=round(qty, 6), custo_medio_atual=round(avg, 6))
 
     def list_stock_snapshots(self) -> list[StockSnapshot]:
-        ids = set(self.state.catalog.keys())
-        ids.update(movement["id_item"] for movement in self.state.movimentos.values() if movement.get("id_item"))
+        ids = {
+            id_item
+            for id_item, catalog in self.state.catalog.items()
+            if self._natureza_tracks_stock(catalog.get("natureza"))
+        }
+        ids.update(
+            movement["id_item"]
+            for movement in self.state.movimentos.values()
+            if movement.get("id_item") and self._movement_affects_stock(movement)
+        )
         snapshots = [self.get_stock_snapshot(id_item) for id_item in sorted(ids)]
         return sorted(snapshots, key=lambda item: item.id_item)
 
@@ -1071,6 +1089,47 @@ class MaterialsService:
 
     def _is_fuel_nature(self, natureza: str | None) -> bool:
         return str(natureza or "").strip().upper() in {"GASOLEO", "GASOLINA"}
+
+    def _natureza_tracks_stock(self, natureza: Any) -> bool:
+        return str(natureza or "").strip().upper() in {"MATERIAL", "GASOLEO", "GASOLINA"}
+
+    def _movement_affects_stock(self, movement: dict[str, Any]) -> bool:
+        source_type = str(movement.get("source_type") or "").strip().upper()
+        source_id = str(movement.get("source_id") or "").strip()
+        movement_type = str(movement.get("tipo") or "").strip().upper()
+
+        if source_type == "FIT":
+            fit = self.state.fatura_items.get(source_id)
+            if fit:
+                return str(fit.get("destino") or "").strip().upper() == "STOCK"
+            return movement_type == "ENTRADA" and self._natureza_tracks_stock(self._movement_natureza(movement))
+
+        if source_type == "AFO":
+            afetacao = self.state.afetacoes.get(source_id)
+            if afetacao:
+                return str(afetacao.get("origem") or "").strip().upper() == "STOCK"
+            observacoes = str(movement.get("observacoes") or "")
+            if "[SRC_FIT:" in observacoes:
+                return False
+            return movement_type == "CONSUMO" and self._natureza_tracks_stock(self._movement_natureza(movement))
+
+        return movement_type == "ENTRADA" and self._natureza_tracks_stock(self._movement_natureza(movement))
+
+    def _movement_natureza(self, movement: dict[str, Any]) -> str | None:
+        source_type = str(movement.get("source_type") or "").strip().upper()
+        source_id = str(movement.get("source_id") or "").strip()
+        if source_type == "FIT" and source_id:
+            fit = self.state.fatura_items.get(source_id)
+            if fit:
+                return str(fit.get("natureza") or "").strip().upper() or None
+        if source_type == "AFO" and source_id:
+            afetacao = self.state.afetacoes.get(source_id)
+            if afetacao:
+                return str(afetacao.get("natureza") or "").strip().upper() or None
+        catalog = self.state.catalog.get(str(movement.get("id_item") or "").strip())
+        if catalog:
+            return str(catalog.get("natureza") or "").strip().upper() or None
+        return None
 
     def _normalize(self, value: str | None) -> str:
         return " ".join((value or "").strip().lower().split())

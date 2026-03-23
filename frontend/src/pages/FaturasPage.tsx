@@ -479,13 +479,16 @@ export function FaturasPage() {
               <div className="section-copy">Regista se a fatura ja foi paga e, quando aplicavel, a respetiva data de pagamento.</div>
               <div className="form-grid">
                 <label className="checkbox-field">
-                  <span>Paga?</span>
-                  <input
-                    name="paga"
-                    type="checkbox"
-                    checked={form.paga}
-                    onChange={(event) => updatePagaField(event.target.checked)}
-                  />
+                  <span>Pagamento</span>
+                  <span className="checkbox-control">
+                    <input
+                      name="paga"
+                      type="checkbox"
+                      checked={form.paga}
+                      onChange={(event) => updatePagaField(event.target.checked)}
+                    />
+                    <span>Paga?</span>
+                  </span>
                 </label>
                 <label>
                   Data Pagamento

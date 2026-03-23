@@ -1,6 +1,45 @@
 export type JsonRecord = Record<string, unknown>;
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+function stripTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function isLoopbackHost(hostname: string) {
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+}
+
+function resolveConfiguredApiBase(configured: string | undefined) {
+  if (!configured) {
+    return null;
+  }
+  if (typeof window === "undefined") {
+    return stripTrailingSlash(configured);
+  }
+  try {
+    const resolved = new URL(configured, window.location.origin);
+    const currentIsLoopback = isLoopbackHost(window.location.hostname);
+    const configuredIsLoopback = isLoopbackHost(resolved.hostname);
+    if (!currentIsLoopback && configuredIsLoopback) {
+      return stripTrailingSlash(window.location.origin);
+    }
+    return stripTrailingSlash(`${resolved.origin}${resolved.pathname}`);
+  } catch {
+    return stripTrailingSlash(configured);
+  }
+}
+
+function defaultApiBase() {
+  if (typeof window === "undefined") {
+    return "http://127.0.0.1:8000";
+  }
+  const port = window.location.port;
+  if (port === "5173" || port === "4173") {
+    return "http://127.0.0.1:8000";
+  }
+  return stripTrailingSlash(window.location.origin);
+}
+
+const API_BASE = resolveConfiguredApiBase(import.meta.env.VITE_API_BASE_URL) ?? defaultApiBase();
 
 function translateBusinessDetail(detail: string) {
   const known: Record<string, string> = {

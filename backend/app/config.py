@@ -35,6 +35,9 @@ class Settings:
     supabase_service_role_key: str | None
     supabase_schema: str
     disable_live_adapters: bool
+    cors_allowed_origins: list[str]
+    frontend_dist_dir: str | None
+    disable_frontend_serving: bool
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -46,6 +49,12 @@ class Settings:
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
             supabase_schema=os.getenv("SUPABASE_SCHEMA", "public"),
             disable_live_adapters=_read_bool_env("BACKEND_DISABLE_LIVE_ADAPTERS"),
+            cors_allowed_origins=_read_csv_env(
+                "BACKOFFICE_CORS_ALLOWED_ORIGINS",
+                default=["http://127.0.0.1:5173", "http://localhost:5173"],
+            ),
+            frontend_dist_dir=os.getenv("BACKOFFICE_FRONTEND_DIST_DIR"),
+            disable_frontend_serving=_read_bool_env("BACKOFFICE_DISABLE_FRONTEND_SERVING"),
         )
 
     @property
@@ -68,3 +77,10 @@ class Settings:
 def _read_bool_env(name: str) -> bool:
     value = (os.getenv(name) or "").strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def _read_csv_env(name: str, *, default: list[str] | None = None) -> list[str]:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return list(default or [])
+    return [item.strip() for item in raw.split(",") if item.strip()]

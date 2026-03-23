@@ -1,5 +1,5 @@
 :root {
-  --bg: #f8fafc;
+  --bg: #dce8f8;
   --panel: #ffffff;
   --line: #d7e0f2;
   --text: #16306b;
@@ -18,8 +18,8 @@ body {
   font-family: "Fira Sans", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 22rem),
-    linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.2), transparent 22rem),
+    linear-gradient(180deg, #eef4fd 0%, var(--bg) 100%);
 }
 
 a {
@@ -301,16 +301,36 @@ textarea {
 
 .checkbox-field {
   align-content: start;
+  gap: 0.5rem;
 }
 
-.checkbox-field input {
-  width: auto;
+.checkbox-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: fit-content;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.checkbox-control input {
+  width: 1.1rem;
+  height: 1.1rem;
   margin: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.checkbox-control span {
+  line-height: 1;
+  cursor: pointer;
 }
 
 .btn {

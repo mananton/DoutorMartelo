@@ -100,8 +100,8 @@ class ServiceContainer:
         ],
     }
 
-    def __init__(self) -> None:
-        self.settings = Settings.from_env()
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or Settings.from_env()
         self.state = RuntimeState()
         self.google_sheets = self._build_google_adapter()
         self.supabase = self._build_supabase_adapter()
@@ -203,21 +203,30 @@ class ServiceContainer:
         if self._work_options_cache is None:
             self._work_options_cache = self._load_work_options()
         return {
-            "obras": self._work_options_cache,
+            "obras": self._merge_work_options(
+                self._work_options_cache,
+                MemoryGoogleSheetsAdapter(self.state).load_work_options(),
+            ),
         }
 
     def supplier_options(self) -> dict[str, Any]:
         if self._supplier_options_cache is None:
             self._supplier_options_cache = self._load_supplier_options()
         return {
-            "fornecedores": self._supplier_options_cache,
+            "fornecedores": self._merge_supplier_options(
+                self._supplier_options_cache,
+                MemoryGoogleSheetsAdapter(self.state).load_supplier_options(),
+            ),
         }
 
     def vehicle_options(self) -> dict[str, Any]:
         if self._vehicle_options_cache is None:
             self._vehicle_options_cache = self._load_vehicle_options()
         return {
-            "veiculos": self._vehicle_options_cache,
+            "veiculos": self._merge_vehicle_options(
+                self._vehicle_options_cache,
+                MemoryGoogleSheetsAdapter(self.state).load_vehicle_options(),
+            ),
         }
 
     def _prime_option_caches(self) -> None:
@@ -245,6 +254,93 @@ class ServiceContainer:
         except Exception:
             logger.exception("Failed to load vehicle options from Google Sheets")
             return MemoryGoogleSheetsAdapter(self.state).load_vehicle_options()
+
+    def _merge_work_options(self, base: list[dict[str, Any]], runtime: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: dict[str, dict[str, Any]] = {}
+        for item in [*base, *runtime]:
+            obra = str(item.get("obra") or "").strip()
+            if not obra:
+                continue
+            current = merged.setdefault(
+                obra.lower(),
+                {
+                    "obra": obra,
+                    "ativa": bool(item.get("ativa", True)),
+                    "fases": set(),
+                },
+            )
+            current["obra"] = current.get("obra") or obra
+            current["ativa"] = bool(current.get("ativa", False) or item.get("ativa", False))
+            current["fases"].update(str(fase).strip() for fase in item.get("fases", []) if str(fase).strip())
+        return [
+            {
+                "obra": str(payload["obra"]),
+                "ativa": bool(payload["ativa"]),
+                "fases": sorted(payload["fases"]),
+            }
+            for _, payload in sorted(
+                merged.items(),
+                key=lambda entry: (not bool(entry[1]["ativa"]), str(entry[1]["obra"]).lower()),
+            )
+        ]
+
+    def _merge_supplier_options(self, base: list[dict[str, Any]], runtime: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: dict[str, dict[str, Any]] = {}
+        for item in [*base, *runtime]:
+            fornecedor = str(item.get("fornecedor") or "").strip()
+            if not fornecedor:
+                continue
+            key = fornecedor.lower()
+            current = merged.setdefault(
+                key,
+                {
+                    "id_fornecedor": item.get("id_fornecedor"),
+                    "fornecedor": fornecedor,
+                    "nif": item.get("nif"),
+                },
+            )
+            if not current.get("id_fornecedor") and item.get("id_fornecedor"):
+                current["id_fornecedor"] = item.get("id_fornecedor")
+            if not current.get("nif") and item.get("nif"):
+                current["nif"] = item.get("nif")
+        return [
+            merged[key]
+            for key in sorted(
+                merged.keys(),
+                key=lambda item: str(merged[item].get("fornecedor") or "").lower(),
+            )
+        ]
+
+    def _merge_vehicle_options(self, base: list[dict[str, Any]], runtime: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: dict[str, dict[str, Any]] = {}
+        for item in [*base, *runtime]:
+            matricula = str(item.get("matricula") or "").strip()
+            if not matricula:
+                continue
+            key = matricula.lower()
+            current = merged.setdefault(
+                key,
+                {
+                    "veiculo": str(item.get("veiculo") or matricula),
+                    "matricula": matricula,
+                },
+            )
+            if (
+                (not current.get("veiculo") or str(current.get("veiculo")).strip() == matricula)
+                and item.get("veiculo")
+                and str(item.get("veiculo")).strip() != matricula
+            ):
+                current["veiculo"] = str(item.get("veiculo"))
+        return [
+            merged[key]
+            for key in sorted(
+                merged.keys(),
+                key=lambda item: (
+                    str(merged[item].get("veiculo") or "").lower(),
+                    str(merged[item].get("matricula") or "").lower(),
+                ),
+            )
+        ]
 
     def _diagnostic_value(self, value: Any) -> str:
         if isinstance(value, datetime):

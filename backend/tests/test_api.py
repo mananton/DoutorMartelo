@@ -117,6 +117,16 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(len(afetacoes), 1)
         self.assertEqual(afetacoes[0]["origem"], "FATURA_DIRETA")
 
+    def test_list_faturas_returns_most_recent_first(self) -> None:
+        first = self._create_fatura("001")
+        second = self._create_fatura("002")
+        third = self._create_fatura("003")
+
+        response = self.client.get("/api/faturas")
+        self.assertEqual(response.status_code, 200)
+        ids = [entry["id_fatura"] for entry in response.json()]
+        self.assertEqual(ids[:3], [third["id_fatura"], second["id_fatura"], first["id_fatura"]])
+
     def test_stock_entry_then_manual_afetacao_uses_average_cost(self) -> None:
         fatura = self._create_fatura("002")
         self._create_item(fatura["id_fatura"], destino="STOCK")
@@ -183,6 +193,32 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(movimentos[0]["tipo"], "CONSUMO")
         self.assertEqual(movimentos[0]["uso_combustivel"], "VIATURA")
         self.assertEqual(movimentos[0]["matricula"], "11-AA-22")
+        stock = self.client.get(f"/api/stock-atual/{fuel_catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 0)
+
+    def test_direct_service_invoice_item_does_not_reduce_stock(self) -> None:
+        service_catalog = self._create_catalog_entry(
+            descricao_original="Servico de instalacao",
+            item_oficial="SERVICO_INSTALACAO",
+            natureza="SERVICO",
+            unidade="UN",
+        )
+        fatura = self._create_fatura("002B-SRV")
+
+        item = self._create_item(
+            fatura["id_fatura"],
+            destino="CONSUMO",
+            descricao_original="Servico de instalacao",
+            id_item=str(service_catalog["id_item"]),
+            obra="Obra Servico",
+            fase="Execucao",
+        )
+        self.assertEqual(item["id_item"], service_catalog["id_item"])
+
+        stock = self.client.get(f"/api/stock-atual/{service_catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 0)
+        stock_list = self.client.get("/api/stock-atual").json()
+        self.assertFalse(any(entry["id_item"] == service_catalog["id_item"] for entry in stock_list))
 
     def test_stock_fuel_afetacao_requires_machine_or_generator_usage(self) -> None:
         fuel_catalog = self._create_catalog_entry(
