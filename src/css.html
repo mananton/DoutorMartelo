@@ -2220,6 +2220,19 @@ body.has-subbar .section { animation-delay: 0s; }
 .mapa-print-cell-empty {
   color: #cbd5e1;
 }
+.mapa-print-day-cell {
+  position: relative;
+}
+.mapa-print-day-atraso {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 7px;
+  font-weight: 700;
+  color: #7f1d1d;
+  line-height: 1;
+  pointer-events: none;
+}
 .mapa-print-total-row td {
   font-weight: 800;
   background: #f8fafc;
@@ -2270,6 +2283,7 @@ body.has-subbar .section { animation-delay: 0s; }
   .mapa-print-summary-col { min-width: 45px !important; }
   .mapa-print-header { margin-bottom: 8px !important; }
   .mapa-print-title { font-size: 18px !important; }
+  .mapa-print-day-atraso { font-size: 6px !important; bottom: 0 !important; right: 1px !important; }
 }
 
 /* ── MOBILE UTILITY CLASSES ──────────────────────────────── */

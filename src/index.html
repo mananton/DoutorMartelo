@@ -31,6 +31,9 @@
     <button class="nav-item active" onclick="showSection('overview')" data-section="overview">
       <i class="fa-solid fa-chart-pie"></i><span>Visão Geral</span>
     </button>
+    <button class="nav-item" onclick="showSection('contabilidade')" data-section="contabilidade">
+      <i class="fa-solid fa-landmark"></i><span>Contabilidade</span>
+    </button>
     <button class="nav-item" onclick="toggleObrasMenu()" data-section="obras-toggle">
       <i class="fa-solid fa-building"></i><span>Obras <i class="fa-solid fa-chevron-down" style="font-size:10px;margin-left:auto"></i></span>
     </button>
@@ -112,7 +115,6 @@
 <!-- ══════ MAIN CONTENT ══════ -->
 <div id="main-content">
 
-  <!-- Visão Geral -->
   <div class="section active" id="section-overview">
     <div class="placeholder-card">
       <i class="fa-solid fa-chart-pie"></i>
@@ -120,6 +122,51 @@
       <p>KPIs globais, resumo de obras e gráficos de custos — a construir no próximo passo.</p>
     </div>
   </div>
+
+  <!-- Contabilidade -->
+  <div class="section" id="section-contabilidade">
+    <!-- KPIs globais -->
+    <div class="obra-kpi-grid" id="contabilidade-kpis">
+      <div class="obra-kpi"><div class="obra-kpi-label">Custo Total</div><div class="obra-kpi-val" id="contab-kpi-total">—</div></div>
+      <div class="obra-kpi"><div class="obra-kpi-label">Mão de Obra</div><div class="obra-kpi-val" id="contab-kpi-mao">—</div></div>
+      <div class="obra-kpi"><div class="obra-kpi-label">Deslocações</div><div class="obra-kpi-val" id="contab-kpi-desl">—</div></div>
+      <div class="obra-kpi"><div class="obra-kpi-label">Materiais / Serv.</div><div class="obra-kpi-val" id="contab-kpi-mat">—</div></div>
+      <div class="obra-kpi"><div class="obra-kpi-label">IVA Dedutível</div><div class="obra-kpi-val" id="contab-kpi-iva">—</div></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="comp-charts-row" style="margin-top:20px">
+      <!-- Custo por Categoria (Doughnut) -->
+      <div class="comp-chart-card">
+        <div class="chart-card-header obra-chart-header">
+          <div class="obra-chart-title-wrap">
+            <span><i class="fa-solid fa-chart-pie"></i> Despesas por Categoria</span>
+            <small class="obra-chart-period" id="contab-cat-period-label"></small>
+          </div>
+        </div>
+        <div class="comp-chart-body tall">
+          <div class="comp-custos-canvas-wrap">
+            <canvas id="contab-chart-categorias"></canvas>
+          </div>
+        </div>
+      </div>
+      <!-- Evolução no tempo (Stacked Bar) -->
+      <div class="comp-chart-card">
+        <div class="chart-card-header obra-chart-header">
+          <div class="obra-chart-title-wrap">
+            <span><i class="fa-solid fa-chart-column"></i> Evolução Diária / Mensal</span>
+            <small class="obra-chart-period" id="contab-evo-period-label"></small>
+          </div>
+        </div>
+        <div class="comp-chart-body tall">
+          <div class="comp-custos-canvas-wrap">
+            <canvas id="contab-chart-evolucao"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <div class="section" id="section-dev">
     <div class="placeholder-card">
@@ -561,6 +608,9 @@
 <nav id="mobile-bottom-nav">
   <button class="mobile-nav-btn active" onclick="showSection('overview')" data-mobilesec="overview">
     <i class="fa-solid fa-chart-pie"></i><span>Geral</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('contabilidade')" data-mobilesec="contabilidade">
+    <i class="fa-solid fa-landmark"></i><span>Contab.</span>
   </button>
   <button class="mobile-nav-btn" onclick="showSection('obra-detail')" data-mobilesec="obra-detail">
     <i class="fa-solid fa-building"></i><span>Obras</span>

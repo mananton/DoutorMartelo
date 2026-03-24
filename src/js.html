@@ -140,7 +140,8 @@ const sectionTitles = {
   'mapa-mensal':'Mapa Mensal',
   assiduidade:  'Assiduidade',
   ferias:       'Férias',
-  comparativa:  'Análise Comparativa'
+  comparativa:  'Análise Comparativa',
+  contabilidade:'Contabilidade'
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -578,6 +579,7 @@ function buildAll() {
   buildAssidTable();
   buildComparativa();
   buildFerias();
+  buildContabilidade();
 }
 
 function buildObrasSidebar() {
@@ -2636,6 +2638,7 @@ function consolidateMapaMensalDay_(day) {
     return {
       raw_minutes: day.raw_minutes,
       valid_minutes: 0,
+      atraso_min: day.atraso_min || 0,
       code: 'Dps',
       display: 'Dsp',
       suppress_hours: true,
@@ -2647,6 +2650,7 @@ function consolidateMapaMensalDay_(day) {
     return {
       raw_minutes: day.raw_minutes,
       valid_minutes: 0,
+      atraso_min: day.atraso_min || 0,
       code: blockingCode,
       display: blockingCode,
       suppress_hours: true,
@@ -2657,6 +2661,7 @@ function consolidateMapaMensalDay_(day) {
   return {
     raw_minutes: day.raw_minutes,
     valid_minutes: day.raw_minutes,
+    atraso_min: day.atraso_min || 0,
     code: '',
     display: day.raw_minutes > 0 ? formatMapaDayHoursLabel_(day.raw_minutes) : '',
     suppress_hours: false,
@@ -2777,7 +2782,10 @@ function renderMapaMensalPrintView_(mapaData) {
       const cls = day.weekend_type === 'sab' ? ' is-sab' : (day.weekend_type === 'dom' ? ' is-dom' : '');
       const absenceCls = cell && /^(F|FJ|Bxa|Fer)$/.test(cell.code || '') ? ' mapa-mensal-absence-day' : '';
       const content = cell && cell.display ? escapeHtml_(cell.display) : '<span class="mapa-print-cell-empty">·</span>';
-      return '<td class="mapa-print-day-cell' + cls + absenceCls + '">' + content + '</td>';
+      const atrasoTag = cell && !cell.suppress_hours && cell.atraso_min > 0
+        ? '<span class="mapa-print-day-atraso">' + cell.atraso_min + '</span>'
+        : '';
+      return '<td class="mapa-print-day-cell' + cls + absenceCls + '">' + content + atrasoTag + '</td>';
     }).join('');
 
     return '<tr>' +
@@ -4792,6 +4800,268 @@ function feriasShowDayPopup(event, dateStr) {
 
 function feriasPopupClose() {
   document.getElementById('ferias-popup-container').innerHTML = '';
+}
+
+/* ══════════════════════════════════════════════════════════
+   CONTABILIDADE
+   ══════════════════════════════════════════════════════════ */
+let contabChartCategorias = null;
+let contabChartEvolucao = null;
+
+function buildContabilidade() {
+  if (!DATA) return;
+  // 1. Mão de Obra
+  let totalMaoDeObra = 0;
+  
+  // Current Registos
+  const registosFiltered = [];
+  (DATA.registos || []).forEach(r => {
+    const d = normalizeDateKey_(r.data);
+    if (!d || !dateInRange(d)) return;
+    totalMaoDeObra += Number(r.custo) || 0;
+    r._normDate = d;
+    registosFiltered.push(r);
+  });
+  
+  // Legacy Registos
+  const legacyMaoFiltered = [];
+  (DATA.legacy_mao_obra || []).forEach(r => {
+    const d = normalizeDateKey_(r.data);
+    if (!d || !dateInRange(d)) return;
+    totalMaoDeObra += Number(r.custo) || 0;
+    r._normDate = d;
+    legacyMaoFiltered.push(r);
+  });
+
+  // 2. Deslocações
+  let totalDeslocacoes = 0;
+
+  // 3. Materiais / Serviços e IVA
+  let totalMateriais = 0;
+  let totalIva = 0;
+  
+  // Categorization
+  const categories = {
+    'MATERIAL': 0,
+    'SERVIÇO': 0,
+    'ALUGUER': 0,
+    'TRANSPORTE': 0,
+    'GASÓLEO/GASOLINA': 0,
+    'OUTROS': 0
+  };
+
+  const matFiltered = [];
+  (DATA.materiais_mov || []).forEach(m => {
+    const d = normalizeDateKey_(m.data);
+    if (!d || !dateInRange(d)) return;
+    m._normDate = d;
+    matFiltered.push(m);
+    
+    const custo = Number(m.custo_total) || 0;
+    totalMateriais += custo;
+    
+    const comIva = Number(m.custo_total_com_iva) || 0;
+    const semIva = Number(m.custo_total_sem_iva) || 0;
+    let ivaValue = comIva - semIva;
+    
+    if (ivaValue === 0 && Number(m.iva) > 0 && custo > 0) {
+      const taxa = Number(m.iva);
+      ivaValue = custo * (taxa / (100 + taxa));
+    }
+    totalIva += (ivaValue > 0 ? ivaValue : 0);
+    
+    // Determine category
+    const idItem = String(m.id_item || '').toUpperCase();
+    if (idItem.startsWith('MAT-')) categories['MATERIAL'] += custo;
+    else if (idItem.startsWith('SER-')) categories['SERVIÇO'] += custo;
+    else if (idItem.startsWith('ALQ-')) categories['ALUGUER'] += custo;
+    else if (idItem.startsWith('TRN-') || idItem.startsWith('TRS-')) categories['TRANSPORTE'] += custo;
+    else if (idItem.startsWith('GAS-') || idItem.startsWith('COM-')) categories['GASÓLEO/GASOLINA'] += custo;
+    else categories['OUTROS'] += custo;
+  });
+
+  const legacyMatFiltered = [];
+  (DATA.legacy_materiais || []).forEach(m => {
+    const d = normalizeDateKey_(m.data);
+    if (!d || !dateInRange(d)) return;
+    m._normDate = d;
+    legacyMatFiltered.push(m);
+    
+    const custo = Number(m.custo) || 0;
+    totalMateriais += custo;
+    categories['MATERIAL'] += custo;
+  });
+
+  const deslFiltered = [];
+  (DATA.deslocacoes || []).forEach(dObj => {
+    const d = normalizeDateKey_(dObj.data);
+    if (!d || !dateInRange(d)) return;
+    dObj._normDate = d;
+    deslFiltered.push(dObj);
+    totalDeslocacoes += Number(dObj.custo) || 0;
+  });
+
+  const totalGlobal = totalMaoDeObra + totalDeslocacoes + totalMateriais;
+
+  // Render KPIs
+  document.getElementById('contab-kpi-total').textContent = fmt(totalGlobal);
+  document.getElementById('contab-kpi-mao').textContent = fmt(totalMaoDeObra);
+  document.getElementById('contab-kpi-desl').textContent = fmt(totalDeslocacoes);
+  document.getElementById('contab-kpi-mat').textContent = fmt(totalMateriais);
+  document.getElementById('contab-kpi-iva').textContent = fmt(totalIva);
+
+  // Prepare labels text for charts period
+  const periodLabel = activeQuickFilter ? ' (' + activeQuickFilter + ')' : '';
+  const labelElCat = document.getElementById('contab-cat-period-label');
+  const labelElEvo = document.getElementById('contab-evo-period-label');
+  if (labelElCat) labelElCat.textContent = periodLabel;
+  if (labelElEvo) labelElEvo.textContent = periodLabel;
+
+  // Prepare data for the Evolution Chart (stacked bar)
+  // group all three sources by date
+  const evoMap = {};
+  const ensureDate = (d) => {
+    if (!evoMap[d]) evoMap[d] = { mao: 0, desl: 0, mat: 0 };
+    return evoMap[d];
+  };
+
+  registosFiltered.forEach(r => ensureDate(r._normDate).mao += Number(r.custo) || 0);
+  legacyMaoFiltered.forEach(r => ensureDate(r._normDate).mao += Number(r.custo) || 0);
+  deslFiltered.forEach(d => ensureDate(d._normDate).desl += Number(d.custo) || 0);
+  matFiltered.forEach(m => ensureDate(m._normDate).mat += Number(m.custo_total) || 0);
+  legacyMatFiltered.forEach(m => ensureDate(m._normDate).mat += Number(m.custo) || 0);
+
+  // Build Charts
+  renderContabilidadeCharts(categories, evoMap, totalMaoDeObra, totalDeslocacoes);
+}
+
+function renderContabilidadeCharts(catMap, evoMap, tMao, tDesl) {
+  // 1. Doughnut Chart (Categories)
+  const ctxCat = document.getElementById('contab-chart-categorias');
+  if (!ctxCat) return;
+
+  const oldCat = Chart.getChart('contab-chart-categorias');
+  if (oldCat) oldCat.destroy();
+  if (contabChartCategorias) contabChartCategorias.destroy();
+  
+  const pieLabels = ['Mão de Obra', 'Deslocações'];
+  const pieData = [tMao, tDesl];
+  const pieColors = ['#082f49', '#0284c7'];
+  
+  const matColors = {
+    'MATERIAL': '#f59e0b',
+    'SERVIÇO': '#10b981',
+    'ALUGUER': '#8b5cf6',
+    'TRANSPORTE': '#ec4899',
+    'GASÓLEO/GASOLINA': '#ef4444',
+    'OUTROS': '#9ca3af'
+  };
+
+  Object.keys(catMap).forEach(k => {
+    if (catMap[k] > 0) {
+      pieLabels.push(k);
+      pieData.push(catMap[k]);
+      pieColors.push(matColors[k] || '#9ca3af');
+    }
+  });
+
+  const isDark = document.body.classList.contains('dark-theme');
+  const textColor = isDark ? '#f1f5f9' : '#0f172a';
+  const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+  contabChartCategorias = new Chart(ctxCat, {
+    type: 'doughnut',
+    data: {
+      labels: pieLabels,
+      datasets: [{
+        data: pieData,
+        backgroundColor: pieColors,
+        borderWidth: isDark ? 2 : 1,
+        borderColor: isDark ? '#1e293b' : '#fff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: textColor, font: { size: 11, family: 'Inter' } }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const val = ctx.raw || 0;
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? Math.round((val/total)*100) : 0;
+              return ' ' + fmt(val) + ' (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // 2. Bar Chart (Evolution)
+  const ctxEvo = document.getElementById('contab-chart-evolucao');
+  if (!ctxEvo) return;
+  
+  const oldEvo = Chart.getChart('contab-chart-evolucao');
+  if (oldEvo) oldEvo.destroy();
+  if (contabChartEvolucao) contabChartEvolucao.destroy();
+
+  const sortedDates = Object.keys(evoMap).sort();
+  const evoLabels = sortedDates.map(d => {
+    const parts = d.split('-');
+    return parts.length === 3 ? parts[2]+'/'+parts[1] : d;
+  });
+  const dataMao = sortedDates.map(d => evoMap[d].mao);
+  const dataDesl = sortedDates.map(d => evoMap[d].desl);
+  const dataMat = sortedDates.map(d => evoMap[d].mat);
+
+  contabChartEvolucao = new Chart(ctxEvo, {
+    type: 'bar',
+    data: {
+      labels: evoLabels,
+      datasets: [
+        { label: 'Mão de Obra', data: dataMao, backgroundColor: '#082f49' },
+        { label: 'Deslocações', data: dataDesl, backgroundColor: '#0284c7' },
+        { label: 'Materiais / Serv.', data: dataMat, backgroundColor: '#f59e0b' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: textColor, maxRotation: 45, minRotation: 45, font: { size: 10 } },
+          grid: { display: false }
+        },
+        y: {
+          stacked: true,
+          ticks: { color: textColor, font: { size: 10 }, callback: function(val) { return fmt(val); } },
+          grid: { color: gridColor, drawBorder: false }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: textColor, font: { size: 11, family: 'Inter' } }
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: function(ctx) {
+              return ' ' + ctx.dataset.label + ': ' + fmt(ctx.raw || 0);
+            }
+          }
+        }
+      }
+    }
+  });
 }
 
 /* ══════════════════════════════════════════════════════════

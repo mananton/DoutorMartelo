@@ -53,6 +53,11 @@ Last updated: 2026-03-23
 - Missing `Horas` does not infer hours from cost (`horas_total` remains numeric sum of valid hour values).
 
 ## 5. UI State (Recent)
+- **Contabilidade Section**:
+  - Added 5 aggregated financial KPIs respecting the global date filter (Custo Total, Mão de Obra, Deslocações, Materiais / Serv., IVA Dedutível).
+  - Added two global breakdown charts: a categorical cost doughnut and a time-series stacked bar.
+- **Mapa Mensal**:
+  - Print/PDF view now features a small red delay indicator on days with valid hours and `atraso_min > 0`.
 - Obra "Cost by phase" chart now supports:
   - Metric selector: Labor / Materials / Total.
   - Chart type selector: Bar / Doughnut.

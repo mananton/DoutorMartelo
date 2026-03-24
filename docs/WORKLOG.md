@@ -9,6 +9,22 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ---
 
+## 2026-03-24
+
+### `pending`
+- **Type**: feat / dashboard
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`
+- **Summary**:
+  - Added new "Contabilidade" section for global cost visualization.
+  - Implemented 5 universal KPIs (Total, Mão de Obra, Deslocações, Materiais / Serv., IVA Dedutível) sensitive to the global date filter.
+  - Added "Despesas por Categoria" doughnut chart and "Evolução Diária / Mensal" stacked bar chart.
+  - Added daily delay indicator in `Mapa Mensal` print/PDF view for days with recorded hours.
+  - Unified legacy and current labor data into the "Mão de Obra" metric in the new Contabilidade section.
+  - Improved date range filtering (`dateInRange`) to safely parse datetime strings without failing strict ISO match. 
+- **Impact**:
+  - The dashboard now provides a comprehensive financial overview of the entire operation, dynamically filterable by time.
+  - Printing the `Mapa Mensal` now shows delays per day alongside recorded hours, useful for payroll accounting.
+
 ## 2026-03-23
 
 ### `pending`
