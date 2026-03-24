@@ -55,6 +55,7 @@ type FaturaRow = Record<string, unknown> & {
   data_pagamento?: string;
   observacoes?: string;
   estado?: string;
+  created_at?: string;
 };
 
 type CompromissoRow = Record<string, unknown> & {
@@ -72,6 +73,7 @@ type CompromissoRow = Record<string, unknown> & {
   valor_com_iva?: number;
   estado?: string;
   observacoes?: string;
+  created_at?: string;
 };
 
 type SupplierOption = Record<string, unknown> & {
@@ -83,6 +85,7 @@ type SupplierOption = Record<string, unknown> & {
 type QueueRow = {
   document_type: "FATURA" | "COMPROMISSO" | "NOTA_CREDITO";
   id: string;
+  created_at: string;
   fornecedor: string;
   nif: string;
   data: string;
@@ -156,6 +159,11 @@ function formatAmount(value: number, digits = 2) {
   }).format(value);
 }
 
+function parseQueueCreatedAt(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
 function toFaturaFormState(item: FaturaRow): FaturaFormState {
   return {
     tipo_doc: String(item.tipo_doc ?? "FATURA") === "NOTA_CREDITO" ? "NOTA_CREDITO" : "FATURA",
@@ -196,6 +204,7 @@ function buildQueueRows(faturas: FaturaRow[], compromissos: CompromissoRow[]): Q
   const invoiceRows: QueueRow[] = faturas.map((item) => ({
     document_type: String(item.tipo_doc ?? "FATURA") === "NOTA_CREDITO" ? "NOTA_CREDITO" : "FATURA",
     id: String(item.id_fatura ?? ""),
+    created_at: String(item.created_at ?? ""),
     fornecedor: String(item.fornecedor ?? ""),
     nif: String(item.nif ?? ""),
     data: String(item.data_fatura ?? ""),
@@ -217,6 +226,7 @@ function buildQueueRows(faturas: FaturaRow[], compromissos: CompromissoRow[]): Q
   const compromissoRows: QueueRow[] = compromissos.map((item) => ({
     document_type: "COMPROMISSO",
     id: String(item.id_compromisso ?? ""),
+    created_at: String(item.created_at ?? ""),
     fornecedor: String(item.fornecedor ?? ""),
     nif: String(item.nif ?? ""),
     data: String(item.data ?? ""),
@@ -233,6 +243,9 @@ function buildQueueRows(faturas: FaturaRow[], compromissos: CompromissoRow[]): Q
   }));
 
   return [...invoiceRows, ...compromissoRows].sort((left, right) => {
+    const leftCreatedAt = parseQueueCreatedAt(left.created_at);
+    const rightCreatedAt = parseQueueCreatedAt(right.created_at);
+    if (leftCreatedAt !== rightCreatedAt) return rightCreatedAt - leftCreatedAt;
     const leftDate = left.data || "";
     const rightDate = right.data || "";
     if (leftDate !== rightDate) return rightDate.localeCompare(leftDate);
@@ -297,6 +310,15 @@ export function FaturasPage() {
     [workOptions],
   );
   const queueRows = useMemo(() => buildQueueRows(faturas, compromissos), [faturas, compromissos]);
+  const queueLoadError = useMemo(() => {
+    if (faturasQuery.isError) {
+      return faturasQuery.error instanceof Error ? faturasQuery.error.message : "Falha ao carregar faturas.";
+    }
+    if (compromissosQuery.isError) {
+      return compromissosQuery.error instanceof Error ? compromissosQuery.error.message : "Falha ao carregar compromissos.";
+    }
+    return "";
+  }, [compromissosQuery.error, compromissosQuery.isError, faturasQuery.error, faturasQuery.isError]);
   const filteredRows = useMemo(() => {
     const search = normalize(searchTerm);
     if (!search) return queueRows;
@@ -597,6 +619,7 @@ export function FaturasPage() {
               />
             </label>
           </div>
+          {queueLoadError ? <div className="status-note warning">{queueLoadError}</div> : null}
 
           <div className="queue-list">
             {filteredRows.map((item) => {

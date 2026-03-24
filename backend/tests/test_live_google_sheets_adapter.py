@@ -189,6 +189,44 @@ class LiveGoogleSheetsAdapterTests(unittest.TestCase):
             ["MAT-000001", "PREGO_20", "UN", 10, 2, 20],
         )
 
+    def test_load_snapshot_keeps_faturas_when_optional_material_sheets_fail(self) -> None:
+        adapter, _ = self._build_adapter({})
+
+        def fake_read_header(sheet_name: str) -> list[str]:
+            if sheet_name == "FATURAS":
+                return ["ID_Fatura", "Fornecedor", "NIF", "Nº Doc/Fatura", "Data Fatura", "Valor"]
+            if sheet_name in {"COMPROMISSOS_OBRA", "NOTAS_CREDITO_ITENS"}:
+                raise RuntimeError(f"missing {sheet_name}")
+            return []
+
+        def fake_read_rows(sheet_name: str, headers: list[str], *, start_row: int = 2) -> list[tuple[int, dict[str, object]]]:
+            if sheet_name == "FATURAS":
+                return [
+                    (
+                        2,
+                        {
+                            "ID_Fatura": "FAT-000001",
+                            "Fornecedor": "Fornecedor Teste",
+                            "NIF": "501234567",
+                            "Nº Doc/Fatura": "FT 2026/001",
+                            "Data Fatura": "2026-03-24",
+                            "Valor": "123",
+                        },
+                    )
+                ]
+            return []
+
+        adapter._read_header = fake_read_header  # type: ignore[method-assign]
+        adapter._read_rows = fake_read_rows  # type: ignore[method-assign]
+
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            snapshot = adapter.load_snapshot()
+
+        self.assertEqual(len(snapshot["faturas"]), 1)
+        self.assertEqual(snapshot["compromissos_obra"], [])
+        self.assertEqual(snapshot["notas_credito_itens"], [])
+        self.assertTrue(any("optional Google Sheets entity" in line for line in captured.output))
+
 
 if __name__ == "__main__":
     unittest.main()

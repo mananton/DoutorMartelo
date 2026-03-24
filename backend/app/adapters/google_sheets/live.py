@@ -15,6 +15,7 @@ from backend.app.config import Settings
 
 Serializer = Callable[[dict[str, Any]], dict[str, Any]]
 logger = logging.getLogger("uvicorn.error")
+OPTIONAL_SNAPSHOT_ENTITIES = {"compromissos_obra", "notas_credito_itens"}
 
 
 class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
@@ -58,15 +59,26 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
     def load_snapshot(self) -> dict[str, list[dict[str, Any]]]:
         snapshot: dict[str, list[dict[str, Any]]] = {}
         for entity, config in SHEET_READ_CONFIG.items():
-            headers = self._read_header(config["sheet_name"])
-            rows = self._read_rows(config["sheet_name"], headers)
-            parser: RowParser = config["parser"]
-            parsed = []
-            for row_num, row in rows:
-                record = parser(row, row_num)
-                if record:
-                    parsed.append(record)
-            snapshot[entity] = parsed
+            try:
+                headers = self._read_header(config["sheet_name"])
+                rows = self._read_rows(config["sheet_name"], headers)
+                parser: RowParser = config["parser"]
+                parsed = []
+                for row_num, row in rows:
+                    record = parser(row, row_num)
+                    if record:
+                        parsed.append(record)
+                snapshot[entity] = parsed
+            except Exception:
+                if entity not in OPTIONAL_SNAPSHOT_ENTITIES:
+                    raise
+                logger.warning(
+                    "Failed to read optional Google Sheets entity during snapshot hydration; continuing with empty data entity=%s sheet=%s",
+                    entity,
+                    config["sheet_name"],
+                    exc_info=True,
+                )
+                snapshot[entity] = []
         return _enrich_snapshot(snapshot)
 
     def load_work_options(self) -> list[dict[str, Any]]:
@@ -479,18 +491,51 @@ def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     if not id_fatura:
         return None
     now = _read_timestamp(row_num)
+    tipo_doc_raw = _read_text(row, ["Tipo_Doc", "Tipo Doc", "Tipo"]) or ""
+    tipo_doc = (_read_upper_text(row, ["Tipo_Doc", "Tipo Doc", "Tipo"]) or "FATURA").replace(" ", "_")
+    doc_origem = _read_text(row, ["Doc_Origem", "Doc Origem", "Documento Origem"])
+    nr_documento = _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Numero Doc/Fatura"]) or ""
+    data_fatura = _read_date(row, ["Data Fatura", "Data"]) or date.today()
     valor_sem_iva = _read_float(row, ["Valor Total Sem IVA", "Custo_Total Sem IVA"])
     valor_com_iva = _read_float(row, ["Valor Total Com IVA", "Custo_Total Com IVA", "Valor"])
     valor_fallback = _read_float(row, ["Valor"])
+
+    if _is_legacy_shifted_fatura_row(tipo_doc_raw, doc_origem, nr_documento, data_fatura, valor_sem_iva, valor_com_iva):
+        legacy_data_fatura = _read_date(row, ["Doc_Origem", "Doc Origem", "Documento Origem"]) or date.today()
+        legacy_valor_sem_iva = _read_float(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Numero Doc/Fatura"]) or 0.0
+        legacy_valor_com_iva = _recover_shifted_legacy_invoice_total(row) or legacy_valor_sem_iva
+        legacy_paga = _read_bool(row, ["Valor Total Sem IVA", "Custo_Total Sem IVA"])
+        legacy_data_pagamento = _read_date(row, ["Valor"])
+        return {
+            "id_fatura": id_fatura,
+            "tipo_doc": "FATURA",
+            "doc_origem": None,
+            "id_compromisso": _read_text(row, ["ID_Compromisso", "ID Compromisso"]),
+            "fornecedor": _read_text(row, ["Fornecedor"]) or "",
+            "nif": _read_text(row, ["NIF"]) or "",
+            "nr_documento": tipo_doc_raw,
+            "data_fatura": legacy_data_fatura,
+            "valor_sem_iva": legacy_valor_sem_iva,
+            "iva": round(((legacy_valor_com_iva / legacy_valor_sem_iva) - 1) * 100, 2) if legacy_valor_sem_iva > 0 and legacy_valor_com_iva > legacy_valor_sem_iva else 0.0,
+            "valor_com_iva": legacy_valor_com_iva,
+            "paga": legacy_paga,
+            "data_pagamento": legacy_data_pagamento if legacy_paga else None,
+            "observacoes": _read_text(row, ["Observacoes", "Observações"]),
+            "estado": _read_text(row, ["Estado"]) or "ATIVA",
+            "sheet_row_num": row_num,
+            "created_at": now,
+            "updated_at": now,
+        }
+
     return {
         "id_fatura": id_fatura,
-        "tipo_doc": (_read_upper_text(row, ["Tipo_Doc", "Tipo Doc", "Tipo"]) or "FATURA").replace(" ", "_"),
-        "doc_origem": _read_text(row, ["Doc_Origem", "Doc Origem", "Documento Origem"]),
+        "tipo_doc": tipo_doc,
+        "doc_origem": doc_origem,
         "id_compromisso": _read_text(row, ["ID_Compromisso", "ID Compromisso"]),
         "fornecedor": _read_text(row, ["Fornecedor"]) or "",
         "nif": _read_text(row, ["NIF"]) or "",
-        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Numero Doc/Fatura"]) or "",
-        "data_fatura": _read_date(row, ["Data Fatura", "Data"]) or date.today(),
+        "nr_documento": nr_documento,
+        "data_fatura": data_fatura,
         "valor_sem_iva": valor_sem_iva if valor_sem_iva is not None else (valor_fallback or 0.0),
         "iva": _read_float(row, ["IVA"]) or 0.0,
         "valor_com_iva": valor_com_iva if valor_com_iva is not None else (valor_fallback or 0.0),
@@ -502,6 +547,67 @@ def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "created_at": now,
         "updated_at": now,
     }
+
+
+def _is_legacy_shifted_fatura_row(
+    tipo_doc_raw: str | None,
+    doc_origem: str | None,
+    nr_documento: str | None,
+    data_fatura: date | None,
+    valor_sem_iva: float | None,
+    valor_com_iva: float | None,
+) -> bool:
+    normalized_tipo_doc = str(tipo_doc_raw or "").strip().upper().replace(" ", "_")
+    if not normalized_tipo_doc or normalized_tipo_doc in {"FATURA", "NOTA_CREDITO"}:
+        return False
+    if not doc_origem or not _looks_like_date_text(doc_origem):
+        return False
+    if _coerce_float_string(nr_documento) is None:
+        return False
+    if (valor_sem_iva or 0) > 0 or (valor_com_iva or 0) > 0:
+        return False
+    if data_fatura is None or data_fatura.year > 1910:
+        return False
+    return True
+
+
+def _looks_like_date_text(value: str | None) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            datetime.strptime(text, fmt)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _coerce_float_string(value: str | None) -> float | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip().replace("\xa0", "").replace(" ", "")
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _recover_shifted_legacy_invoice_total(row: dict[str, Any]) -> float | None:
+    shifted_date = _read_date(row, ["Data Fatura", "Data"])
+    if shifted_date is None or shifted_date.year > 1910:
+        return None
+    base = date(1899, 12, 30)
+    serial = float((shifted_date - base).days)
+    return serial if serial > 0 else None
 
 
 def _parse_compromisso(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:

@@ -300,6 +300,10 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "NOTA_CREDITO_REQUIRES_DOC_ORIGEM")
 
+    def test_create_nota_credito_uses_nc_prefix(self) -> None:
+        nota = self._create_fatura("NC-ID", tipo_doc="NOTA_CREDITO", doc_origem="FT 2026/NC-ID")
+        self.assertTrue(str(nota["id_fatura"]).startswith("NC-"))
+
     def test_material_nota_credito_sem_obra_reduces_stock_only(self) -> None:
         fatura_stock = self._create_fatura("NC-STOCK-BASE")
         self._create_item(fatura_stock["id_fatura"], destino="STOCK")

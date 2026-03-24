@@ -121,9 +121,10 @@ class MaterialsService:
 
     def create_fatura(self, payload: FaturaCreate) -> FaturaRecord:
         now = self._now()
+        tipo_doc = self._normalize_fatura_tipo_doc(payload.tipo_doc)
         entity = {
-            "id_fatura": self.state.next_id("FAT"),
-            "tipo_doc": payload.tipo_doc,
+            "id_fatura": self._generate_fatura_id(tipo_doc),
+            "tipo_doc": tipo_doc,
             "doc_origem": payload.doc_origem,
             "id_compromisso": payload.id_compromisso,
             "fornecedor": payload.fornecedor,
@@ -1875,6 +1876,10 @@ class MaterialsService:
         if normalized in {"nota_credito", "nota_de_credito"}:
             return "NOTA_CREDITO"
         return "FATURA"
+
+    def _generate_fatura_id(self, tipo_doc: Any) -> str:
+        prefix = "NC" if self._normalize_fatura_tipo_doc(tipo_doc) == "NOTA_CREDITO" else "FAT"
+        return self.state.next_id(prefix)
 
     def _validate_fatura_document_fields(self, fatura: dict[str, Any]) -> None:
         tipo_doc = self._normalize_fatura_tipo_doc(fatura.get("tipo_doc"))

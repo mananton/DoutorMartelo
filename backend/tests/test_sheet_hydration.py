@@ -86,6 +86,34 @@ class SheetParserContractTests(unittest.TestCase):
         self.assertAlmostEqual(parsed["valor_sem_iva"], 2281.29)
         self.assertAlmostEqual(parsed["valor_com_iva"], 2805.99)
 
+    def test_parse_fatura_recovers_legacy_rows_shifted_after_manual_header_insert(self) -> None:
+        parsed = _parse_fatura(
+            {
+                "ID_Fatura": "FAT-000053",
+                "Fornecedor": "Leroy Merlin",
+                "NIF": "506848558",
+                "Tipo_Doc": "FT20260030901/001809",
+                "Doc_Origem": "2026-03-04",
+                "NÂº Doc/Fatura": "605,22",
+                "Data Fatura": "1902/01/13",
+                "Valor Total Sem IVA": "TRUE",
+                "Valor": "2026-03-04",
+                "Observacoes": "",
+            },
+            58,
+        )
+
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["tipo_doc"], "FATURA")
+        self.assertEqual(parsed["doc_origem"], None)
+        self.assertEqual(parsed["nr_documento"], "FT20260030901/001809")
+        self.assertEqual(str(parsed["data_fatura"]), "2026-03-04")
+        self.assertAlmostEqual(parsed["valor_sem_iva"], 605.22)
+        self.assertAlmostEqual(parsed["valor_com_iva"], 744.0)
+        self.assertTrue(parsed["paga"])
+        self.assertEqual(str(parsed["data_pagamento"]), "2026-03-04")
+
     def test_parse_fatura_keeps_fornecedor_required_by_api_model(self) -> None:
         parsed = _parse_fatura(
             {
