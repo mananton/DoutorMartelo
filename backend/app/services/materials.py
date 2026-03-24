@@ -19,6 +19,9 @@ from backend.app.schemas.materials import (
     CatalogEntryCreate,
     CatalogEntryRecord,
     CatalogEntryUpdate,
+    CompromissoCreate,
+    CompromissoRecord,
+    CompromissoUpdate,
     FaturaCreate,
     FaturaDetail,
     FaturaItemCreate,
@@ -27,6 +30,10 @@ from backend.app.schemas.materials import (
     FaturaRecord,
     FaturaUpdate,
     MovimentoRecord,
+    NotaCreditoItemCreate,
+    NotaCreditoItemRecord,
+    NotaCreditoItemsResponse,
+    NotaCreditoItemUpdate,
 )
 from backend.app.services.state import RuntimeState
 
@@ -39,6 +46,59 @@ class MaterialsService:
         self.state = state
         self.google_sheets = google_sheets
         self.supabase = supabase
+
+    def list_compromissos(self) -> list[CompromissoRecord]:
+        ordered = sorted(
+            self.state.compromissos.values(),
+            key=lambda item: (
+                item.get("created_at") or datetime.min.replace(tzinfo=UTC),
+                str(item.get("id_compromisso") or ""),
+            ),
+            reverse=True,
+        )
+        return [self._to_model(CompromissoRecord, item) for item in ordered]
+
+    def create_compromisso(self, payload: CompromissoCreate) -> CompromissoRecord:
+        now = self._now()
+        entity = {
+            "id_compromisso": self.state.next_id("COMP"),
+            "data": payload.data,
+            "fornecedor": payload.fornecedor,
+            "nif": payload.nif,
+            "tipo_doc": payload.tipo_doc,
+            "doc_origem": payload.doc_origem,
+            "obra": payload.obra,
+            "fase": payload.fase,
+            "descricao": payload.descricao,
+            "valor_sem_iva": payload.valor_sem_iva,
+            "iva": payload.iva,
+            "valor_com_iva": payload.valor_com_iva,
+            "estado": payload.estado,
+            "observacoes": payload.observacoes,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._persist({"compromissos_obra": [entity]})
+        self.state.compromissos[entity["id_compromisso"]] = entity
+        return self._to_model(CompromissoRecord, entity)
+
+    def patch_compromisso(self, id_compromisso: str, payload: CompromissoUpdate) -> CompromissoRecord:
+        current = deepcopy(self._require_compromisso(id_compromisso))
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            current[field] = value
+        current["updated_at"] = self._now()
+        self._persist({"compromissos_obra": [current]})
+        self.state.compromissos[id_compromisso] = current
+        return self._to_model(CompromissoRecord, current)
+
+    def delete_compromisso(self, id_compromisso: str) -> None:
+        compromisso = self._require_compromisso(id_compromisso)
+        normalized_id = str(compromisso.get("id_compromisso") or "").strip()
+        if any(str(fatura.get("id_compromisso") or "").strip() == normalized_id for fatura in self.state.faturas.values()):
+            raise HTTPException(status_code=422, detail="COMPROMISSO_REFERENCIADO")
+        delete_groups = {"compromissos_obra": [id_compromisso]}
+        self._delete_records(delete_groups)
+        self._delete_runtime_records(delete_groups)
 
     def list_faturas(self) -> list[FaturaRecord]:
         ordered = sorted(
@@ -53,13 +113,18 @@ class MaterialsService:
 
     def get_fatura(self, id_fatura: str) -> FaturaDetail:
         fatura = self._require_fatura(id_fatura)
-        items = [self._to_model(FaturaItemRecord, item) for item in self.state.fatura_items.values() if item["id_fatura"] == id_fatura]
+        if self._is_note_credit_fatura(fatura):
+            items = [self._to_model(NotaCreditoItemRecord, item) for item in self.state.nota_credito_items.values() if item["id_fatura"] == id_fatura]
+        else:
+            items = [self._to_model(FaturaItemRecord, item) for item in self.state.fatura_items.values() if item["id_fatura"] == id_fatura]
         return FaturaDetail(fatura=self._to_model(FaturaRecord, fatura), items=items)
 
     def create_fatura(self, payload: FaturaCreate) -> FaturaRecord:
         now = self._now()
         entity = {
             "id_fatura": self.state.next_id("FAT"),
+            "tipo_doc": payload.tipo_doc,
+            "doc_origem": payload.doc_origem,
             "id_compromisso": payload.id_compromisso,
             "fornecedor": payload.fornecedor,
             "nif": payload.nif,
@@ -75,69 +140,120 @@ class MaterialsService:
             "created_at": now,
             "updated_at": now,
         }
+        self._validate_fatura_document_fields(entity)
+        self._validate_fatura_compromisso_link(entity)
         self._normalize_fatura_payment_fields(entity)
         self._persist({"faturas": [entity]})
         self.state.faturas[entity["id_fatura"]] = entity
         return self._to_model(FaturaRecord, entity)
 
     def patch_fatura(self, id_fatura: str, payload: FaturaUpdate) -> FaturaRecord:
-        current = deepcopy(self._require_fatura(id_fatura))
-        for field, value in payload.model_dump(exclude_none=True, by_alias=True).items():
+        previous = self._require_fatura(id_fatura)
+        current = deepcopy(previous)
+        for field, value in payload.model_dump(exclude_unset=True, by_alias=True).items():
             current[field] = value
+        self._validate_fatura_document_fields(current)
+        self._validate_fatura_document_transition(previous, current)
+        self._validate_fatura_compromisso_link(current)
         self._normalize_fatura_payment_fields(current)
         current["updated_at"] = self._now()
         dependent_items: list[dict[str, Any]] = []
+        dependent_note_items: list[dict[str, Any]] = []
         dependent_afetacoes: list[dict[str, Any]] = []
         dependent_movimentos: list[dict[str, Any]] = []
-        for item in self.state.fatura_items.values():
-            if item["id_fatura"] != id_fatura:
-                continue
-            updated_item = deepcopy(item)
-            updated_item["fornecedor"] = current["fornecedor"]
-            updated_item["nif"] = current["nif"]
-            updated_item["nr_documento"] = current["nr_documento"]
-            updated_item["data_fatura"] = current["data_fatura"]
-            updated_item["updated_at"] = current["updated_at"]
-            dependent_items.append(updated_item)
+        if self._is_note_credit_fatura(current):
+            for item in self.state.nota_credito_items.values():
+                if item["id_fatura"] != id_fatura:
+                    continue
+                updated_item = deepcopy(item)
+                updated_item["fornecedor"] = current["fornecedor"]
+                updated_item["nif"] = current["nif"]
+                updated_item["nr_documento"] = current["nr_documento"]
+                updated_item["doc_origem"] = current.get("doc_origem")
+                updated_item["data_fatura"] = current["data_fatura"]
+                updated_item["updated_at"] = current["updated_at"]
+                dependent_note_items.append(updated_item)
 
-            fit_movement = self._find_movement_by_source("FIT", updated_item["id_item_fatura"])
-            if updated_item["destino"] in {"STOCK", "VIATURA", "ESCRITORIO", "EMPRESA"} and fit_movement:
-                dependent_movimentos.append(
-                    self._reuse_record_identity(
-                        self._build_fit_movement(
-                            updated_item,
-                            current,
-                            "ENTRADA" if updated_item["destino"] == "STOCK" else "CONSUMO",
-                        ),
-                        fit_movement,
-                        "id_mov",
-                        keep_sequence=True,
-                    )
-                )
-
-            direct_afetacao = self._find_direct_afetacao_by_source(updated_item["id_item_fatura"])
-            if updated_item["destino"] == "CONSUMO" and direct_afetacao:
-                updated_afetacao = self._reuse_record_identity(
-                    self._build_direct_afetacao(updated_item, current),
-                    direct_afetacao,
-                    "id_afetacao",
-                )
-                dependent_afetacoes.append(updated_afetacao)
-                current_afo_movement = self._find_movement_by_source("AFO", updated_afetacao["id_afetacao"])
-                if current_afo_movement:
+                note_movement = self._find_movement_by_source("NCI", updated_item["id_item_nota_credito"])
+                if self._note_credit_item_affects_stock(updated_item) and note_movement:
                     dependent_movimentos.append(
                         self._reuse_record_identity(
-                            self._build_afo_movement(updated_afetacao),
-                            current_afo_movement,
+                            self._build_nci_stock_movement(updated_item, current),
+                            note_movement,
                             "id_mov",
                             keep_sequence=True,
                         )
                     )
 
+                direct_afetacao = self._find_direct_afetacao_by_source(updated_item["id_item_nota_credito"])
+                if updated_item["categoria_nota_credito"] == "NC_COM_OBRA" and direct_afetacao:
+                    updated_afetacao = self._reuse_record_identity(
+                        self._build_nci_credit_afetacao(updated_item, current),
+                        direct_afetacao,
+                        "id_afetacao",
+                    )
+                    dependent_afetacoes.append(updated_afetacao)
+                    current_afo_movement = self._find_movement_by_source("AFO", updated_afetacao["id_afetacao"])
+                    if current_afo_movement:
+                        dependent_movimentos.append(
+                            self._reuse_record_identity(
+                                self._build_afo_movement(updated_afetacao),
+                                current_afo_movement,
+                                "id_mov",
+                                keep_sequence=True,
+                            )
+                        )
+        else:
+            for item in self.state.fatura_items.values():
+                if item["id_fatura"] != id_fatura:
+                    continue
+                updated_item = deepcopy(item)
+                updated_item["fornecedor"] = current["fornecedor"]
+                updated_item["nif"] = current["nif"]
+                updated_item["nr_documento"] = current["nr_documento"]
+                updated_item["data_fatura"] = current["data_fatura"]
+                updated_item["updated_at"] = current["updated_at"]
+                dependent_items.append(updated_item)
+
+                fit_movement = self._find_movement_by_source("FIT", updated_item["id_item_fatura"])
+                if updated_item["destino"] in {"STOCK", "VIATURA", "ESCRITORIO", "EMPRESA"} and fit_movement:
+                    dependent_movimentos.append(
+                        self._reuse_record_identity(
+                            self._build_fit_movement(
+                                updated_item,
+                                current,
+                                "ENTRADA" if updated_item["destino"] == "STOCK" else "CONSUMO",
+                            ),
+                            fit_movement,
+                            "id_mov",
+                            keep_sequence=True,
+                        )
+                    )
+
+                direct_afetacao = self._find_direct_afetacao_by_source(updated_item["id_item_fatura"])
+                if updated_item["destino"] == "CONSUMO" and direct_afetacao:
+                    updated_afetacao = self._reuse_record_identity(
+                        self._build_direct_afetacao(updated_item, current),
+                        direct_afetacao,
+                        "id_afetacao",
+                    )
+                    dependent_afetacoes.append(updated_afetacao)
+                    current_afo_movement = self._find_movement_by_source("AFO", updated_afetacao["id_afetacao"])
+                    if current_afo_movement:
+                        dependent_movimentos.append(
+                            self._reuse_record_identity(
+                                self._build_afo_movement(updated_afetacao),
+                                current_afo_movement,
+                                "id_mov",
+                                keep_sequence=True,
+                            )
+                        )
+
         self._persist(
             {
                 "faturas": [current],
                 "faturas_itens": dependent_items,
+                "notas_credito_itens": dependent_note_items,
                 "afetacoes_obra": dependent_afetacoes,
                 "materiais_mov": dependent_movimentos,
             }
@@ -145,6 +261,8 @@ class MaterialsService:
         self.state.faturas[id_fatura] = current
         for item in dependent_items:
             self.state.fatura_items[item["id_item_fatura"]] = item
+        for item in dependent_note_items:
+            self.state.nota_credito_items[item["id_item_nota_credito"]] = item
         for afetacao in dependent_afetacoes:
             self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
         for movimento in dependent_movimentos:
@@ -152,12 +270,18 @@ class MaterialsService:
         return self._to_model(FaturaRecord, current)
 
     def delete_fatura(self, id_fatura: str) -> None:
-        self._require_fatura(id_fatura)
+        fatura = self._require_fatura(id_fatura)
         delete_groups: dict[str, list[str]] = {"faturas": [id_fatura]}
-        for item in list(self.state.fatura_items.values()):
-            if item["id_fatura"] != id_fatura:
-                continue
-            self._merge_delete_groups(delete_groups, self._collect_fit_delete_groups(item["id_item_fatura"]))
+        if self._is_note_credit_fatura(fatura):
+            for item in list(self.state.nota_credito_items.values()):
+                if item["id_fatura"] != id_fatura:
+                    continue
+                self._merge_delete_groups(delete_groups, self._collect_nci_delete_groups(item["id_item_nota_credito"]))
+        else:
+            for item in list(self.state.fatura_items.values()):
+                if item["id_fatura"] != id_fatura:
+                    continue
+                self._merge_delete_groups(delete_groups, self._collect_fit_delete_groups(item["id_item_fatura"]))
         stock_item_ids_to_sync = self._collect_stock_item_ids_from_groups(delete_groups)
         self._delete_records(delete_groups)
         self._delete_runtime_records(delete_groups)
@@ -385,6 +509,212 @@ class MaterialsService:
         self._delete_runtime_records(delete_groups)
         self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
 
+    def preview_nota_credito_items(self, id_fatura: str, items: list[NotaCreditoItemCreate]) -> NotaCreditoItemsResponse:
+        self._require_note_credit_fatura(id_fatura)
+        impacts = [impact for item in items for impact in self._preview_nota_credito_impacts(item)]
+        return NotaCreditoItemsResponse(items=[], impacts=impacts)
+
+    def create_nota_credito_items(self, id_fatura: str, items: list[NotaCreditoItemCreate]) -> NotaCreditoItemsResponse:
+        started_at = perf_counter()
+        fatura = self._require_note_credit_fatura(id_fatura)
+        created_items: list[dict[str, Any]] = []
+        generated_afetacoes: list[dict[str, Any]] = []
+        generated_movimentos: list[dict[str, Any]] = []
+        impacts: list[OperationImpact] = []
+        stock_item_ids_to_sync: set[str] = set()
+
+        for item in items:
+            catalog = self._resolve_item_mapping(fatura, item)
+            now = self._now()
+            note_item = {
+                "id_item_nota_credito": self.state.next_id("NCI"),
+                "id_fatura": id_fatura,
+                "fornecedor": fatura["fornecedor"],
+                "nif": fatura["nif"],
+                "nr_documento": fatura["nr_documento"],
+                "doc_origem": fatura.get("doc_origem"),
+                "data_fatura": fatura["data_fatura"],
+                "descricao_original": item.descricao_original,
+                "id_item": catalog["id_item"],
+                "item_oficial": catalog["item_oficial"],
+                "unidade": catalog["unidade"],
+                "natureza": catalog["natureza"],
+                "quantidade": item.quantidade,
+                "custo_unit": item.custo_unit,
+                "custo_total_sem_iva": self._calc_nota_credito_total_sem_iva(item),
+                "iva": item.iva,
+                "custo_total_com_iva": self._calc_nota_credito_total_com_iva(item),
+                "categoria_nota_credito": self._normalize_nota_credito_categoria(item.categoria_nota_credito),
+                "obra": item.obra,
+                "fase": item.fase,
+                "estado": "GUARDADO",
+                "observacoes": item.observacoes,
+                "created_at": now,
+                "updated_at": now,
+            }
+            self._validate_nota_credito_item_business_rules(note_item)
+            created_items.append(note_item)
+            impacts.extend(self._preview_nota_credito_impacts(item))
+
+            if self._note_credit_item_affects_stock(note_item):
+                generated_movimentos.append(self._build_nci_stock_movement(note_item, fatura))
+                normalized_id = str(note_item.get("id_item") or "").strip()
+                if normalized_id:
+                    stock_item_ids_to_sync.add(normalized_id)
+
+            if note_item["categoria_nota_credito"] == "NC_COM_OBRA":
+                afetacao = self._build_nci_credit_afetacao(note_item, fatura)
+                generated_afetacoes.append(afetacao)
+                generated_movimentos.append(self._build_afo_movement(afetacao))
+
+        self._persist(
+            {
+                "notas_credito_itens": created_items,
+                "afetacoes_obra": generated_afetacoes,
+                "materiais_mov": generated_movimentos,
+            }
+        )
+        for item in created_items:
+            self.state.nota_credito_items[item["id_item_nota_credito"]] = item
+        for afetacao in generated_afetacoes:
+            self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
+        for movimento in generated_movimentos:
+            self.state.movimentos[movimento["id_mov"]] = movimento
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
+        logger.info(
+            "timing.create_nota_credito_items id_fatura=%s items=%s generated_afetacoes=%s generated_movimentos=%s duration_ms=%.2f",
+            id_fatura,
+            len(created_items),
+            len(generated_afetacoes),
+            len(generated_movimentos),
+            (perf_counter() - started_at) * 1000,
+        )
+        return NotaCreditoItemsResponse(items=[self._to_model(NotaCreditoItemRecord, item) for item in created_items], impacts=impacts)
+
+    def update_nota_credito_item(self, id_fatura: str, item_id: str, payload: dict[str, Any]) -> NotaCreditoItemRecord:
+        started_at = perf_counter()
+        current = self.state.nota_credito_items.get(item_id)
+        if not current or current["id_fatura"] != id_fatura:
+            raise HTTPException(status_code=404, detail="Nota de credito item not found")
+        fatura = self._require_note_credit_fatura(id_fatura)
+        merged_payload = {
+            "descricao_original": current["descricao_original"],
+            "id_item": current.get("id_item"),
+            "item_oficial": current.get("item_oficial"),
+            "natureza": current.get("natureza"),
+            "unidade": current.get("unidade"),
+            "quantidade": current["quantidade"],
+            "custo_unit": current["custo_unit"],
+            "iva": current["iva"],
+            "categoria_nota_credito": current["categoria_nota_credito"],
+            "obra": current.get("obra"),
+            "fase": current.get("fase"),
+            "observacoes": current.get("observacoes"),
+        }
+        for key, value in payload.items():
+            merged_payload[key] = value
+        item_input = NotaCreditoItemCreate.model_validate(merged_payload)
+        catalog = self._resolve_item_mapping(fatura, item_input)
+        updated = {
+            "id_item_nota_credito": current["id_item_nota_credito"],
+            "id_fatura": id_fatura,
+            "fornecedor": fatura["fornecedor"],
+            "nif": fatura["nif"],
+            "nr_documento": fatura["nr_documento"],
+            "doc_origem": fatura.get("doc_origem"),
+            "data_fatura": fatura["data_fatura"],
+            "descricao_original": item_input.descricao_original,
+            "id_item": catalog["id_item"],
+            "item_oficial": catalog["item_oficial"],
+            "unidade": catalog["unidade"],
+            "natureza": catalog["natureza"],
+            "quantidade": item_input.quantidade,
+            "custo_unit": item_input.custo_unit,
+            "custo_total_sem_iva": self._calc_nota_credito_total_sem_iva(item_input),
+            "iva": item_input.iva,
+            "custo_total_com_iva": self._calc_nota_credito_total_com_iva(item_input),
+            "categoria_nota_credito": self._normalize_nota_credito_categoria(item_input.categoria_nota_credito),
+            "obra": item_input.obra,
+            "fase": item_input.fase,
+            "estado": "GUARDADO",
+            "observacoes": item_input.observacoes,
+            "created_at": current["created_at"],
+            "updated_at": self._now(),
+        }
+        if current.get("sheet_row_num") is not None:
+            updated["sheet_row_num"] = current["sheet_row_num"]
+        self._validate_nota_credito_item_business_rules(updated)
+
+        current_note_movement = self._find_movement_by_source("NCI", item_id)
+        current_direct_afetacao = self._find_direct_afetacao_by_source(item_id)
+        current_afo_movement = (
+            self._find_movement_by_source("AFO", current_direct_afetacao["id_afetacao"])
+            if current_direct_afetacao
+            else None
+        )
+        stock_item_ids_to_sync = set()
+        if self._note_credit_item_affects_stock(current):
+            normalized_id = str(current.get("id_item") or "").strip()
+            if normalized_id:
+                stock_item_ids_to_sync.add(normalized_id)
+        if self._note_credit_item_affects_stock(updated):
+            normalized_id = str(updated.get("id_item") or "").strip()
+            if normalized_id:
+                stock_item_ids_to_sync.add(normalized_id)
+
+        upserts: dict[str, list[dict[str, Any]]] = {"notas_credito_itens": [updated]}
+        deletions: dict[str, list[str]] = {}
+
+        if self._note_credit_item_affects_stock(updated):
+            movement = self._build_nci_stock_movement(updated, fatura)
+            if current_note_movement:
+                movement = self._reuse_record_identity(movement, current_note_movement, "id_mov", keep_sequence=True)
+            upserts.setdefault("materiais_mov", []).append(movement)
+        elif current_note_movement:
+            self._merge_delete_groups(deletions, {"materiais_mov": [current_note_movement["id_mov"]]})
+
+        if updated["categoria_nota_credito"] == "NC_COM_OBRA":
+            credit_afetacao = self._build_nci_credit_afetacao(updated, fatura)
+            if current_direct_afetacao:
+                credit_afetacao = self._reuse_record_identity(credit_afetacao, current_direct_afetacao, "id_afetacao")
+            upserts["afetacoes_obra"] = [credit_afetacao]
+            direct_movement = self._build_afo_movement(credit_afetacao)
+            if current_afo_movement:
+                direct_movement = self._reuse_record_identity(direct_movement, current_afo_movement, "id_mov", keep_sequence=True)
+            upserts.setdefault("materiais_mov", []).append(direct_movement)
+        elif current_direct_afetacao:
+            self._merge_delete_groups(deletions, self._collect_afetacao_delete_groups(current_direct_afetacao["id_afetacao"]))
+
+        self._persist(upserts)
+        self.state.nota_credito_items[item_id] = updated
+        for afetacao in upserts.get("afetacoes_obra", []):
+            self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
+        for movimento in upserts.get("materiais_mov", []):
+            self.state.movimentos[movimento["id_mov"]] = movimento
+        if deletions:
+            self._delete_records(deletions)
+            self._delete_runtime_records(deletions)
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
+        logger.info(
+            "timing.update_nota_credito_item id_fatura=%s item_id=%s categoria=%s deleted_groups=%s duration_ms=%.2f",
+            id_fatura,
+            item_id,
+            updated["categoria_nota_credito"],
+            ",".join(sorted(deletions.keys())) if deletions else "-",
+            (perf_counter() - started_at) * 1000,
+        )
+        return self._to_model(NotaCreditoItemRecord, updated)
+
+    def delete_nota_credito_item(self, id_fatura: str, item_id: str) -> None:
+        current = self.state.nota_credito_items.get(item_id)
+        if not current or current["id_fatura"] != id_fatura:
+            raise HTTPException(status_code=404, detail="Nota de credito item not found")
+        delete_groups = self._collect_nci_delete_groups(item_id)
+        stock_item_ids_to_sync = self._collect_stock_item_ids_from_groups(delete_groups)
+        self._delete_records(delete_groups)
+        self._delete_runtime_records(delete_groups)
+        self._sync_stock_atual_for_item_ids(stock_item_ids_to_sync)
+
     def list_catalog(self) -> list[CatalogEntryRecord]:
         return [self._to_catalog_model(item) for item in self.state.catalog.values()]
 
@@ -418,6 +748,7 @@ class MaterialsService:
         self._ensure_catalog_item_unique(current["item_oficial"], exclude_id=id_item)
         current["updated_at"] = self._now()
         dependent_fit_updates: list[dict[str, Any]] = []
+        dependent_nci_updates: list[dict[str, Any]] = []
         dependent_afetacao_updates: list[dict[str, Any]] = []
         dependent_mov_updates: list[dict[str, Any]] = []
         for fit in self.state.fatura_items.values():
@@ -429,6 +760,15 @@ class MaterialsService:
             updated_fit["unidade"] = current["unidade"]
             updated_fit["updated_at"] = current["updated_at"]
             dependent_fit_updates.append(updated_fit)
+        for note_item in self.state.nota_credito_items.values():
+            if note_item["id_item"] != id_item:
+                continue
+            updated_note_item = deepcopy(note_item)
+            updated_note_item["item_oficial"] = current["item_oficial"]
+            updated_note_item["natureza"] = current["natureza"]
+            updated_note_item["unidade"] = current["unidade"]
+            updated_note_item["updated_at"] = current["updated_at"]
+            dependent_nci_updates.append(updated_note_item)
         for afetacao in self.state.afetacoes.values():
             if afetacao["id_item"] != id_item:
                 continue
@@ -451,6 +791,7 @@ class MaterialsService:
             {
                 "materiais_cad": [current],
                 "faturas_itens": dependent_fit_updates,
+                "notas_credito_itens": dependent_nci_updates,
                 "afetacoes_obra": dependent_afetacao_updates,
                 "materiais_mov": dependent_mov_updates,
             }
@@ -458,6 +799,8 @@ class MaterialsService:
         self.state.catalog[id_item] = current
         for fit in dependent_fit_updates:
             self.state.fatura_items[fit["id_item_fatura"]] = fit
+        for note_item in dependent_nci_updates:
+            self.state.nota_credito_items[note_item["id_item_nota_credito"]] = note_item
         for afetacao in dependent_afetacao_updates:
             self.state.afetacoes[afetacao["id_afetacao"]] = afetacao
         for movimento in dependent_mov_updates:
@@ -468,6 +811,8 @@ class MaterialsService:
     def delete_catalog_entry(self, id_item: str) -> None:
         self._require_catalog(id_item)
         if any(item["id_item"] == id_item for item in self.state.fatura_items.values()):
+            raise HTTPException(status_code=422, detail="CATALOGO_REFERENCIADO")
+        if any(item["id_item"] == id_item for item in self.state.nota_credito_items.values()):
             raise HTTPException(status_code=422, detail="CATALOGO_REFERENCIADO")
         if any(item["id_item"] == id_item for item in self.state.afetacoes.values()):
             raise HTTPException(status_code=422, detail="CATALOGO_REFERENCIADO")
@@ -1077,7 +1422,7 @@ class MaterialsService:
                     payload={"operation": "delete", "ids": ids},
                 )
 
-    def _resolve_item_mapping(self, fatura: dict[str, Any], item: FaturaItemCreate) -> dict[str, Any]:
+    def _resolve_item_mapping(self, fatura: dict[str, Any], item: FaturaItemCreate | NotaCreditoItemCreate) -> dict[str, Any]:
         if item.id_item:
             catalog = self._require_catalog(item.id_item)
             self._ensure_catalog_reference(item.id_item, item.descricao_original)
@@ -1143,6 +1488,16 @@ class MaterialsService:
         if destino == "CONSUMO" and (not item["obra"] or not item["fase"]):
             raise HTTPException(status_code=422, detail="Direct consumption requires obra and fase")
 
+    def _validate_nota_credito_item_business_rules(self, item: dict[str, Any]) -> None:
+        categoria = self._normalize_nota_credito_categoria(item.get("categoria_nota_credito"))
+        item["categoria_nota_credito"] = categoria
+        if categoria == "NC_COM_OBRA":
+            if not item.get("obra") or not item.get("fase"):
+                raise HTTPException(status_code=422, detail="NC_COM_OBRA_REQUIRES_OBRA_AND_FASE")
+            return
+        item["obra"] = None
+        item["fase"] = None
+
     def _validate_stock_afetacao_business_rules(self, afetacao: dict[str, Any]) -> None:
         natureza = str(afetacao.get("natureza") or "").strip().upper()
         uso_combustivel = self._normalize_uso_combustivel(afetacao.get("uso_combustivel"), natureza)
@@ -1179,6 +1534,38 @@ class MaterialsService:
             "processar": True,
             "estado": "MOVIMENTO_GERADO",
             "observacoes": "Gerado automaticamente a partir de FATURAS_ITENS",
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    def _build_nci_credit_afetacao(self, note_item: dict[str, Any], fatura: dict[str, Any]) -> dict[str, Any]:
+        now = self._now()
+        quantidade = abs(float(note_item.get("quantidade") or 0.0))
+        unit_cost = note_item["custo_total_sem_iva"] / quantidade if quantidade else note_item["custo_unit"]
+        return {
+            "id_afetacao": self.state.next_id("AFO"),
+            "origem": "FATURA_DIRETA",
+            "source_id": note_item["id_item_nota_credito"],
+            "data": note_item["data_fatura"],
+            "id_item": note_item["id_item"],
+            "item_oficial": note_item["item_oficial"],
+            "natureza": note_item["natureza"],
+            "uso_combustivel": "N/A",
+            "quantidade": -quantidade,
+            "unidade": note_item["unidade"],
+            "custo_unit": unit_cost,
+            "custo_total": -note_item["custo_total_com_iva"],
+            "custo_total_sem_iva": -note_item["custo_total_sem_iva"],
+            "iva": note_item["iva"],
+            "custo_total_com_iva": -note_item["custo_total_com_iva"],
+            "obra": note_item["obra"],
+            "fase": note_item["fase"],
+            "fornecedor": fatura["fornecedor"],
+            "nif": fatura["nif"],
+            "nr_documento": fatura["nr_documento"],
+            "processar": True,
+            "estado": "MOVIMENTO_GERADO",
+            "observacoes": "Gerado automaticamente a partir de NOTAS_CREDITO_ITENS",
             "created_at": now,
             "updated_at": now,
         }
@@ -1222,11 +1609,48 @@ class MaterialsService:
             "sequence": self.state.next_sequence(),
         }
 
+    def _build_nci_stock_movement(self, note_item: dict[str, Any], fatura: dict[str, Any]) -> dict[str, Any]:
+        now = self._now()
+        quantidade = abs(float(note_item.get("quantidade") or 0.0))
+        unit_cost = note_item["custo_total_sem_iva"] / quantidade if quantidade else note_item["custo_unit"]
+        observacoes = f"[SRC_NCI:{note_item['id_item_nota_credito']}]"
+        if note_item.get("categoria_nota_credito") == "NC_COM_OBRA" and note_item.get("obra"):
+            observacoes += f" [OBRA:{note_item['obra']}]"
+            if note_item.get("fase"):
+                observacoes += f" [FASE:{note_item['fase']}]"
+        return {
+            "id_mov": self.state.next_id("MOV"),
+            "tipo": "CONSUMO",
+            "data": note_item["data_fatura"],
+            "id_item": note_item["id_item"],
+            "item_oficial": note_item["item_oficial"],
+            "unidade": note_item["unidade"],
+            "uso_combustivel": "N/A",
+            "matricula": None,
+            "quantidade": quantidade,
+            "custo_unit": unit_cost,
+            "custo_total_sem_iva": note_item["custo_total_sem_iva"],
+            "iva": note_item["iva"],
+            "custo_total_com_iva": note_item["custo_total_com_iva"],
+            "obra": None,
+            "fase": None,
+            "fornecedor": fatura["fornecedor"],
+            "nif": fatura["nif"],
+            "nr_documento": fatura["nr_documento"],
+            "observacoes": observacoes,
+            "source_type": "NCI",
+            "source_id": note_item["id_item_nota_credito"],
+            "created_at": now,
+            "updated_at": now,
+            "sequence": self.state.next_sequence(),
+        }
+
     def _build_afo_movement(self, afetacao: dict[str, Any]) -> dict[str, Any]:
         now = self._now()
         observations = f"[SRC_AFO:{afetacao['id_afetacao']}]"
         if afetacao.get("source_id"):
-            observations += f" [SRC_FIT:{afetacao['source_id']}]"
+            source_marker = "SRC_NCI" if str(afetacao.get("source_id") or "").startswith("NCI-") else "SRC_FIT"
+            observations += f" [{source_marker}:{afetacao['source_id']}]"
         return {
             "id_mov": self.state.next_id("MOV"),
             "tipo": "CONSUMO",
@@ -1295,12 +1719,48 @@ class MaterialsService:
             OperationImpact(type="generated", entity="MATERIAIS_MOV", source="AFETACOES_OBRA", summary="Vai gerar movimento tecnico de consumo"),
         ]
 
+    def _preview_nota_credito_impacts(self, item: NotaCreditoItemCreate) -> list[OperationImpact]:
+        impacts: list[OperationImpact] = []
+        if str(item.natureza or "").strip().upper() == "MATERIAL":
+            impacts.append(
+                OperationImpact(
+                    type="generated",
+                    entity="MATERIAIS_MOV",
+                    source="NOTAS_CREDITO_ITENS",
+                    summary="Vai gerar saida tecnica de stock por devolucao/credito de material",
+                )
+            )
+        if self._normalize_nota_credito_categoria(item.categoria_nota_credito) == "NC_COM_OBRA":
+            impacts.append(
+                OperationImpact(
+                    type="generated",
+                    entity="AFETACOES_OBRA",
+                    source="NOTAS_CREDITO_ITENS",
+                    summary="Vai gerar reducao de custo na obra/fase",
+                )
+            )
+            impacts.append(
+                OperationImpact(
+                    type="generated",
+                    entity="MATERIAIS_MOV",
+                    source="AFETACOES_OBRA",
+                    summary="Vai gerar movimento tecnico de regularizacao da obra",
+                )
+            )
+        return impacts
+
     def _calc_total_sem_iva(self, item: FaturaItemCreate) -> float:
         unit = item.custo_unit * (1 - (item.desconto_1 / 100)) * (1 - (item.desconto_2 / 100))
         return round(unit * item.quantidade, 6)
 
     def _calc_total_com_iva(self, item: FaturaItemCreate) -> float:
         return round(self._calc_total_sem_iva(item) * (1 + (item.iva / 100)), 6)
+
+    def _calc_nota_credito_total_sem_iva(self, item: NotaCreditoItemCreate) -> float:
+        return round(item.custo_unit * item.quantidade, 6)
+
+    def _calc_nota_credito_total_com_iva(self, item: NotaCreditoItemCreate) -> float:
+        return round(self._calc_nota_credito_total_sem_iva(item) * (1 + (item.iva / 100)), 6)
 
     def _generate_catalog_id(self, natureza: str) -> str:
         prefix = {
@@ -1343,6 +1803,15 @@ class MaterialsService:
     def _is_fuel_nature(self, natureza: str | None) -> bool:
         return str(natureza or "").strip().upper() in {"GASOLEO", "GASOLINA"}
 
+    def _normalize_nota_credito_categoria(self, value: Any) -> str:
+        normalized = self._normalize(str(value or "")).replace(" ", "_")
+        if normalized in {"nc_com_obra", "com_obra"}:
+            return "NC_COM_OBRA"
+        return "NC_SEM_OBRA"
+
+    def _note_credit_item_affects_stock(self, item: dict[str, Any]) -> bool:
+        return str(item.get("natureza") or "").strip().upper() == "MATERIAL"
+
     def _natureza_tracks_stock(self, natureza: Any) -> bool:
         return str(natureza or "").strip().upper() in {"MATERIAL", "GASOLEO", "GASOLINA"}
 
@@ -1357,12 +1826,18 @@ class MaterialsService:
                 return str(fit.get("destino") or "").strip().upper() == "STOCK"
             return movement_type == "ENTRADA" and self._natureza_tracks_stock(self._movement_natureza(movement))
 
+        if source_type == "NCI":
+            note_item = self.state.nota_credito_items.get(source_id)
+            if note_item:
+                return self._note_credit_item_affects_stock(note_item)
+            return movement_type == "CONSUMO" and str(self._movement_natureza(movement) or "").strip().upper() == "MATERIAL"
+
         if source_type == "AFO":
             afetacao = self.state.afetacoes.get(source_id)
             if afetacao:
                 return str(afetacao.get("origem") or "").strip().upper() == "STOCK"
             observacoes = str(movement.get("observacoes") or "")
-            if "[SRC_FIT:" in observacoes:
+            if "[SRC_FIT:" in observacoes or "[SRC_NCI:" in observacoes:
                 return False
             return movement_type == "CONSUMO" and self._natureza_tracks_stock(self._movement_natureza(movement))
 
@@ -1375,6 +1850,10 @@ class MaterialsService:
             fit = self.state.fatura_items.get(source_id)
             if fit:
                 return str(fit.get("natureza") or "").strip().upper() or None
+        if source_type == "NCI" and source_id:
+            note_item = self.state.nota_credito_items.get(source_id)
+            if note_item:
+                return str(note_item.get("natureza") or "").strip().upper() or None
         if source_type == "AFO" and source_id:
             afetacao = self.state.afetacoes.get(source_id)
             if afetacao:
@@ -1387,11 +1866,66 @@ class MaterialsService:
     def _normalize(self, value: str | None) -> str:
         return " ".join((value or "").strip().lower().split())
 
+    def _normalize_optional_identifier(self, value: Any) -> str | None:
+        normalized = str(value or "").strip()
+        return normalized or None
+
+    def _normalize_fatura_tipo_doc(self, value: Any) -> str:
+        normalized = self._normalize(str(value or "")).replace(" ", "_")
+        if normalized in {"nota_credito", "nota_de_credito"}:
+            return "NOTA_CREDITO"
+        return "FATURA"
+
+    def _validate_fatura_document_fields(self, fatura: dict[str, Any]) -> None:
+        tipo_doc = self._normalize_fatura_tipo_doc(fatura.get("tipo_doc"))
+        fatura["tipo_doc"] = tipo_doc
+        fatura["doc_origem"] = self._normalize_optional_identifier(fatura.get("doc_origem"))
+        if tipo_doc == "NOTA_CREDITO":
+            if not fatura.get("doc_origem"):
+                raise HTTPException(status_code=422, detail="NOTA_CREDITO_REQUIRES_DOC_ORIGEM")
+            fatura["paga"] = False
+            fatura["data_pagamento"] = None
+            return
+        fatura["doc_origem"] = None
+
+    def _validate_fatura_document_transition(self, previous: dict[str, Any], current: dict[str, Any]) -> None:
+        previous_tipo = self._normalize_fatura_tipo_doc(previous.get("tipo_doc"))
+        current_tipo = self._normalize_fatura_tipo_doc(current.get("tipo_doc"))
+        if previous_tipo == current_tipo:
+            return
+        has_invoice_items = any(item["id_fatura"] == previous["id_fatura"] for item in self.state.fatura_items.values())
+        has_note_items = any(item["id_fatura"] == previous["id_fatura"] for item in self.state.nota_credito_items.values())
+        if has_invoice_items or has_note_items:
+            raise HTTPException(status_code=422, detail="FATURA_TIPO_DOC_COM_LINHAS")
+
+    def _validate_fatura_compromisso_link(self, fatura: dict[str, Any]) -> None:
+        normalized_id = self._normalize_optional_identifier(fatura.get("id_compromisso"))
+        fatura["id_compromisso"] = normalized_id
+        if not normalized_id:
+            return
+        if normalized_id not in self.state.compromissos:
+            raise HTTPException(status_code=422, detail="COMPROMISSO_INEXISTENTE")
+
     def _require_fatura(self, id_fatura: str) -> dict[str, Any]:
         fatura = self.state.faturas.get(id_fatura)
         if not fatura:
             raise HTTPException(status_code=404, detail="Fatura not found")
         return fatura
+
+    def _require_note_credit_fatura(self, id_fatura: str) -> dict[str, Any]:
+        fatura = self._require_fatura(id_fatura)
+        if not self._is_note_credit_fatura(fatura):
+            raise HTTPException(status_code=422, detail="NOTA_CREDITO_ITEM_ON_FATURA")
+        return fatura
+
+    def _is_note_credit_fatura(self, fatura: dict[str, Any]) -> bool:
+        return self._normalize_fatura_tipo_doc(fatura.get("tipo_doc")) == "NOTA_CREDITO"
+
+    def _require_compromisso(self, id_compromisso: str) -> dict[str, Any]:
+        compromisso = self.state.compromissos.get(id_compromisso)
+        if not compromisso:
+            raise HTTPException(status_code=404, detail="Compromisso not found")
+        return compromisso
 
     def _require_catalog(self, id_item: str) -> dict[str, Any]:
         catalog = self.state.catalog.get(id_item)
@@ -1584,6 +2118,16 @@ class MaterialsService:
             self._merge_delete_groups(groups, self._collect_afetacao_delete_groups(direct_afetacao["id_afetacao"]))
         return groups
 
+    def _collect_nci_delete_groups(self, item_id: str) -> dict[str, list[str]]:
+        groups: dict[str, list[str]] = {"notas_credito_itens": [item_id]}
+        nci_movement = self._find_movement_by_source("NCI", item_id)
+        if nci_movement:
+            groups.setdefault("materiais_mov", []).append(nci_movement["id_mov"])
+        direct_afetacao = self._find_direct_afetacao_by_source(item_id)
+        if direct_afetacao:
+            self._merge_delete_groups(groups, self._collect_afetacao_delete_groups(direct_afetacao["id_afetacao"]))
+        return groups
+
     def _collect_afetacao_delete_groups(self, id_afetacao: str) -> dict[str, list[str]]:
         groups: dict[str, list[str]] = {"afetacoes_obra": [id_afetacao]}
         movement = self._find_movement_by_source("AFO", id_afetacao)
@@ -1604,6 +2148,12 @@ class MaterialsService:
                 normalized_id = str(fit.get("id_item") or "").strip()
                 if normalized_id:
                     item_ids.add(normalized_id)
+        for item_id in groups.get("notas_credito_itens", []):
+            note_item = self.state.nota_credito_items.get(item_id)
+            if note_item and self._note_credit_item_affects_stock(note_item):
+                normalized_id = str(note_item.get("id_item") or "").strip()
+                if normalized_id:
+                    item_ids.add(normalized_id)
         for afetacao_id in groups.get("afetacoes_obra", []):
             afetacao = self.state.afetacoes.get(afetacao_id)
             if afetacao and str(afetacao.get("origem") or "").strip().upper() == "STOCK":
@@ -1620,8 +2170,10 @@ class MaterialsService:
 
     def _delete_runtime_records(self, groups: dict[str, list[str]]) -> None:
         mapping = {
+            "compromissos_obra": self.state.compromissos,
             "faturas": self.state.faturas,
             "faturas_itens": self.state.fatura_items,
+            "notas_credito_itens": self.state.nota_credito_items,
             "materiais_cad": self.state.catalog,
             "materiais_referencias": self.state.catalog_references,
             "afetacoes_obra": self.state.afetacoes,
@@ -1654,6 +2206,10 @@ class MaterialsService:
         return datetime.now(UTC)
 
     def _normalize_fatura_payment_fields(self, entity: dict[str, Any]) -> None:
+        if self._normalize_fatura_tipo_doc(entity.get("tipo_doc")) == "NOTA_CREDITO":
+            entity["paga"] = False
+            entity["data_pagamento"] = None
+            return
         entity["paga"] = bool(entity.get("paga", False))
         if not entity["paga"]:
             entity["data_pagamento"] = None
@@ -1694,6 +2250,8 @@ class MaterialsService:
         source_record: dict[str, Any] | None = None
         if source_type == "FIT" and source_id:
             source_record = self.state.fatura_items.get(source_id)
+        elif source_type == "NCI" and source_id:
+            source_record = self.state.nota_credito_items.get(source_id)
         elif source_type == "AFO" and source_id:
             source_record = self.state.afetacoes.get(source_id)
 

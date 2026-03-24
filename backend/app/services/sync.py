@@ -10,7 +10,9 @@ from backend.app.services.state import RuntimeState
 
 CORE_SYNC_ENTITIES = [
     "faturas",
+    "compromissos_obra",
     "faturas_itens",
+    "notas_credito_itens",
     "materiais_cad",
     "materiais_referencias",
     "afetacoes_obra",

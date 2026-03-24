@@ -231,6 +231,15 @@ Last updated: 2026-03-23
   - manual `AFETACOES_OBRA` stock rows are now processed on save in the new app; the temporary UI checkbox/process button was removed
   - the new app now exposes a manual `Recarregar do Sheets` action instead of forcing backend restart when operators need to rehydrate runtime state from Google Sheets
 - `Sincronizacao` now shows the core entity jobs even before any sync attempt happens in the current backend session
+- The materials backoffice now also supports header-only `COMPROMISSOS_OBRA` management:
+  - dedicated backend CRUD
+  - startup hydration and sync diagnostics
+  - Sheets-first + Supabase-mirror handling like the other core material entities
+  - `FATURAS.ID_Compromisso` is now exposed in the app and validated against existing compromisso rows
+- `Faturas` now works as a mixed document queue in the new app:
+  - `Fatura` keeps the current invoice-detail workflow
+  - `Compromisso` is managed from the same workspace without invoice-line detail
+  - `Nota de Crédito` is visible in the selector but intentionally blocked for a later phase
 - The built frontend now resolves API base safely for LAN access:
   - if the app is opened from another machine through `http://<IP-DO-PC>:8000/`, it no longer falls back to `127.0.0.1`
 - `FATURAS_ITENS` now has guided item selection from catalog, quick-create of catalog items, and a readable impact preview before save
@@ -302,6 +311,16 @@ Last updated: 2026-03-23
   - `Install-MaterialsBackofficeService.ps1`
   - the recommended Windows service wrapper is `NSSM`
 - Edit/delete flows are now implemented in the app, but they still need validation on a wider sample of real business rows from the live workbook.
+- `COMPROMISSOS_OBRA` is now first-class in the backoffice, but still needs real-row validation for:
+  - operator state management (`ABERTO` / `PARCIALMENTE_PAGO` / `PAGO`)
+  - invoice-link usage through `FATURAS.ID_Compromisso`
+  - delete blocking when referenced by existing invoices
+- `Nota de Crédito` is now active in the backoffice flow with this operating model:
+  - header stays in `FATURAS` using `Tipo_Doc = NOTA_CREDITO` and `Doc_Origem`
+  - lines are written to `NOTAS_CREDITO_ITENS`
+  - `NC_COM_OBRA` reduces cost in `AFETACOES_OBRA`
+  - `MATERIAL` lines generate technical stock reduction in `MATERIAIS_MOV`
+  - values remain positive in Sheets and are treated as credit in the backend
 - `MATERIAIS_MOV` can still look duplicated to operators when two `STOCK` afetacoes hit the same item/date/obra/fase context; this now has a safe diagnostic path but still needs UX clarification.
 - Watch for Apps Script trigger behavior differences between:
   - manual cell edit,

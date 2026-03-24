@@ -11,6 +11,30 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-23
 
+### `pending`
+- **Type**: feat / ui / sync
+- **Scope**: `backend/app/*`, `backend/sql/*`, `backend/tests/*`, `frontend/src/*`
+- **Summary**:
+  - Promoted `COMPROMISSOS_OBRA` to a first-class materials-backoffice entity with:
+    - runtime hydration
+    - Google Sheets parser/serializer support
+    - Supabase table mapping
+    - sync diagnostics and retry visibility
+    - CRUD API routes
+  - Kept the existing `FATURAS.ID_Compromisso` groundwork and made it operational by:
+    - exposing it in the `Faturas` UI
+    - validating it against existing compromissos
+    - blocking compromisso deletion while referenced by invoices
+  - Reworked the `Faturas` workspace into a mixed document queue:
+    - `Fatura` keeps the current invoice-detail flow
+    - `Compromisso` uses a header-only workflow in the same page
+    - `Nota de Crédito` is shown but intentionally blocked for a later phase
+- **Impact**:
+  - The backoffice now separates:
+    - assumed obra cost in `COMPROMISSOS_OBRA`
+    - later liquidation/payment documents in `FATURAS`
+  - Operators can manage compromisso headers without losing the current invoice-line workflow.
+
 ### `28d9dbc`
 - **Type**: fix
 - **Scope**: `backend/app/*`, `backend/tests/*`
@@ -507,3 +531,28 @@ Purpose: chronological, commit-based project history for fast handoff.
   - The materials backoffice now matches the newer Google Sheet operating model more closely, especially for fuel attribution and payment tracking.
   - Runtime behavior is less likely to drift because old GAS materials automation no longer rewrites the same rows behind the new app.
   - Operator entry should be more stable for supplier, obra/fase, and vehicle-assisted dropdown flows.
+
+### `pending`
+- **Type**: feat
+- **Scope**: `backend/`, `frontend/`, `docs/*`
+- **Summary**:
+  - Activated `Nota de Crédito` inside the materials backoffice while keeping the header in `FATURAS`.
+  - Added backend support for:
+    - `FATURAS.Tipo_Doc`
+    - `FATURAS.Doc_Origem`
+    - `NOTAS_CREDITO_ITENS`
+    - generated stock reduction for material credit lines
+    - generated obra-cost reduction for `NC_COM_OBRA`
+  - Added Google Sheets hydration/serialization, Supabase mapping, sync diagnostics, and migration coverage for `NOTAS_CREDITO_ITENS`.
+  - Unblocked the frontend flow so the `Faturas` workspace now supports:
+    - `Fatura`
+    - `Compromisso`
+    - `Nota de Credito`
+  - Added a dedicated note-credit detail workspace under the same `/faturas/:id` route family.
+- **Impact**:
+  - Operators can now register and process credit notes without inventing a parallel document flow outside the backoffice.
+  - The implementation preserves the operating model:
+    - Sheets first
+    - Supabase second
+    - retry visibility explicit
+  - Credit behavior is now auditable per line instead of being hidden behind manual spreadsheet conventions.

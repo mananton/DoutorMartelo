@@ -95,6 +95,7 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
                 ("REGISTOS_POR_DIA", 1),
                 ("LEGACY_MAO_OBRA", 1),
                 ("FATURAS_ITENS", 1),
+                ("NOTAS_CREDITO_ITENS", 1),
                 ("AFETACOES_OBRA", 1),
                 ("MATERIAIS_MOV", 1),
             ]
@@ -483,10 +484,12 @@ def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     valor_fallback = _read_float(row, ["Valor"])
     return {
         "id_fatura": id_fatura,
+        "tipo_doc": (_read_upper_text(row, ["Tipo_Doc", "Tipo Doc", "Tipo"]) or "FATURA").replace(" ", "_"),
+        "doc_origem": _read_text(row, ["Doc_Origem", "Doc Origem", "Documento Origem"]),
         "id_compromisso": _read_text(row, ["ID_Compromisso", "ID Compromisso"]),
         "fornecedor": _read_text(row, ["Fornecedor"]) or "",
         "nif": _read_text(row, ["NIF"]) or "",
-        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]) or "",
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Numero Doc/Fatura"]) or "",
         "data_fatura": _read_date(row, ["Data Fatura", "Data"]) or date.today(),
         "valor_sem_iva": valor_sem_iva if valor_sem_iva is not None else (valor_fallback or 0.0),
         "iva": _read_float(row, ["IVA"]) or 0.0,
@@ -495,6 +498,32 @@ def _parse_fatura(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "data_pagamento": _read_date(row, ["Data Pagamento"]),
         "observacoes": _read_text(row, ["Observacoes", "Observações"]),
         "estado": _read_text(row, ["Estado"]) or "ATIVA",
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _parse_compromisso(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    id_compromisso = _read_text(row, ["ID_Compromisso", "ID Compromisso"])
+    if not id_compromisso:
+        return None
+    now = _read_timestamp(row_num)
+    return {
+        "id_compromisso": id_compromisso,
+        "data": _read_date(row, ["Data"]) or date.today(),
+        "fornecedor": _read_text(row, ["Fornecedor"]) or "",
+        "nif": _read_text(row, ["NIF"]) or "",
+        "tipo_doc": (_read_upper_text(row, ["Tipo_Doc", "Tipo Doc", "Tipo"]) or "PRO_FORMA").replace(" ", "_"),
+        "doc_origem": _read_text(row, ["Doc_Origem", "Doc Origem", "Documento Origem"]) or "",
+        "obra": _read_text(row, ["Obra"]) or "",
+        "fase": _read_text(row, ["Fase"]) or "",
+        "descricao": _read_text(row, ["Descricao", "Descrição"]) or "",
+        "valor_sem_iva": _read_float(row, ["Valor_Sem_IVA", "Valor Sem IVA", "Valor Total Sem IVA"]) or 0.0,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "valor_com_iva": _read_float(row, ["Valor_Com_IVA", "Valor Com IVA", "Valor Total Com IVA", "Valor"]) or 0.0,
+        "estado": (_read_upper_text(row, ["Estado"]) or "ABERTO").replace(" ", "_"),
+        "observacoes": _read_text(row, ["Observacoes", "Observações", "ObservaÃ§Ãµes"]),
         "sheet_row_num": row_num,
         "created_at": now,
         "updated_at": now,
@@ -511,7 +540,7 @@ def _parse_fit(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "id_fatura": _read_text(row, ["ID_Fatura", "ID Fatura"]) or "",
         "fornecedor": _read_text(row, ["Fornecedor"]),
         "nif": _read_text(row, ["NIF"]),
-        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "Numero Doc/Fatura"]),
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Numero Doc/Fatura"]),
         "data_fatura": _read_date(row, ["Data Fatura", "Data"]),
         "descricao_original": _read_text(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]) or "",
         "id_item": _read_text(row, ["ID_Item", "ID Item"]),
@@ -533,6 +562,40 @@ def _parse_fit(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "observacoes": _read_text(row, ["Observacoes", "Observações"]),
         "estado_mapeamento": _read_text(row, ["Estado_Mapeamento", "Estado Mapeamento"]) or "GUARDADO",
         "sugestao_alias": _read_text(row, ["Sugestao_Alias", "Sugestao Alias"]),
+        "sheet_row_num": row_num,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _parse_nci(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    item_id = _read_text(row, ["ID_Item_Nota_Credito", "ID Item Nota Credito"])
+    if not item_id:
+        return None
+    now = _read_timestamp(row_num)
+    return {
+        "id_item_nota_credito": item_id,
+        "id_fatura": _read_text(row, ["ID_Fatura", "ID Fatura"]) or "",
+        "fornecedor": _read_text(row, ["Fornecedor"]),
+        "nif": _read_text(row, ["NIF"]),
+        "nr_documento": _read_text(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Numero Doc/Fatura"]),
+        "doc_origem": _read_text(row, ["Doc_Origem", "Doc Origem", "Documento Origem"]),
+        "data_fatura": _read_date(row, ["Data Fatura", "Data"]),
+        "descricao_original": _read_text(row, ["Descricao_Original", "Descrição_Original", "Descricao Original"]) or "",
+        "id_item": _read_text(row, ["ID_Item", "ID Item"]),
+        "item_oficial": _read_text(row, ["Item_Oficial", "Item Oficial"]),
+        "unidade": _read_text(row, ["Unidade"]),
+        "natureza": _read_upper_text(row, ["Natureza"]),
+        "quantidade": _read_float(row, ["Quantidade"]) or 0.0,
+        "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit"]) or 0.0,
+        "custo_total_sem_iva": _read_float(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]) or 0.0,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "custo_total_com_iva": _read_float(row, ["Custo_Total Com IVA", "Custo Total Com IVA"]) or 0.0,
+        "categoria_nota_credito": (_read_upper_text(row, ["Categoria_Nota_Credito", "Categoria Nota Credito"]) or "NC_SEM_OBRA").replace(" ", "_"),
+        "obra": _read_text(row, ["Obra"]),
+        "fase": _read_text(row, ["Fase"]),
+        "estado": _read_text(row, ["Estado"]) or "GUARDADO",
+        "observacoes": _read_text(row, ["Observacoes", "Observações"]),
         "sheet_row_num": row_num,
         "created_at": now,
         "updated_at": now,
@@ -666,6 +729,8 @@ def _parse_stock_atual(row: dict[str, Any], row_num: int) -> dict[str, Any] | No
 def _fatura_serializer(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "ID_Fatura": record["id_fatura"],
+        "Tipo_Doc": record.get("tipo_doc", "FATURA"),
+        "Doc_Origem": record.get("doc_origem", ""),
         "ID_Compromisso": record.get("id_compromisso", ""),
         "Fornecedor": record["fornecedor"],
         "NIF": record["nif"],
@@ -678,6 +743,25 @@ def _fatura_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "Data Pagamento": str(record["data_pagamento"]) if record.get("data_pagamento") else "",
         "Valor Total Com IVA": record["valor_com_iva"],
         "Estado": record.get("estado", ""),
+        "Observacoes": record.get("observacoes", ""),
+    }
+
+
+def _compromisso_serializer(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ID_Compromisso": record["id_compromisso"],
+        "Data": str(record["data"]),
+        "Fornecedor": record["fornecedor"],
+        "NIF": record["nif"],
+        "Tipo_Doc": record["tipo_doc"],
+        "Doc_Origem": record["doc_origem"],
+        "Obra": record["obra"],
+        "Fase": record["fase"],
+        "Descricao": record["descricao"],
+        "Valor_Sem_IVA": record.get("valor_sem_iva", 0),
+        "IVA": _format_percentage_input(record.get("iva", 0)),
+        "Valor_Com_IVA": record.get("valor_com_iva", 0),
+        "Estado": record.get("estado", "ABERTO"),
         "Observacoes": record.get("observacoes", ""),
     }
 
@@ -710,6 +794,33 @@ def _fit_serializer(record: dict[str, Any]) -> dict[str, Any]:
         "Observacoes": record.get("observacoes", ""),
         "Estado_Mapeamento": record.get("estado_mapeamento", ""),
         "Sugestao_Alias": record.get("sugestao_alias", ""),
+    }
+
+
+def _nci_serializer(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ID_Item_Nota_Credito": record["id_item_nota_credito"],
+        "ID_Fatura": record["id_fatura"],
+        "Fornecedor": record.get("fornecedor", ""),
+        "NIF": record.get("nif", ""),
+        "Nº Doc/Fatura": record.get("nr_documento", ""),
+        "Doc_Origem": record.get("doc_origem", ""),
+        "Data Fatura": str(record.get("data_fatura") or ""),
+        "Descricao_Original": record["descricao_original"],
+        "ID_Item": record.get("id_item", ""),
+        "Item_Oficial": record.get("item_oficial", ""),
+        "Unidade": record.get("unidade", ""),
+        "Natureza": record.get("natureza", ""),
+        "Quantidade": record.get("quantidade", 0),
+        "Custo_Unit": record.get("custo_unit", 0),
+        "Custo_Total Sem IVA": record.get("custo_total_sem_iva", 0),
+        "IVA": _format_percentage_input(record.get("iva", 0)),
+        "Custo_Total Com IVA": record.get("custo_total_com_iva", 0),
+        "Categoria_Nota_Credito": record.get("categoria_nota_credito", "NC_SEM_OBRA"),
+        "Obra": record.get("obra", ""),
+        "Fase": record.get("fase", ""),
+        "Estado": record.get("estado", "GUARDADO"),
+        "Observacoes": record.get("observacoes", ""),
     }
 
 
@@ -802,7 +913,9 @@ def _stock_atual_serializer(record: dict[str, Any]) -> dict[str, Any]:
 
 SHEET_WRITE_CONFIG: dict[str, dict[str, Any]] = {
     "faturas": {"sheet_name": "FATURAS", "id_field": "ID_Fatura", "serializer": _fatura_serializer},
+    "compromissos_obra": {"sheet_name": "COMPROMISSOS_OBRA", "id_field": "ID_Compromisso", "serializer": _compromisso_serializer},
     "faturas_itens": {"sheet_name": "FATURAS_ITENS", "id_field": "ID_Item_Fatura", "serializer": _fit_serializer},
+    "notas_credito_itens": {"sheet_name": "NOTAS_CREDITO_ITENS", "id_field": "ID_Item_Nota_Credito", "serializer": _nci_serializer},
     "materiais_cad": {"sheet_name": "MATERIAIS_CAD", "id_field": "ID_Item", "serializer": _catalog_serializer},
     "materiais_referencias": {"sheet_name": "MATERIAIS_REFERENCIAS", "id_field": "ID_Referencia", "serializer": _catalog_reference_serializer},
     "afetacoes_obra": {"sheet_name": "AFETACOES_OBRA", "id_field": "ID_Afetacao", "serializer": _afetacao_serializer},
@@ -812,7 +925,9 @@ SHEET_WRITE_CONFIG: dict[str, dict[str, Any]] = {
 
 SHEET_READ_CONFIG: dict[str, dict[str, Any]] = {
     "faturas": {"sheet_name": "FATURAS", "parser": _parse_fatura},
+    "compromissos_obra": {"sheet_name": "COMPROMISSOS_OBRA", "parser": _parse_compromisso},
     "faturas_itens": {"sheet_name": "FATURAS_ITENS", "parser": _parse_fit},
+    "notas_credito_itens": {"sheet_name": "NOTAS_CREDITO_ITENS", "parser": _parse_nci},
     "materiais_cad": {"sheet_name": "MATERIAIS_CAD", "parser": _parse_catalog},
     "materiais_referencias": {"sheet_name": "MATERIAIS_REFERENCIAS", "parser": _parse_catalog_reference},
     "afetacoes_obra": {"sheet_name": "AFETACOES_OBRA", "parser": _parse_afetacao},
@@ -837,7 +952,7 @@ def _enrich_snapshot(snapshot: dict[str, list[dict[str, Any]]]) -> dict[str, lis
         for record in snapshot.get("materiais_cad", [])
         if str(record.get("id_item") or "").strip()
     }
-    for entity in ("faturas_itens", "afetacoes_obra", "materiais_mov"):
+    for entity in ("faturas_itens", "notas_credito_itens", "afetacoes_obra", "materiais_mov"):
         for record in snapshot.get(entity, []):
             catalog = catalog_by_id.get(str(record.get("id_item") or "").strip())
             if not catalog:

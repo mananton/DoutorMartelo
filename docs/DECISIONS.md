@@ -574,7 +574,50 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - Dashboard material totals can now reflect modern backoffice-generated movements instead of depending only on `LEGACY_MATERIAIS`.
 
+## D-033: `COMPROMISSOS_OBRA` becomes a first-class backoffice entity while `FATURAS.ID_Compromisso` stays the invoice bridge
+- **Status**: accepted
+- **Date**: 2026-03-24
+- **Commit**: `pending`
+- **Decision**:
+  - Keep the previously added `FATURAS.id_compromisso` link field as-is.
+  - Add dedicated backoffice CRUD, hydration, sync visibility, and Sheets/Supabase mappings for `COMPROMISSOS_OBRA`.
+  - Keep `Compromisso` as a header-only cost-assumption record in the app for now.
+  - Keep the invoice-line workspace reserved for real `Fatura` records.
+  - Keep `Nota de Crédito` out of implementation for now and do not add a new sheet yet.
+- **Rationale**:
+  - The business needs to separate the assumed obra cost from the later invoices/payments that liquidate it.
+  - The groundwork for invoice linkage already existed, but the commitment record itself was still missing from the controlled backoffice flow.
+- **Impact**:
+  - Operators can now register the assumed obra cost before one or more real invoices arrive.
+  - `FATURAS.ID_Compromisso` is now a validated bridge instead of a dormant field.
+  - Future `Nota de Crédito` work should evolve inside `FATURAS` / `FATURAS_ITENS`, not via a separate sheet by default.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.
 - Keep legacy rules active unless business owner requests rollback.
+
+## D-033: `Nota de Crédito` should stay in `FATURAS` header and use its own line sheet
+- **Status**: accepted
+- **Date**: 2026-03-24
+- **Commit**: `pending`
+- **Decision**:
+  - Keep the document header in `FATURAS` with `Tipo_Doc = NOTA_CREDITO`.
+  - Add `Doc_Origem` to the header as the pointer to the original document number.
+  - Store note-credit lines in `NOTAS_CREDITO_ITENS`, not in `FATURAS_ITENS`.
+  - Interpret sheet values as positive while applying credit semantics only in backend/runtime generation.
+  - Use line-level category:
+    - `NC_COM_OBRA`
+    - `NC_SEM_OBRA`
+  - Make `MATERIAL` note-credit lines reduce stock through generated `MATERIAIS_MOV`.
+  - Make `NC_COM_OBRA` lines reduce work cost through generated negative-effect `AFETACOES_OBRA`.
+- **Rationale**:
+  - The same note can mix lines with and without obra attribution, so the decision must live at line level.
+  - Reusing `FATURAS_ITENS` would blur two different behaviors:
+    - normal purchase entry
+    - credit/reversal logic
+  - Operators should keep writing positive values in Sheets to avoid manual sign mistakes.
+- **Impact**:
+  - `FATURAS` remains the single document queue for purchases and credits.
+  - `NOTAS_CREDITO_ITENS` becomes the controlled source for credit-line behavior.
+  - Stock and obra-cost reductions are explicit, generated, and auditable without changing the Sheets-first operating model.

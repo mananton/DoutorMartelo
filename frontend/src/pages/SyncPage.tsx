@@ -36,7 +36,9 @@ function formatDateTime(value: string | null | undefined) {
 function entityLabel(entity: string | undefined) {
   const labels: Record<string, string> = {
     faturas: "Faturas",
+    compromissos_obra: "Compromissos",
     faturas_itens: "Itens de Fatura",
+    notas_credito_itens: "Itens de Nota de Credito",
     materiais_cad: "Catalogo",
     materiais_referencias: "Referencias",
     afetacoes_obra: "Afetacoes",
@@ -76,9 +78,10 @@ export function SyncPage() {
       setMessage("Estado recarregado a partir da Google Sheet.");
       queryClient.invalidateQueries({ queryKey: ["sync-status"] });
       queryClient.invalidateQueries({ queryKey: ["faturas"] });
+      queryClient.invalidateQueries({ queryKey: ["compromissos"] });
       queryClient.invalidateQueries({ queryKey: ["catalogo"] });
       queryClient.invalidateQueries({ queryKey: ["afetacoes"] });
-      if (result.faturas_itens) {
+      if (result.faturas_itens || result.notas_credito_itens) {
         queryClient.invalidateQueries({ queryKey: ["fatura"] });
       }
     },

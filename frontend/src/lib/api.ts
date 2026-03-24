@@ -43,6 +43,12 @@ const API_BASE = resolveConfiguredApiBase(import.meta.env.VITE_API_BASE_URL) ?? 
 
 function translateBusinessDetail(detail: string) {
   const known: Record<string, string> = {
+    COMPROMISSO_INEXISTENTE: "O `ID_Compromisso` indicado nao existe nos compromissos registados.",
+    COMPROMISSO_REFERENCIADO: "Este compromisso ja esta ligado a uma ou mais faturas e nao pode ser apagado.",
+    FATURA_TIPO_DOC_COM_LINHAS: "Nao e seguro mudar o `Tipo_Doc` depois de ja existirem linhas registadas neste documento.",
+    NOTA_CREDITO_REQUIRES_DOC_ORIGEM: "A `Nota de Credito` exige o preenchimento de `Doc_Origem` com o numero do documento original.",
+    NC_COM_OBRA_REQUIRES_OBRA_AND_FASE: "Quando a categoria for `NC_COM_OBRA`, tens de indicar `Obra` e `Fase`.",
+    NOTA_CREDITO_ITEM_ON_FATURA: "As linhas de nota de credito so podem ser usadas em documentos com `Tipo_Doc = NOTA_CREDITO`.",
     CUSTO_STOCK_EM_FALTA: "Este item ainda nao tem custo medio disponivel em stock.",
     CATALOGO_DUPLICADO_ITEM_OFICIAL: "Ja existe um item oficial com esse nome no catalogo.",
     CATALOGO_REFERENCIA_DESCRICAO_DUPLICADA: "Esta descricao original ja esta ligada a outro item do catalogo.",
@@ -93,7 +99,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   listFaturas: () => request<JsonRecord[]>("/api/faturas"),
+  listCompromissos: () => request<JsonRecord[]>("/api/compromissos"),
   getFatura: (id: string) => request<JsonRecord>(`/api/faturas/${id}`),
+  createCompromisso: (payload: JsonRecord) => request<JsonRecord>("/api/compromissos", { method: "POST", body: JSON.stringify(payload) }),
+  updateCompromisso: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/compromissos/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteCompromisso: (id: string) => request<void>(`/api/compromissos/${id}`, { method: "DELETE" }),
   createFatura: (payload: JsonRecord) => request<JsonRecord>("/api/faturas", { method: "POST", body: JSON.stringify(payload) }),
   updateFatura: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteFatura: (id: string) => request<void>(`/api/faturas/${id}`, { method: "DELETE" }),
@@ -101,6 +111,10 @@ export const api = {
   createItems: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}/itens`, { method: "POST", body: JSON.stringify(payload) }),
   updateFaturaItem: (id: string, itemId: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}/itens/${itemId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteFaturaItem: (id: string, itemId: string) => request<void>(`/api/faturas/${id}/itens/${itemId}`, { method: "DELETE" }),
+  previewNotaCreditoItems: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}/notas-credito-itens/preview`, { method: "POST", body: JSON.stringify(payload) }),
+  createNotaCreditoItems: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}/notas-credito-itens`, { method: "POST", body: JSON.stringify(payload) }),
+  updateNotaCreditoItem: (id: string, itemId: string, payload: JsonRecord) => request<JsonRecord>(`/api/faturas/${id}/notas-credito-itens/${itemId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteNotaCreditoItem: (id: string, itemId: string) => request<void>(`/api/faturas/${id}/notas-credito-itens/${itemId}`, { method: "DELETE" }),
   listCatalog: () => request<JsonRecord[]>("/api/materiais-cad"),
   createCatalog: (payload: JsonRecord) => request<JsonRecord>("/api/materiais-cad", { method: "POST", body: JSON.stringify(payload) }),
   updateCatalog: (id: string, payload: JsonRecord) => request<JsonRecord>(`/api/materiais-cad/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),

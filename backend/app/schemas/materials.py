@@ -12,9 +12,66 @@ Natureza = Literal["MATERIAL", "SERVICO", "ALUGUER", "TRANSPORTE", "GASOLEO", "G
 UsoCombustivel = Literal["N/A", "VIATURA", "MAQUINA", "GERADOR"]
 OrigemAfetacao = Literal["STOCK", "FATURA_DIRETA"]
 TipoMovimento = Literal["ENTRADA", "CONSUMO"]
+TipoDocFatura = Literal["FATURA", "NOTA_CREDITO"]
+TipoDocCompromisso = Literal["PRO_FORMA", "ORCAMENTO", "ADJUDICACAO"]
+EstadoCompromisso = Literal["ABERTO", "PARCIALMENTE_PAGO", "PAGO"]
+CategoriaNotaCredito = Literal["NC_COM_OBRA", "NC_SEM_OBRA"]
+
+
+class CompromissoCreate(ApiModel):
+    data: date
+    fornecedor: str
+    nif: str
+    tipo_doc: TipoDocCompromisso
+    doc_origem: str
+    obra: str
+    fase: str
+    descricao: str
+    valor_sem_iva: float = 0
+    iva: float = 0
+    valor_com_iva: float = 0
+    estado: EstadoCompromisso = "ABERTO"
+    observacoes: str | None = None
+
+
+class CompromissoUpdate(ApiModel):
+    data: date | None = None
+    fornecedor: str | None = None
+    nif: str | None = None
+    tipo_doc: TipoDocCompromisso | None = None
+    doc_origem: str | None = None
+    obra: str | None = None
+    fase: str | None = None
+    descricao: str | None = None
+    valor_sem_iva: float | None = None
+    iva: float | None = None
+    valor_com_iva: float | None = None
+    estado: EstadoCompromisso | None = None
+    observacoes: str | None = None
+
+
+class CompromissoRecord(ApiModel):
+    id_compromisso: str
+    data: date
+    fornecedor: str
+    nif: str
+    tipo_doc: TipoDocCompromisso
+    doc_origem: str
+    obra: str
+    fase: str
+    descricao: str
+    valor_sem_iva: float = 0
+    iva: float = 0
+    valor_com_iva: float = 0
+    estado: EstadoCompromisso = "ABERTO"
+    observacoes: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class FaturaCreate(ApiModel):
+    tipo_doc: TipoDocFatura = "FATURA"
+    doc_origem: str | None = None
     id_compromisso: str | None = None
     fornecedor: str
     nif: str
@@ -29,6 +86,8 @@ class FaturaCreate(ApiModel):
 
 
 class FaturaUpdate(ApiModel):
+    tipo_doc: TipoDocFatura | None = None
+    doc_origem: str | None = None
     id_compromisso: str | None = None
     fornecedor: str | None = None
     nif: str | None = None
@@ -45,6 +104,8 @@ class FaturaUpdate(ApiModel):
 
 class FaturaRecord(ApiModel):
     id_fatura: str
+    tipo_doc: TipoDocFatura = "FATURA"
+    doc_origem: str | None = None
     id_compromisso: str | None = None
     fornecedor: str
     nif: str
@@ -80,8 +141,27 @@ class FaturaItemCreate(ApiModel):
     observacoes: str | None = None
 
 
+class NotaCreditoItemCreate(ApiModel):
+    descricao_original: str
+    quantidade: float
+    custo_unit: float
+    iva: float = 0
+    categoria_nota_credito: CategoriaNotaCredito
+    obra: str | None = None
+    fase: str | None = None
+    id_item: str | None = None
+    item_oficial: str | None = None
+    unidade: str | None = None
+    natureza: Natureza | None = None
+    observacoes: str | None = None
+
+
 class FaturaItemsCreateRequest(ApiModel):
     items: list[FaturaItemCreate]
+
+
+class NotaCreditoItemsCreateRequest(ApiModel):
+    items: list[NotaCreditoItemCreate]
 
 
 class FaturaItemUpdate(ApiModel):
@@ -100,6 +180,21 @@ class FaturaItemUpdate(ApiModel):
     fase: str | None = None
     desconto_1: float | None = None
     desconto_2: float | None = None
+    observacoes: str | None = None
+
+
+class NotaCreditoItemUpdate(ApiModel):
+    descricao_original: str | None = None
+    id_item: str | None = None
+    item_oficial: str | None = None
+    unidade: str | None = None
+    natureza: Natureza | None = None
+    quantidade: float | None = None
+    custo_unit: float | None = None
+    iva: float | None = None
+    categoria_nota_credito: CategoriaNotaCredito | None = None
+    obra: str | None = None
+    fase: str | None = None
     observacoes: str | None = None
 
 
@@ -129,6 +224,33 @@ class FaturaItemRecord(ApiModel):
     fase: str | None = None
     observacoes: str | None = None
     estado_mapeamento: str = "GUARDADO"
+    created_at: datetime
+    updated_at: datetime
+
+
+class NotaCreditoItemRecord(ApiModel):
+    id_item_nota_credito: str
+    id_fatura: str
+    fornecedor: str | None = None
+    nif: str | None = None
+    nr_documento: str | None = None
+    doc_origem: str | None = None
+    data_fatura: date | None = None
+    descricao_original: str
+    id_item: str | None = None
+    item_oficial: str | None = None
+    unidade: str | None = None
+    natureza: Natureza | None = None
+    quantidade: float
+    custo_unit: float
+    custo_total_sem_iva: float = 0
+    iva: float = 0
+    custo_total_com_iva: float = 0
+    categoria_nota_credito: CategoriaNotaCredito
+    obra: str | None = None
+    fase: str | None = None
+    estado: str = "GUARDADO"
+    observacoes: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -255,9 +377,14 @@ class MovimentoRecord(ApiModel):
 
 class FaturaDetail(ApiModel):
     fatura: FaturaRecord
-    items: list[FaturaItemRecord]
+    items: list[FaturaItemRecord | NotaCreditoItemRecord]
 
 
 class FaturaItemsResponse(ApiModel):
     items: list[FaturaItemRecord]
+    impacts: list[OperationImpact]
+
+
+class NotaCreditoItemsResponse(ApiModel):
+    items: list[NotaCreditoItemRecord]
     impacts: list[OperationImpact]

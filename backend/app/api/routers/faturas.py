@@ -12,6 +12,10 @@ from backend.app.schemas.materials import (
     FaturaItemsResponse,
     FaturaRecord,
     FaturaUpdate,
+    NotaCreditoItemRecord,
+    NotaCreditoItemUpdate,
+    NotaCreditoItemsCreateRequest,
+    NotaCreditoItemsResponse,
 )
 
 router = APIRouter(prefix="/api/faturas", tags=["faturas"])
@@ -73,3 +77,36 @@ def patch_item(
 @router.delete("/{id_fatura}/itens/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item(id_fatura: str, item_id: str, container: ServiceContainer = Depends(get_container)) -> None:
     container.materials.delete_fatura_item(id_fatura, item_id)
+
+
+@router.post("/{id_fatura}/notas-credito-itens/preview", response_model=NotaCreditoItemsResponse)
+def preview_nota_credito_items(
+    id_fatura: str,
+    payload: NotaCreditoItemsCreateRequest,
+    container: ServiceContainer = Depends(get_container),
+) -> NotaCreditoItemsResponse:
+    return container.materials.preview_nota_credito_items(id_fatura, payload.items)
+
+
+@router.post("/{id_fatura}/notas-credito-itens", response_model=NotaCreditoItemsResponse, status_code=status.HTTP_201_CREATED)
+def create_nota_credito_items(
+    id_fatura: str,
+    payload: NotaCreditoItemsCreateRequest,
+    container: ServiceContainer = Depends(get_container),
+) -> NotaCreditoItemsResponse:
+    return container.materials.create_nota_credito_items(id_fatura, payload.items)
+
+
+@router.patch("/{id_fatura}/notas-credito-itens/{item_id}", response_model=NotaCreditoItemRecord)
+def patch_nota_credito_item(
+    id_fatura: str,
+    item_id: str,
+    payload: NotaCreditoItemUpdate,
+    container: ServiceContainer = Depends(get_container),
+) -> NotaCreditoItemRecord:
+    return container.materials.update_nota_credito_item(id_fatura, item_id, payload.model_dump(exclude_none=True))
+
+
+@router.delete("/{id_fatura}/notas-credito-itens/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_nota_credito_item(id_fatura: str, item_id: str, container: ServiceContainer = Depends(get_container)) -> None:
+    container.materials.delete_nota_credito_item(id_fatura, item_id)

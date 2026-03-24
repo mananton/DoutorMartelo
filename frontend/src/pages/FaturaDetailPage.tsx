@@ -611,6 +611,7 @@ export function FaturaDetailPage() {
     { semIva: 0, comIva: 0 },
   );
   const fatura = (detail.data?.fatura as Record<string, unknown> | undefined) ?? {};
+  const compromissoAtual = String(fatura.id_compromisso ?? "");
   const documentoAtual = String(fatura.nr_documento ?? "-");
   const dataFaturaAtual = String(fatura.data_fatura ?? "-");
   const valorSemIvaFatura = Number(fatura.valor_sem_iva ?? 0);
@@ -651,6 +652,7 @@ export function FaturaDetailPage() {
             <span className="tag">{workspaceModeLabel}</span>
             <span className="tag">{destinoLabel}</span>
             <span className="tag tag-success">{existingItems.length} linha(s)</span>
+            {compromissoAtual ? <span className="tag">Compromisso {compromissoAtual}</span> : null}
           </div>
         </div>
         <div className="detail-header-grid">
@@ -662,7 +664,7 @@ export function FaturaDetailPage() {
           <div className="summary-card">
             <div className="summary-title">Documento</div>
             <div className="summary-main">{documentoAtual}</div>
-            <div className="muted">{dataFaturaAtual}</div>
+            <div className="muted">{compromissoAtual ? `${dataFaturaAtual} | ${compromissoAtual}` : dataFaturaAtual}</div>
           </div>
           <div className="summary-card">
             <div className="summary-title">Totais da fatura</div>

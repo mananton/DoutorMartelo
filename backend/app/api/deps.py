@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 class ServiceContainer:
     DIAGNOSTIC_CONFIG = {
         "faturas": ("id_fatura", "faturas"),
+        "compromissos_obra": ("id_compromisso", "compromissos"),
         "faturas_itens": ("id_item_fatura", "fatura_items"),
+        "notas_credito_itens": ("id_item_nota_credito", "nota_credito_items"),
         "materiais_cad": ("id_item", "catalog"),
         "materiais_referencias": ("id_referencia", "catalog_references"),
         "afetacoes_obra": ("id_afetacao", "afetacoes"),
@@ -30,6 +32,8 @@ class ServiceContainer:
     }
     DIAGNOSTIC_FIELDS = {
         "faturas": [
+            "tipo_doc",
+            "doc_origem",
             "id_compromisso",
             "fornecedor",
             "nif",
@@ -40,6 +44,20 @@ class ServiceContainer:
             "valor_com_iva",
             "paga",
             "data_pagamento",
+            "estado",
+        ],
+        "compromissos_obra": [
+            "data",
+            "fornecedor",
+            "nif",
+            "tipo_doc",
+            "doc_origem",
+            "obra",
+            "fase",
+            "descricao",
+            "valor_sem_iva",
+            "iva",
+            "valor_com_iva",
             "estado",
         ],
         "faturas_itens": [
@@ -60,6 +78,23 @@ class ServiceContainer:
             "obra",
             "fase",
             "estado_mapeamento",
+        ],
+        "notas_credito_itens": [
+            "id_fatura",
+            "doc_origem",
+            "descricao_original",
+            "id_item",
+            "item_oficial",
+            "natureza",
+            "quantidade",
+            "custo_unit",
+            "custo_total_sem_iva",
+            "iva",
+            "custo_total_com_iva",
+            "categoria_nota_credito",
+            "obra",
+            "fase",
+            "estado",
         ],
         "materiais_cad": ["item_oficial", "natureza", "unidade", "estado_cadastro"],
         "materiais_referencias": ["descricao_original", "id_item", "estado_referencia"],
@@ -139,7 +174,9 @@ class ServiceContainer:
         return {
             "source": "google_sheets",
             "faturas": len(self.state.faturas),
+            "compromissos_obra": len(self.state.compromissos),
             "faturas_itens": len(self.state.fatura_items),
+            "notas_credito_itens": len(self.state.nota_credito_items),
             "materiais_cad": len(self.state.catalog),
             "materiais_referencias": len(self.state.catalog_references),
             "afetacoes_obra": len(self.state.afetacoes),

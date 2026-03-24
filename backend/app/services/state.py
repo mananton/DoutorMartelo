@@ -11,8 +11,10 @@ from backend.app.adapters.google_sheets.base import WriteBatch
 
 @dataclass
 class RuntimeState:
+    compromissos: dict[str, dict[str, Any]] = field(default_factory=dict)
     faturas: dict[str, dict[str, Any]] = field(default_factory=dict)
     fatura_items: dict[str, dict[str, Any]] = field(default_factory=dict)
+    nota_credito_items: dict[str, dict[str, Any]] = field(default_factory=dict)
     catalog: dict[str, dict[str, Any]] = field(default_factory=dict)
     catalog_references: dict[str, dict[str, Any]] = field(default_factory=dict)
     afetacoes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -76,10 +78,20 @@ class RuntimeState:
             for record in snapshot.get("faturas", [])
             if record.get("id_fatura")
         }
+        self.compromissos = {
+            record["id_compromisso"]: record
+            for record in snapshot.get("compromissos_obra", [])
+            if record.get("id_compromisso")
+        }
         self.fatura_items = {
             record["id_item_fatura"]: record
             for record in snapshot.get("faturas_itens", [])
             if record.get("id_item_fatura")
+        }
+        self.nota_credito_items = {
+            record["id_item_nota_credito"]: record
+            for record in snapshot.get("notas_credito_itens", [])
+            if record.get("id_item_nota_credito")
         }
         self.catalog = {
             record["id_item"]: record
@@ -115,9 +127,13 @@ class RuntimeState:
         self.counters = defaultdict(int)
         self.sequence = 0
 
+        for identifier in self.compromissos:
+            self._seed_counter(identifier)
         for identifier in self.faturas:
             self._seed_counter(identifier)
         for identifier in self.fatura_items:
+            self._seed_counter(identifier)
+        for identifier in self.nota_credito_items:
             self._seed_counter(identifier)
         for identifier in self.catalog:
             self._seed_counter(identifier)

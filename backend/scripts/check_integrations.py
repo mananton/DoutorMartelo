@@ -14,7 +14,9 @@ from backend.app.config import Settings
 
 REQUIRED_SHEETS = [
     "FATURAS",
+    "COMPROMISSOS_OBRA",
     "FATURAS_ITENS",
+    "NOTAS_CREDITO_ITENS",
     "MATERIAIS_CAD",
     "AFETACOES_OBRA",
     "MATERIAIS_MOV",
@@ -23,7 +25,9 @@ REQUIRED_SHEETS = [
 
 REQUIRED_TABLES = [
     "faturas",
+    "compromissos_obra",
     "faturas_itens",
+    "notas_credito_itens",
     "materiais_cad",
     "afetacoes_obra",
     "materiais_mov",

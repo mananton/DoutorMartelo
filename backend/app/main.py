@@ -11,6 +11,7 @@ from starlette.staticfiles import StaticFiles
 from backend.app.api.deps import ServiceContainer
 from backend.app.api.routers.afetacoes import router as afetacoes_router
 from backend.app.api.routers.catalogo import router as catalogo_router
+from backend.app.api.routers.compromissos import router as compromissos_router
 from backend.app.config import Settings
 from backend.app.api.routers.faturas import router as faturas_router
 from backend.app.api.routers.movimentos import router as movimentos_router
@@ -37,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(sync_router)
     app.include_router(options_router)
+    app.include_router(compromissos_router)
     app.include_router(faturas_router)
     app.include_router(catalogo_router)
     app.include_router(afetacoes_router)

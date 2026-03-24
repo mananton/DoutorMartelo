@@ -50,12 +50,18 @@ class MaterialsApiTests(unittest.TestCase):
         self,
         suffix: str = "001",
         *,
+        tipo_doc: str = "FATURA",
+        doc_origem: str | None = None,
+        id_compromisso: str | None = None,
         paga: bool = False,
         data_pagamento: str | None = None,
     ) -> dict[str, object]:
         return self.client.post(
             "/api/faturas",
             json={
+                "tipo_doc": tipo_doc,
+                "doc_origem": doc_origem,
+                "id_compromisso": id_compromisso,
                 "fornecedor": "Fornecedor Base",
                 "nif": "501234567",
                 "nr_documento": f"FT 2026/{suffix}",
@@ -67,6 +73,65 @@ class MaterialsApiTests(unittest.TestCase):
                 "data_pagamento": data_pagamento,
             },
         ).json()
+
+    def _create_nota_credito_item(
+        self,
+        id_fatura: str,
+        *,
+        categoria_nota_credito: str = "NC_SEM_OBRA",
+        natureza: str = "MATERIAL",
+        obra: str | None = None,
+        fase: str | None = None,
+    ) -> dict[str, object]:
+        response = self.client.post(
+            f"/api/faturas/{id_fatura}/notas-credito-itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Devolucao material",
+                        "quantidade": 10,
+                        "custo_unit": 0.1,
+                        "iva": 23,
+                        "categoria_nota_credito": categoria_nota_credito,
+                        "obra": obra,
+                        "fase": fase,
+                        "id_item": self.catalog["id_item"],
+                        "natureza": natureza,
+                        "unidade": "UN",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()["items"][0]
+
+    def _create_compromisso(
+        self,
+        suffix: str = "001",
+        *,
+        tipo_doc: str = "PRO_FORMA",
+        estado: str = "ABERTO",
+    ) -> dict[str, object]:
+        response = self.client.post(
+            "/api/compromissos",
+            json={
+                "data": "2026-03-16",
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "tipo_doc": tipo_doc,
+                "doc_origem": f"PF-{suffix}",
+                "obra": "Obra Compromisso",
+                "fase": "Cozinha",
+                "descricao": "Compromisso de cozinha",
+                "valor_sem_iva": 16260,
+                "iva": 23,
+                "valor_com_iva": 20000,
+                "estado": estado,
+                "observacoes": None,
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()
 
     def _create_item(
         self,
@@ -116,6 +181,51 @@ class MaterialsApiTests(unittest.TestCase):
         afetacoes = self.client.get("/api/afetacoes").json()
         self.assertEqual(len(afetacoes), 1)
         self.assertEqual(afetacoes[0]["origem"], "FATURA_DIRETA")
+
+    def test_create_and_patch_compromisso(self) -> None:
+        compromisso = self._create_compromisso("001")
+        self.assertEqual(compromisso["tipo_doc"], "PRO_FORMA")
+
+        response = self.client.patch(
+            f"/api/compromissos/{compromisso['id_compromisso']}",
+            json={
+                "estado": "PARCIALMENTE_PAGO",
+                "descricao": "Compromisso revisto",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["estado"], "PARCIALMENTE_PAGO")
+        self.assertEqual(response.json()["descricao"], "Compromisso revisto")
+
+    def test_create_fatura_accepts_existing_compromisso_link(self) -> None:
+        compromisso = self._create_compromisso("002")
+        fatura = self._create_fatura("001C", id_compromisso=str(compromisso["id_compromisso"]))
+        self.assertEqual(fatura["id_compromisso"], compromisso["id_compromisso"])
+
+    def test_create_fatura_rejects_unknown_compromisso_link(self) -> None:
+        response = self.client.post(
+            "/api/faturas",
+            json={
+                "id_compromisso": "COMP-999999",
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "nr_documento": "FT 2026/INVALID",
+                "data_fatura": "2026-03-18",
+                "valor_sem_iva": 100,
+                "iva": 23,
+                "valor_com_iva": 123,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "COMPROMISSO_INEXISTENTE")
+
+    def test_delete_compromisso_is_blocked_when_invoice_references_it(self) -> None:
+        compromisso = self._create_compromisso("003")
+        self._create_fatura("003C", id_compromisso=str(compromisso["id_compromisso"]))
+
+        response = self.client.delete(f"/api/compromissos/{compromisso['id_compromisso']}")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "COMPROMISSO_REFERENCIADO")
 
     def test_list_faturas_returns_most_recent_first(self) -> None:
         first = self._create_fatura("001")
@@ -172,6 +282,90 @@ class MaterialsApiTests(unittest.TestCase):
         self.assertEqual(patch.status_code, 200)
         self.assertFalse(patch.json()["paga"])
         self.assertIsNone(patch.json()["data_pagamento"])
+
+    def test_create_nota_credito_requires_doc_origem(self) -> None:
+        response = self.client.post(
+            "/api/faturas",
+            json={
+                "tipo_doc": "NOTA_CREDITO",
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "nr_documento": "NC 2026/001",
+                "data_fatura": "2026-03-18",
+                "valor_sem_iva": 100,
+                "iva": 23,
+                "valor_com_iva": 123,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "NOTA_CREDITO_REQUIRES_DOC_ORIGEM")
+
+    def test_material_nota_credito_sem_obra_reduces_stock_only(self) -> None:
+        fatura_stock = self._create_fatura("NC-STOCK-BASE")
+        self._create_item(fatura_stock["id_fatura"], destino="STOCK")
+
+        nota = self._create_fatura("NC-STOCK", tipo_doc="NOTA_CREDITO", doc_origem="FT 2026/STOCK")
+        self._create_nota_credito_item(nota["id_fatura"], categoria_nota_credito="NC_SEM_OBRA")
+
+        afetacoes = self.client.get("/api/afetacoes").json()
+        self.assertEqual(len(afetacoes), 0)
+
+        movimentos = self.client.get("/api/materiais-mov").json()
+        note_movement = next(mov for mov in movimentos if mov["source_type"] == "NCI")
+        self.assertEqual(note_movement["tipo"], "CONSUMO")
+        self.assertEqual(note_movement["quantidade"], 10)
+
+        stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 90)
+        self.assertEqual(stock["valor_stock"], 9.0)
+
+    def test_material_nota_credito_com_obra_reduces_stock_and_work_cost(self) -> None:
+        fatura_stock = self._create_fatura("NC-OBRA-BASE")
+        self._create_item(fatura_stock["id_fatura"], destino="STOCK")
+
+        nota = self._create_fatura("NC-OBRA", tipo_doc="NOTA_CREDITO", doc_origem="FT 2026/OBRA")
+        self._create_nota_credito_item(
+            nota["id_fatura"],
+            categoria_nota_credito="NC_COM_OBRA",
+            obra="Obra NC",
+            fase="Fase NC",
+        )
+
+        afetacoes = self.client.get("/api/afetacoes").json()
+        self.assertEqual(len(afetacoes), 1)
+        self.assertEqual(afetacoes[0]["origem"], "FATURA_DIRETA")
+        self.assertEqual(afetacoes[0]["quantidade"], -10)
+        self.assertEqual(afetacoes[0]["custo_total_sem_iva"], -1)
+        self.assertEqual(afetacoes[0]["obra"], "Obra NC")
+        self.assertEqual(afetacoes[0]["fase"], "Fase NC")
+
+        movimentos = self.client.get("/api/materiais-mov").json()
+        note_movements = [mov for mov in movimentos if mov["source_type"] in {"NCI", "AFO"}]
+        self.assertEqual(len(note_movements), 2)
+        stock = self.client.get(f"/api/stock-atual/{self.catalog['id_item']}").json()
+        self.assertEqual(stock["stock_atual"], 90)
+
+    def test_nota_credito_item_endpoint_is_blocked_for_regular_fatura(self) -> None:
+        fatura = self._create_fatura("NC-BLOCK")
+        response = self.client.post(
+            f"/api/faturas/{fatura['id_fatura']}/notas-credito-itens",
+            json={
+                "items": [
+                    {
+                        "descricao_original": "Teste",
+                        "quantidade": 1,
+                        "custo_unit": 1,
+                        "iva": 23,
+                        "categoria_nota_credito": "NC_SEM_OBRA",
+                        "id_item": self.catalog["id_item"],
+                        "natureza": "MATERIAL",
+                        "unidade": "UN",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "NOTA_CREDITO_ITEM_ON_FATURA")
 
     def test_fuel_invoice_item_for_viatura_generates_direct_movement(self) -> None:
         fuel_catalog = self._create_catalog_entry(
@@ -407,13 +601,46 @@ class MaterialsApiTests(unittest.TestCase):
         retried_job = next(job for job in retry.json()["jobs"] if job["entity"] == "faturas_itens")
         self.assertFalse(retried_job["pending_retry"])
 
+    def test_compromisso_sync_retry_marks_pending_when_supabase_fails(self) -> None:
+        container = self.app.state.container
+        container.supabase.fail_entities.add("compromissos_obra")
+
+        response = self.client.post(
+            "/api/compromissos",
+            json={
+                "data": "2026-03-16",
+                "fornecedor": "Fornecedor Base",
+                "nif": "501234567",
+                "tipo_doc": "PRO_FORMA",
+                "doc_origem": "PF-RETRY",
+                "obra": "Obra Retry",
+                "fase": "Fase Retry",
+                "descricao": "Compromisso com retry",
+                "valor_sem_iva": 100,
+                "iva": 23,
+                "valor_com_iva": 123,
+                "estado": "ABERTO",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+
+        status = self.client.get("/api/sync/status").json()
+        compromisso_job = next(job for job in status["jobs"] if job["entity"] == "compromissos_obra")
+        self.assertTrue(compromisso_job["pending_retry"])
+
+        container.supabase.fail_entities.clear()
+        retry = self.client.post("/api/sync/retry")
+        self.assertEqual(retry.status_code, 200)
+        retried_job = next(job for job in retry.json()["jobs"] if job["entity"] == "compromissos_obra")
+        self.assertFalse(retried_job["pending_retry"])
+
     def test_sync_status_includes_core_entities_even_without_activity(self) -> None:
         status = self.client.get("/api/sync/status")
         self.assertEqual(status.status_code, 200)
         entities = [job["entity"] for job in status.json()["jobs"]]
         self.assertEqual(
             entities,
-            ["faturas", "faturas_itens", "materiais_cad", "materiais_referencias", "afetacoes_obra", "materiais_mov"],
+            ["faturas", "compromissos_obra", "faturas_itens", "notas_credito_itens", "materiais_cad", "materiais_referencias", "afetacoes_obra", "materiais_mov"],
         )
 
     def test_stock_and_diagnostics_endpoints(self) -> None:
@@ -431,7 +658,7 @@ class MaterialsApiTests(unittest.TestCase):
         diagnostics = self.client.get("/api/sync/diagnostics")
         self.assertEqual(diagnostics.status_code, 200)
         self.assertEqual(diagnostics.json()["source"], "google_sheets")
-        self.assertEqual(len(diagnostics.json()["entities"]), 6)
+        self.assertEqual(len(diagnostics.json()["entities"]), 8)
 
     def test_work_options_endpoint_returns_obras_and_fases(self) -> None:
         fatura = self._create_fatura("004")
@@ -618,6 +845,7 @@ class MaterialsApiTests(unittest.TestCase):
         current = container.state.faturas[str(fatura["id_fatura"])]
         container.google_sheets.load_snapshot = lambda: {
             "faturas": [{**current, "fornecedor": "Fornecedor Divergente", "sheet_row_num": 7}],
+            "compromissos_obra": [],
             "faturas_itens": [],
             "materiais_cad": [],
             "materiais_referencias": [],

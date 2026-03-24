@@ -19,7 +19,12 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
 
     def load_work_options(self) -> list[dict[str, object]]:
         fases_by_obra: dict[str, set[str]] = {}
-        for collection in (self.state.fatura_items.values(), self.state.afetacoes.values(), self.state.movimentos.values()):
+        for collection in (
+            self.state.fatura_items.values(),
+            self.state.nota_credito_items.values(),
+            self.state.afetacoes.values(),
+            self.state.movimentos.values(),
+        ):
             for record in collection:
                 obra = str(record.get("obra") or "").strip()
                 fase = str(record.get("fase") or "").strip()
@@ -35,7 +40,13 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
 
     def load_supplier_options(self) -> list[dict[str, object]]:
         suppliers_by_name: dict[str, dict[str, object]] = {}
-        for collection in (self.state.faturas.values(), self.state.fatura_items.values(), self.state.movimentos.values()):
+        for collection in (
+            self.state.compromissos.values(),
+            self.state.faturas.values(),
+            self.state.fatura_items.values(),
+            self.state.nota_credito_items.values(),
+            self.state.movimentos.values(),
+        ):
             for record in collection:
                 fornecedor = str(record.get("fornecedor") or "").strip()
                 if not fornecedor:

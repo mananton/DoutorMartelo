@@ -4,7 +4,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { api } from "./lib/api";
 import { AfetacoesPage } from "./pages/AfetacoesPage";
 import { CatalogoPage } from "./pages/CatalogoPage";
-import { FaturaDetailPage } from "./pages/FaturaDetailPage";
+import { DocumentoCompraDetailPage } from "./pages/DocumentoCompraDetailPage";
 import { FaturasPage } from "./pages/FaturasPage";
 import { SyncPage } from "./pages/SyncPage";
 import { TecnicoPage } from "./pages/TecnicoPage";
@@ -50,7 +50,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<FaturasPage />} />
           <Route path="/faturas" element={<FaturasPage />} />
-          <Route path="/faturas/:idFatura" element={<FaturaDetailPage />} />
+          <Route path="/faturas/:idFatura" element={<DocumentoCompraDetailPage />} />
           <Route path="/catalogo" element={<CatalogoPage />} />
           <Route path="/afetacoes" element={<AfetacoesPage />} />
           <Route path="/tecnico" element={<TecnicoPage />} />

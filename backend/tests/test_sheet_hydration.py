@@ -7,12 +7,23 @@ from backend.app.adapters.google_sheets.live import (
     _parse_afetacao,
     _parse_catalog,
     _parse_catalog_reference,
+    _parse_compromisso,
     _parse_fatura,
     _parse_fit,
+    _parse_nci,
     _parse_mov,
 )
 from backend.app.api.deps import ServiceContainer
-from backend.app.schemas.materials import AfetacaoRecord, CatalogEntryRecord, CatalogReferenceRecord, FaturaItemRecord, FaturaRecord, MovimentoRecord
+from backend.app.schemas.materials import (
+    AfetacaoRecord,
+    CatalogEntryRecord,
+    CatalogReferenceRecord,
+    CompromissoRecord,
+    FaturaItemRecord,
+    FaturaRecord,
+    MovimentoRecord,
+    NotaCreditoItemRecord,
+)
 from backend.app.services.state import RuntimeState
 
 
@@ -79,6 +90,8 @@ class SheetParserContractTests(unittest.TestCase):
         parsed = _parse_fatura(
             {
                 "ID_Fatura": "FAT-000001",
+                "Tipo_Doc": "NOTA_CREDITO",
+                "Doc_Origem": "FT 2026/0001",
                 "ID_Compromisso": "COMP-000001",
                 "Fornecedor": "Fornecedor Teste",
                 "NIF": "501234567",
@@ -100,10 +113,43 @@ class SheetParserContractTests(unittest.TestCase):
         validated = FaturaRecord.model_validate(
             {key: value for key, value in parsed.items() if key in FaturaRecord.model_fields}
         )
+        self.assertEqual(validated.tipo_doc, "NOTA_CREDITO")
+        self.assertEqual(validated.doc_origem, "FT 2026/0001")
         self.assertEqual(validated.id_compromisso, "COMP-000001")
         self.assertEqual(validated.fornecedor, "Fornecedor Teste")
         self.assertTrue(validated.paga)
         self.assertEqual(str(validated.data_pagamento), "2026-03-20")
+
+    def test_parse_compromisso_keeps_business_fields_required_by_api_model(self) -> None:
+        parsed = _parse_compromisso(
+            {
+                "ID_Compromisso": "COMP-000001",
+                "Data": "2026-03-16",
+                "Fornecedor": "Fornecedor Teste",
+                "NIF": "501234567",
+                "Tipo_Doc": "PRO_FORMA",
+                "Doc_Origem": "PF-123",
+                "Obra": "Moradia X",
+                "Fase": "Cozinha",
+                "Descricao": "Cozinha",
+                "Valor_Sem_IVA": 16260,
+                "IVA": 23,
+                "Valor_Com_IVA": 20000,
+                "Estado": "ABERTO",
+            },
+            4,
+        )
+
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        validated = CompromissoRecord.model_validate(
+            {key: value for key, value in parsed.items() if key in CompromissoRecord.model_fields}
+        )
+        self.assertEqual(validated.id_compromisso, "COMP-000001")
+        self.assertEqual(str(validated.data), "2026-03-16")
+        self.assertEqual(validated.tipo_doc, "PRO_FORMA")
+        self.assertEqual(validated.doc_origem, "PF-123")
+        self.assertEqual(validated.estado, "ABERTO")
 
     def test_parse_fit_keeps_descricao_original_required_by_api_model(self) -> None:
         parsed = _parse_fit(
@@ -151,6 +197,44 @@ class SheetParserContractTests(unittest.TestCase):
         assert parsed is not None
         self.assertAlmostEqual(parsed["iva"], 23.0)
 
+    def test_parse_nci_keeps_business_fields_required_by_api_model(self) -> None:
+        parsed = _parse_nci(
+            {
+                "ID_Item_Nota_Credito": "NCI-000001",
+                "ID_Fatura": "FAT-000222",
+                "Fornecedor": "Fornecedor Teste",
+                "NIF": "501234567",
+                "Nº Doc/Fatura": "NC 2026/002",
+                "Doc_Origem": "FT 2026/111",
+                "Data Fatura": "2026-03-21",
+                "Descricao_Original": "Devolucao tijolo",
+                "ID_Item": "MAT-000001",
+                "Item_Oficial": "TIJOLO_11",
+                "Unidade": "un",
+                "Natureza": "MATERIAL",
+                "Quantidade": 20,
+                "Custo_Unit": 1.5,
+                "Custo_Total Sem IVA": 30,
+                "IVA": 23,
+                "Custo_Total Com IVA": 36.9,
+                "Categoria_Nota_Credito": "NC_COM_OBRA",
+                "Obra": "Moradia X",
+                "Fase": "Alvenaria",
+                "Estado": "GUARDADO",
+            },
+            12,
+        )
+
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        validated = NotaCreditoItemRecord.model_validate(
+            {key: value for key, value in parsed.items() if key in NotaCreditoItemRecord.model_fields}
+        )
+        self.assertEqual(validated.id_item_nota_credito, "NCI-000001")
+        self.assertEqual(validated.doc_origem, "FT 2026/111")
+        self.assertEqual(validated.categoria_nota_credito, "NC_COM_OBRA")
+        self.assertEqual(validated.obra, "Moradia X")
+
     def test_enrich_snapshot_backfills_catalog_fields_missing_from_faturas_itens_sheet(self) -> None:
         snapshot = _enrich_snapshot(
             {
@@ -172,6 +256,16 @@ class SheetParserContractTests(unittest.TestCase):
                         "item_oficial": "",
                     }
                 ],
+                "notas_credito_itens": [
+                    {
+                        "id_item_nota_credito": "NCI-000001",
+                        "id_item": "MAT-000001",
+                        "descricao_original": "Devolucao",
+                        "natureza": None,
+                        "unidade": None,
+                        "item_oficial": "",
+                    }
+                ],
                 "afetacoes_obra": [],
                 "materiais_mov": [],
             }
@@ -181,6 +275,10 @@ class SheetParserContractTests(unittest.TestCase):
         self.assertEqual(fit["item_oficial"], "GASOLEO")
         self.assertEqual(fit["natureza"], "GASOLEO")
         self.assertEqual(fit["unidade"], "Lt")
+        nci = snapshot["notas_credito_itens"][0]
+        self.assertEqual(nci["item_oficial"], "GASOLEO")
+        self.assertEqual(nci["natureza"], "GASOLEO")
+        self.assertEqual(nci["unidade"], "Lt")
 
     def test_parse_catalog_keeps_id_item_required_by_api_model(self) -> None:
         parsed = _parse_catalog(
