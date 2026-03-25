@@ -58,7 +58,7 @@ Nota:
 ### 1. Trabalho normal
 Se no dia existirem apenas horas validas:
 - essas horas contam para o acumulado mensal
-- a celula diaria mostra as horas do dia
+- a celula diaria mostra as horas efetivas do dia
 
 Exemplos:
 - 8
@@ -88,7 +88,7 @@ Se existir Dps e nao houver horas:
 ### 5. Atrasos
 - os atrasos reduzem as horas liquidas usadas no calculo de Total Horas e Dias
 - para um dia com horas e sem ausencia bloqueante, aplicar `max(0, horas_do_dia - atraso)`
-- a celula diaria continua a mostrar as horas registadas do dia
+- a celula diaria deve mostrar diretamente as horas efetivas do dia
 - os atrasos continuam a aparecer em coluna propria para conferencia
 
 ## Regras de apuramento mensal

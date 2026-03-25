@@ -2677,7 +2677,9 @@ function consolidateMapaMensalDay_(day) {
     valid_minutes: Math.max(0, day.raw_minutes - (day.atraso_min || 0)),
     atraso_min: day.atraso_min || 0,
     code: '',
-    display: day.raw_minutes > 0 ? formatMapaDayHoursLabel_(day.raw_minutes) : '',
+    display: (day.raw_minutes > 0 || (day.atraso_min || 0) > 0)
+      ? formatMapaDayHoursLabel_(Math.max(0, day.raw_minutes - (day.atraso_min || 0)))
+      : '',
     suppress_hours: false,
     is_dps_with_hours: false
   };
@@ -2793,10 +2795,7 @@ function renderMapaMensalPrintView_(mapaData) {
       const cls = day.weekend_type === 'sab' ? ' is-sab' : (day.weekend_type === 'dom' ? ' is-dom' : '');
       const absenceCls = cell && /^(F|FJ|Bxa|Fer)$/.test(cell.code || '') ? ' mapa-mensal-absence-day' : '';
       const content = cell && cell.display ? escapeHtml_(cell.display) : '<span class="mapa-print-cell-empty">·</span>';
-      const atrasoTag = cell && !cell.suppress_hours && cell.atraso_min > 0
-        ? '<span class="mapa-print-day-atraso">' + cell.atraso_min + '</span>'
-        : '';
-      return '<td class="mapa-print-day-cell' + cls + absenceCls + '">' + content + atrasoTag + '</td>';
+      return '<td class="mapa-print-day-cell' + cls + absenceCls + '">' + content + '</td>';
     }).join('');
 
     return '<tr>' +

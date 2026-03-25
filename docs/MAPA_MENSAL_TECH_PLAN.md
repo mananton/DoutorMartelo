@@ -213,10 +213,10 @@ Observacao:
 ### Passo 4 - Determinar display da celula
 - `F`, `FJ`, `Bxa`, `Fer` -> mostrar so o codigo
 - `Dsp` -> mostrar `Dsp`
-- horas sem ausencia -> `8`, `7:30`, etc.
+- horas sem ausencia -> mostrar `valid_minutes` ja com o atraso descontado, por exemplo `8`, `7:30`, `4`
 
 Nota:
-- o atraso continua visivel como indicador/coluna propria, mas nao altera o texto mostrado na celula diaria
+- o atraso continua somado na coluna/resumo mensal, mas deixa de aparecer como indicador visual na celula diaria
 
 ## Parsing tecnico das ausencias
 O campo `motivo` deve ser traduzido para o codigo do mapa por funcao dedicada.

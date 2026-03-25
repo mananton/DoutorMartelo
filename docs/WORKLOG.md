@@ -9,6 +9,19 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ---
 
+## 2026-03-25
+
+### `0adc969`
+- **Type**: fix / dashboard / docs
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`, `docs/MAPA_MENSAL_SPEC.md`, `docs/MAPA_MENSAL_TECH_PLAN.md`
+- **Summary**:
+  - Aligned `Mapa Mensal` monthly totals with payroll-effective hours by subtracting daily delay minutes from valid minutes, capped at zero per day.
+  - Updated dashboard and print/PDF summaries to show liquid `Total Horas` and compact `Dias` labels, removed the `Dsp` summary column, and corrected `F` vs `FJ` absence mapping including `JS`.
+  - Refined the print/PDF table styling after validation feedback, moving the outer border to the printed table and tuning the internal grid lines for clearer reading on white background.
+- **Impact**:
+  - The monthly map now reflects the same effective-hour logic used by cost calculation while keeping delay totals visible for audit.
+  - Payroll printouts are easier to validate thanks to clearer totals, corrected absence buckets, and a more legible printed grid.
+
 ## 2026-03-24
 
 ### `pending`
