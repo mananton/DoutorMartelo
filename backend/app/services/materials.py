@@ -1771,7 +1771,7 @@ class MaterialsService:
             "SERVICO": "SER",
             "ALUGUER": "ALQ",
             "TRANSPORTE": "TRN",
-        }[natureza]
+        }.get(natureza, "MAT")
         return self.state.next_id(prefix)
 
     def _normalize_destino(self, value: str) -> str:

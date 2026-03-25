@@ -719,7 +719,7 @@ function getSyncSheetRows_(sheet, headerRow) {
 
         var obj = {};
         for (var k = 0; k < headers.length; k++) {
-            if (headers[k]) obj[headers[k]] = row[k];
+            if (headers[k]) obj[String(headers[k]).trim()] = row[k];
         }
         obj.__sheet_row_num = i + 1;
         rows.push(obj);

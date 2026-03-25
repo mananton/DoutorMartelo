@@ -1,0 +1,5162 @@
+
+/* ══════════════════════════════════════════════════════════
+   GLOBALS
+   ══════════════════════════════════════════════════════════ */
+let DATA = null;
+let currentSection = 'overview';
+let sidebarCollapsed = false;
+let obrasMenuOpen = false;
+let obraCharts = {};
+let currentObraName = null;
+let currentObraWorkers = [];
+let expandedWorkerNames = new Set();
+let workerActiveTab = 'presentes';
+let expandedMateriaisFases = new Set();
+let expandedMateriaisObra = null;
+let currentMateriaisFases = [];
+let workerSortCol = 'custo';
+let workerSortAsc = false;
+let dailyPeriod = 0;
+let obraFaseMetric = 'mao_obra';
+let obraFaseChartType = 'bar';
+let obraWorkersCollapsed = true;
+let obraMateriaisCollapsed = true;
+let obraFaseDoughnutEnabled = true;
+let obraFaseHiddenByKey = {};
+
+const MOBILE_OBRA_CHART_MAX_DOUGHNUT = 5;
+const MOBILE_OBRA_CHART_TOP_PHASES = 6;
+const MOBILE_COMP_CUSTOS_MAX_DOUGHNUT = 5;
+const MOBILE_COMP_CUSTOS_TOP_OBRAS = 6;
+const DEFAULT_COMP_FASES = [
+  'A - projetos',
+  'B - abertura estaleiro',
+  'C - movimentacao terras',
+  'D - estrutura',
+  'E - paredes exteriores e interiores',
+  'F - capoto',
+  'G - eletricidade',
+  'U / M - janelas/caixilharias'
+];
+
+/* ── ASSIDUIDADE GLOBALS ───────────────────────────────── */
+let assidCurrentObra = null;
+let assidCurrentWorker = null;
+let assidYear = new Date().getFullYear();
+let assidMonth = new Date().getMonth(); // 0-based
+
+/* ── DESLOCAÇÕES GLOBALS ───────────────────────────────── */
+let deslCharts = {};
+let deslAllRows = [];
+let deslSortCol = 'data';
+let deslSortAsc = false;
+let deslSelectedObra = '';
+let deslRegistoCollapsed = true;
+
+/* ── EQUIPA GLOBALS ────────────────────────────────────── */
+let equipaCharts = {};
+let equipaAllRows = [];
+let equipaSortCol = 'custo';
+let equipaSortAsc = false;
+let equipaExpandedRow = null;
+let equipaDetailChart = null;
+
+/* ── COMPARATIVA GLOBALS ──────────────────────────────── */
+let compCharts = {};
+let compCurrentTab = 'obras';
+let compEvoMetric = 'custo';
+let compEvoHidden = {};
+let compCustosMetric = 'mao_obra';
+let compCustosChartType = 'bar';
+let compCustosDoughnutEnabled = true;
+let compCustosHiddenObras = {};
+let compFasesMetric = 'mao_obra';
+let compFasesSelectedObras = {};
+let compFasesSelectedKeys = {};
+let compDiasSelectedObras = {};
+let compDiasSelectedKeys = {};
+
+/* ── FÉRIAS GLOBALS ──────────────────────────────────── */
+let feriasAllRows   = [];
+let feriasSortCol   = 'nome';
+let feriasSortAsc   = true;
+let feriasSelected  = null;
+
+/* ── RH GLOBALS ──────────────────────────────────────── */
+let rhAllRows = [];
+let rhExpandedRow = null;
+let rhSortCol = 'nome';
+let rhSortAsc = true;
+
+/* ── MAPA MENSAL GLOBALS ─────────────────────────────── */
+let mapaMensalMonth = '';
+let mapaMensalStatus = 'provisorio';
+let mapaMensalCache = {};
+
+/* ── MATERIAIS GLOBALS ─────────────────────────────────── */
+let matMovAll = [];
+let legacyMatAll = [];
+let legacyFallbackAttempted = false;
+
+/* ── FORMATTERS ─────────────────────────────────────────── */
+const fmt  = v => (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const fmtN = v => typeof v === 'number' ? v.toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : v;
+const fmtMin = m => { if (!m) return '0m'; const h = Math.floor(m / 60); const min = Math.round(m % 60); return h > 0 ? h + 'h ' + min + 'm' : min + 'm'; };
+const initials = n => n.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const CHART_PALETTE = ['#e94560','#63b3ed','#48bb78','#f6ad55','#ff6b6b','#805ad5','#38b2ac','#d69e2e','#ed64a6','#4fd1c5'];
+function isMobile() { return window.innerWidth < 768; }
+function mLegend(override) {
+  const base = isMobile()
+    ? { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 6 } }
+    : { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } };
+  return Object.assign(base, override || {});
+}
+
+/* ── THEME / DATE FILTER / KPI TOOLTIP GLOBALS ──────────── */
+let currentTheme = 'light';
+let globalDateFrom = '';
+let globalDateTo = '';
+let activeQuickFilter = 'hoje';
+
+const KPI_TOOLTIPS = {
+  'Custo Total':       'Soma de todos os custos de mão de obra, deslocações e materiais em todas as obras.',
+  'Mão de Obra':       'Custo total dos trabalhadores (horas × valor/hora) em todas as obras.',
+  'Deslocações':       'Custo total de viagens e deslocações para as obras.',
+  'Materiais':         'Custo total de materiais consumidos (tipo CONSUMO), usando Custo_Total Com IVA.',
+  'Horas Trabalhadas': 'Total de horas registadas por todos os trabalhadores em todas as obras.',
+  'Obras Ativas':      'Número de obras atualmente em andamento (marcadas como ativas).',
+  'Colaboradores':     'Número total de trabalhadores únicos registados no sistema.',
+  'Faltas Totais':     'Total de dias de ausência registados em todas as obras.',
+  'Total Atrasos':     'Soma acumulada de todos os minutos de atraso dos colaboradores.',
+};
+
+/* ── CHART.JS DEFAULTS ─────────────────────────────────── */
+Chart.defaults.color = '#a0aec0';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family = "'Inter', sans-serif";
+
+/* ── SECTION TITLES MAP ─────────────────────────────────── */
+const sectionTitles = {
+  overview:     'Visão Geral',
+  'obra-detail':'Detalhe da Obra',
+  deslocacoes:  'Deslocações',
+  equipa:       'Equipa',
+  'mapa-mensal':'Mapa Mensal',
+  assiduidade:  'Assiduidade',
+  ferias:       'Férias',
+  comparativa:  'Análise Comparativa',
+  contabilidade:'Contabilidade',
+  rh:           'Recursos Humanos'
+};
+
+/* ══════════════════════════════════════════════════════════
+   DATA LOADING
+   ══════════════════════════════════════════════════════════ */
+function loadData() {
+  const overlay = document.getElementById('loading-overlay');
+  overlay.classList.remove('hidden');
+  startRefreshSpinner();
+  showSkeletons();
+
+  google.script.run
+    .withSuccessHandler(onDataLoaded)
+    .withFailureHandler(onDataError)
+    .getDashboardData({ mode: 'raw_v2' });
+}
+
+function onDataLoaded(jsonStr) {
+  try {
+    const payload = JSON.parse(jsonStr);
+    DATA = normalizeDashboardPayload_(payload);
+    mapaMensalCache = {};
+    if (DATA.error) { onDataError(DATA.error); return; }
+    matMovAll = DATA.materiais_mov || [];
+    legacyMatAll = DATA.legacy_materiais || [];
+    buildAll();
+    setQuickFilter('hoje');
+    hideOverlay();
+    stopRefreshSpinner();
+    checkAlerts();
+  } catch (e) {
+    if (!legacyFallbackAttempted) {
+      legacyFallbackAttempted = true;
+      google.script.run
+        .withSuccessHandler(onDataLoaded)
+        .withFailureHandler(onDataError)
+        .getDashboardData({ mode: 'legacy' });
+      return;
+    }
+    onDataError('Erro ao processar dados: ' + e.message);
+  }
+}
+
+function normalizeDashboardPayload_(payload) {
+  if (!payload || payload.error) return payload;
+  if (payload.payload_mode === 'raw_v2' && Array.isArray(payload.registos)) {
+    return buildDashboardFromRaw_(payload);
+  }
+  return payload;
+}
+
+function normalizeDiagnostics_(rawDiagnostics) {
+  const base = rawDiagnostics && typeof rawDiagnostics === 'object' ? rawDiagnostics : {};
+  return {
+    total_issues: Number(base.total_issues) || 0,
+    summary: base.summary && typeof base.summary === 'object' ? base.summary : {},
+    samples: Array.isArray(base.samples) ? base.samples : []
+  };
+}
+
+function isoWeekClient_(dateStr) {
+  const d = new Date(String(dateStr) + 'T12:00:00');
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((d - startOfYear) / 86400000);
+  const weekNum = Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7);
+  return d.getFullYear() + '-S' + String(weekNum).padStart(2, '0');
+}
+
+function isDashboardMaterialMov_(item) {
+  const row = item || {};
+  if (Object.prototype.hasOwnProperty.call(row, 'dashboard_consumo')) {
+    return !!row.dashboard_consumo;
+  }
+  const tipo = String(row.tipo || '').trim().toUpperCase();
+  const obra = String(row.obra || '').trim();
+  return tipo === 'CONSUMO' && !!obra && obra !== '-' && obra.toUpperCase() !== 'ESCRITORIO';
+}
+
+function buildDashboardFromRaw_(raw) {
+  const registos = Array.isArray(raw.registos) ? raw.registos : [];
+  const legacyMaoObra = Array.isArray(raw.legacy_mao_obra) ? raw.legacy_mao_obra : [];
+  const legacyMateriais = Array.isArray(raw.legacy_materiais) ? raw.legacy_materiais : [];
+  const deslocacoes = Array.isArray(raw.deslocacoes) ? raw.deslocacoes : [];
+  const viagens = Array.isArray(raw.viagens) ? raw.viagens : [];
+  const materiaisMov = Array.isArray(raw.materiais_mov) ? raw.materiais_mov : [];
+  const obraMap = {};
+
+  function ensureObraBucket_(obra) {
+    if (!obraMap[obra]) {
+      obraMap[obra] = {
+        custo_total: 0, horas_total: 0, atraso_total: 0,
+        trabalhadores: new Set(), faltas: 0, datas: new Set(),
+        daily: {}, weekly: {}, monthly: {},
+        workerMap: {}, assidMap: {}, faseMap: {}
+      };
+    }
+    return obraMap[obra];
+  }
+
+  for (let i = 0; i < registos.length; i++) {
+    const r = registos[i] || {};
+    const obra = String(r.obra || '').trim();
+    if (!obra) continue;
+    const dataStr = String(r.data || '').slice(0, 10);
+    const o = ensureObraBucket_(obra);
+    const nome = String(r.nome || '').trim();
+    const fase = String(r.fase || '').trim();
+    const custo = Number(r.custo) || 0;
+    const horas = Number(r.horas) || 0;
+    const atrasoMin = Number(r.atraso_min) || 0;
+    const falta = !!r.falta;
+    const dispensado = !!r.dispensado;
+
+    o.custo_total += custo;
+    o.horas_total += horas;
+    o.atraso_total += atrasoMin;
+    if (nome) o.trabalhadores.add(nome);
+    if (falta) o.faltas++;
+    if (dataStr) o.datas.add(dataStr);
+
+    if (dataStr) {
+      if (!o.daily[dataStr]) o.daily[dataStr] = { Custo: 0, Horas: 0, Atraso: 0, Trabalhadores: new Set(), Faltas: 0 };
+      o.daily[dataStr].Custo += custo;
+      o.daily[dataStr].Horas += horas;
+      o.daily[dataStr].Atraso += atrasoMin;
+      if (nome) o.daily[dataStr].Trabalhadores.add(nome);
+      if (falta) o.daily[dataStr].Faltas++;
+    }
+
+    if (dataStr) {
+      const wk = isoWeekClient_(dataStr);
+      if (!o.weekly[wk]) o.weekly[wk] = { Custo: 0, Horas: 0 };
+      o.weekly[wk].Custo += custo;
+      o.weekly[wk].Horas += horas;
+
+      const mo = dataStr.slice(0, 7);
+      if (!o.monthly[mo]) o.monthly[mo] = { Custo: 0, Horas: 0 };
+      o.monthly[mo].Custo += custo;
+      o.monthly[mo].Horas += horas;
+    }
+
+    if (!o.workerMap[nome]) {
+      o.workerMap[nome] = { funcao: r.funcao, fase: fase, Custo: 0, Horas: 0, Atraso: 0, Dias: new Set(), Faltas: 0 };
+    }
+    o.workerMap[nome].Custo += custo;
+    o.workerMap[nome].Horas += horas;
+    o.workerMap[nome].Atraso += atrasoMin;
+    if (dataStr) o.workerMap[nome].Dias.add(dataStr);
+    if (falta) o.workerMap[nome].Faltas++;
+
+    if (!o.assidMap[nome]) o.assidMap[nome] = { funcao: r.funcao, dias: {} };
+    if (dataStr && !o.assidMap[nome].dias[dataStr]) {
+      o.assidMap[nome].dias[dataStr] = {
+        horas: 0, falta: false, dispensado: false, custo: 0,
+        atraso_min: 0, motivo: '', observacao: '', fases: []
+      };
+    }
+    if (dataStr) {
+      const day = o.assidMap[nome].dias[dataStr];
+      day.horas += horas;
+      day.custo += custo;
+      day.atraso_min += atrasoMin;
+      if (falta) day.falta = true;
+      if (dispensado) day.dispensado = true;
+      if (r.motivo) day.motivo = r.motivo;
+      if (r.observacao) day.observacao = r.observacao;
+      if (fase && !day.fases.includes(fase)) day.fases.push(fase);
+    }
+
+    if (fase) {
+      if (!o.faseMap[fase]) o.faseMap[fase] = { Custo: 0, Horas: 0, Workers: new Set(), Dias: new Set(), Faltas: 0 };
+      o.faseMap[fase].Custo += custo;
+      o.faseMap[fase].Horas += horas;
+      if (nome) o.faseMap[fase].Workers.add(nome);
+      if (dataStr) o.faseMap[fase].Dias.add(dataStr);
+      if (falta) o.faseMap[fase].Faltas++;
+    }
+  }
+
+  for (let i = 0; i < legacyMaoObra.length; i++) {
+    const r = legacyMaoObra[i] || {};
+    const obra = String(r.obra || '').trim();
+    if (!obra) continue;
+    const dataStr = String(r.data || '').slice(0, 10);
+    const fase = String(r.fase || '').trim() || 'Sem Fase';
+    const custo = Number(r.custo) || 0;
+    const horas = Number(r.horas) || 0;
+    const o = ensureObraBucket_(obra);
+
+    o.custo_total += custo;
+    o.horas_total += horas;
+    if (dataStr) o.datas.add(dataStr);
+
+    if (dataStr) {
+      if (!o.daily[dataStr]) o.daily[dataStr] = { Custo: 0, Horas: 0, Atraso: 0, Trabalhadores: new Set(), Faltas: 0 };
+      o.daily[dataStr].Custo += custo;
+      o.daily[dataStr].Horas += horas;
+
+      const wk = isoWeekClient_(dataStr);
+      if (!o.weekly[wk]) o.weekly[wk] = { Custo: 0, Horas: 0 };
+      o.weekly[wk].Custo += custo;
+      o.weekly[wk].Horas += horas;
+
+      const mo = dataStr.slice(0, 7);
+      if (!o.monthly[mo]) o.monthly[mo] = { Custo: 0, Horas: 0 };
+      o.monthly[mo].Custo += custo;
+      o.monthly[mo].Horas += horas;
+    }
+
+    if (fase) {
+      if (!o.faseMap[fase]) o.faseMap[fase] = { Custo: 0, Horas: 0, Workers: new Set(), Dias: new Set(), Faltas: 0 };
+      o.faseMap[fase].Custo += custo;
+      o.faseMap[fase].Horas += horas;
+      if (dataStr) o.faseMap[fase].Dias.add(dataStr);
+    }
+  }
+
+  const deslocMap = {};
+  for (let i = 0; i < deslocacoes.length; i++) {
+    const d = deslocacoes[i] || {};
+    const obra = String(d.obra || '').trim();
+    if (!obra) continue;
+    if (!deslocMap[obra]) deslocMap[obra] = { custo: 0, qtd: 0 };
+    deslocMap[obra].custo += Number(d.custo) || 0;
+    deslocMap[obra].qtd += Number(d.qtd) || 0;
+  }
+
+  const matPorObra = {};
+  const matPorObraFase = {};
+  let custoMateriais = 0;
+  for (let i = 0; i < materiaisMov.length; i++) {
+    const m = materiaisMov[i] || {};
+    if (!isDashboardMaterialMov_(m)) continue;
+    const obra = String(m.obra || '').trim();
+    const fase = String(m.fase || '-').trim() || '-';
+    const custo = Number(m.custo) || 0;
+    const qtd = Number(m.qtd) || 0;
+    custoMateriais += custo;
+    if (!matPorObra[obra]) matPorObra[obra] = { custo: 0, qtd: 0 };
+    matPorObra[obra].custo += custo;
+    matPorObra[obra].qtd += qtd;
+    if (!matPorObraFase[obra]) matPorObraFase[obra] = {};
+    if (!matPorObraFase[obra][fase]) matPorObraFase[obra][fase] = { custo: 0, qtd: 0 };
+    matPorObraFase[obra][fase].custo += custo;
+    matPorObraFase[obra][fase].qtd += qtd;
+  }
+
+  for (let i = 0; i < legacyMateriais.length; i++) {
+    const m = legacyMateriais[i] || {};
+    const obra = String(m.obra || '').trim();
+    if (!obra) continue;
+    const fase = String(m.fase || '-').trim() || '-';
+    const custo = Number(m.custo) || 0;
+    const qtd = Number(m.qtd) || 0;
+    custoMateriais += custo;
+    if (!matPorObra[obra]) matPorObra[obra] = { custo: 0, qtd: 0 };
+    matPorObra[obra].custo += custo;
+    matPorObra[obra].qtd += qtd;
+    if (!matPorObraFase[obra]) matPorObraFase[obra] = {};
+    if (!matPorObraFase[obra][fase]) matPorObraFase[obra][fase] = { custo: 0, qtd: 0 };
+    matPorObraFase[obra][fase].custo += custo;
+    matPorObraFase[obra][fase].qtd += qtd;
+  }
+
+  const obras = {};
+  Object.keys(obraMap).sort().forEach(nome => {
+    const o = obraMap[nome];
+    const allDates = Array.from(o.datas).sort();
+    obras[nome] = {
+      custo_mao_obra: o.custo_total,
+      custo_deslocacoes: (deslocMap[nome] || {}).custo || 0,
+      qtd_deslocacoes: (deslocMap[nome] || {}).qtd || 0,
+      custo_materiais: (matPorObra[nome] || {}).custo || 0,
+      custo_total: o.custo_total + ((deslocMap[nome] || {}).custo || 0) + ((matPorObra[nome] || {}).custo || 0),
+      horas_total: o.horas_total,
+      atraso_total: o.atraso_total,
+      trabalhadores: o.trabalhadores.size,
+      faltas: o.faltas,
+      dias: o.datas.size,
+      all_dates: allDates,
+      daily: Object.keys(o.daily).sort().map(d => ({
+        DATA_str: d,
+        Custo: o.daily[d].Custo,
+        Horas: o.daily[d].Horas,
+        Atraso: o.daily[d].Atraso,
+        Trabalhadores: o.daily[d].Trabalhadores.size,
+        Faltas: o.daily[d].Faltas
+      })),
+      weekly: Object.keys(o.weekly).sort().map(w => ({ Semana: w, Custo: o.weekly[w].Custo, Horas: o.weekly[w].Horas })),
+      monthly: Object.keys(o.monthly).sort().map(m => ({ Mes: m, Custo: o.monthly[m].Custo, Horas: o.monthly[m].Horas })),
+      workers: Object.keys(o.workerMap).map(n => ({
+        'Nome (auto)': n,
+        'Função (auto)': o.workerMap[n].funcao,
+        'Fase': o.workerMap[n].fase,
+        Custo: o.workerMap[n].Custo,
+        Horas: o.workerMap[n].Horas,
+        Atraso: o.workerMap[n].Atraso,
+        Dias: o.workerMap[n].Dias.size,
+        Faltas: o.workerMap[n].Faltas
+      })).sort((a, b) => b.Custo - a.Custo),
+      assiduidade: Object.keys(o.assidMap).map(n => ({ nome: n, funcao: o.assidMap[n].funcao, dias: o.assidMap[n].dias })),
+      fases: Object.keys(o.faseMap).map(f => ({
+        Fase: f,
+        Custo: o.faseMap[f].Custo,
+        Horas: o.faseMap[f].Horas,
+        Workers: o.faseMap[f].Workers.size,
+        Dias: o.faseMap[f].Dias.size,
+        Faltas: o.faseMap[f].Faltas
+      })).sort((a, b) => b.Custo - a.Custo),
+      materiais_fases: (matPorObraFase[nome])
+        ? Object.keys(matPorObraFase[nome]).map(f => ({
+            Fase: f,
+            Custo: matPorObraFase[nome][f].custo,
+            Qtd: matPorObraFase[nome][f].qtd
+          })).sort((a, b) => b.Custo - a.Custo)
+        : []
+    };
+  });
+
+  const custoMaoObra = registos.reduce((s, r) => s + (Number(r.custo) || 0), 0) +
+    legacyMaoObra.reduce((s, r) => s + (Number(r.custo) || 0), 0);
+  const custoDeslocacoes = deslocacoes.reduce((s, d) => s + (Number(d.custo) || 0), 0);
+  const custoTotal = custoMaoObra + custoDeslocacoes + custoMateriais;
+  const horasTotal = registos.reduce((s, r) => s + (Number(r.horas) || 0), 0) +
+    legacyMaoObra.reduce((s, r) => s + (Number(r.horas) || 0), 0);
+  const totalAtrasos = registos.reduce((s, r) => s + (Number(r.atraso_min) || 0), 0);
+  const totalFaltas = registos.filter(r => !!r.falta).length;
+  const trabUnicos = new Set(registos.map(r => r.nome)).size;
+  const custoViagens = viagens.reduce((s, v) => s + (Number(v.custo_dia) || 0), 0);
+  const totalViagens = viagens.reduce((s, v) => s + (Number(v.v_efetivas) || 0), 0);
+
+  return {
+    global: {
+      custo_total: custoTotal,
+      custo_mao_obra: custoMaoObra,
+      custo_deslocacoes: custoDeslocacoes,
+      custo_materiais: custoMateriais,
+      horas_total: horasTotal,
+      total_atrasos: totalAtrasos,
+      obras_ativas: Object.keys(obras).length,
+      colaboradores: trabUnicos,
+      faltas: totalFaltas,
+      custo_viagens: custoViagens,
+      total_viagens: totalViagens,
+      last_update: raw.generated_at || ''
+    },
+    obras: obras,
+    obras_info: raw.obras_info || [],
+    colaboradores: raw.colaboradores || [],
+    diagnostics: normalizeDiagnostics_(raw.diagnostics),
+    registos: registos,
+    legacy_mao_obra: legacyMaoObra,
+    legacy_materiais: legacyMateriais,
+    viagens: viagens,
+    deslocacoes: deslocacoes,
+    ferias: raw.ferias || [],
+    materiais_mov: materiaisMov,
+    generated_at: raw.generated_at || ''
+  };
+}
+
+function onDataError(err) {
+  hideOverlay();
+  stopRefreshSpinner();
+  document.getElementById('section-overview').innerHTML =
+    `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i>
+     Erro ao carregar dados: ${err}</div>`;
+}
+
+function hideOverlay() {
+  const overlay = document.getElementById('loading-overlay');
+  overlay.classList.add('hidden');
+}
+
+/* ══════════════════════════════════════════════════════════
+   NAVIGATION
+   ══════════════════════════════════════════════════════════ */
+function showSection(id) {
+  currentSection = id;
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById('section-' + id);
+  if (target) target.classList.add('active');
+
+  // Update nav active state
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navBtn = document.querySelector(`.nav-item[data-section="${id}"]`);
+  if (navBtn) navBtn.classList.add('active');
+
+  // Update topbar title
+  document.getElementById('topbar-title').textContent =
+    sectionTitles[id] || (id === 'dev' ? 'Dev' : id);
+
+  // Update breadcrumb + mobile nav
+  updateBreadcrumb();
+  updateMobileNav();
+
+  // Auto-sync assiduidade with current obra — disabled (heatmap removed)
+  // if (id === 'assiduidade' && currentObraName && DATA && DATA.obras[currentObraName]) {
+  //   const sel = document.getElementById('assid-obra-select');
+  //   if (sel.value !== currentObraName) {
+  //     sel.value = currentObraName;
+  //     assidSelectObra(currentObraName);
+  //   }
+  // }
+
+  window.scrollTo(0, 0);
+}
+
+function toggleObrasMenu() {
+  obrasMenuOpen = !obrasMenuOpen;
+  document.getElementById('obras-submenu').classList.toggle('open', obrasMenuOpen);
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+  document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  const icon = document.getElementById('sidebar-toggle-icon');
+  icon.className = sidebarCollapsed
+    ? 'fa-solid fa-angles-right'
+    : 'fa-solid fa-angles-left';
+}
+
+/* ══════════════════════════════════════════════════════════
+   BUILD ALL (stubs)
+   ══════════════════════════════════════════════════════════ */
+function buildAll() {
+  buildObrasSidebar();
+  buildObraButtons();
+  buildOverview();
+  buildDevSection();
+  buildDeslocacoes();
+  buildEquipa();
+  buildMapaMensal();
+  buildAssidTable();
+  buildComparativa();
+  buildFerias();
+  buildContabilidade();
+  buildRecursosHumanos();
+}
+
+function buildObrasSidebar() {
+  if (!DATA || !DATA.obras) return;
+  const container = document.getElementById('obras-submenu');
+  const obraNames = Object.keys(DATA.obras).sort();
+  container.innerHTML = obraNames.map(nome =>
+    `<button class="nav-item" onclick="openObra('${nome.replace(/'/g, "\\'")}')" data-section="obra-detail">
+      <i class="fa-solid fa-circle"></i><span>${nome}</span>
+    </button>`
+  ).join('');
+  if (obraNames.length > 0) {
+    obrasMenuOpen = true;
+    container.classList.add('open');
+  }
+}
+
+function openObra(nome) {
+  if (!DATA || !DATA.obras[nome]) return;
+  currentObraName = nome;
+  if (isMobile()) obraFaseChartType = 'bar';
+  sectionTitles['obra-detail'] = nome;
+  showSection('obra-detail');
+
+  // Fix sidebar active: highlight only the clicked obra button
+  document.querySelectorAll('#obras-submenu .nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === nome);
+  });
+  document.querySelectorAll('#obra-buttons .obra-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === nome);
+  });
+
+  // Update status badge
+  const infoMap = {};
+  (DATA.obras_info || []).forEach(o => { infoMap[o.Obra_ID] = o; });
+  const info = infoMap[nome];
+  const badge = document.getElementById('obra-status-badge');
+  if (info && info.Ativa) {
+    const isAtiva = info.Ativa.toLowerCase() === 'sim' || info.Ativa.toLowerCase() === 'true' || info.Ativa === '1';
+    badge.textContent = isAtiva ? 'Ativa' : 'Inativa';
+    badge.className = 'obra-status ' + (isAtiva ? 'ativa' : 'inativa');
+  } else {
+    badge.textContent = '';
+    badge.className = 'obra-status';
+  }
+
+  buildObraKpis(nome);
+  buildObraCharts(nome);
+  buildObraWorkersTable(nome);
+  buildObraMateriais(nome);
+  applyObraSectionCollapseState_();
+  updateBreadcrumb();
+}
+
+function applyObraSectionCollapseState_() {
+  const workersCard = document.getElementById('obra-workers-card');
+  const workersBtn = document.getElementById('obra-workers-toggle-btn');
+  if (workersCard) workersCard.classList.toggle('section-collapsed', !!obraWorkersCollapsed);
+  if (workersBtn) {
+    workersBtn.setAttribute('aria-expanded', obraWorkersCollapsed ? 'false' : 'true');
+    workersBtn.innerHTML = '<i class="fa-solid ' + (obraWorkersCollapsed ? 'fa-chevron-down' : 'fa-chevron-up') + '"></i> ' +
+      (obraWorkersCollapsed ? 'Expandir' : 'Recolher');
+  }
+
+  const materiaisCard = document.getElementById('obra-materiais-card');
+  const materiaisBtn = document.getElementById('obra-materiais-toggle-btn');
+  if (materiaisCard) materiaisCard.classList.toggle('section-collapsed', !!obraMateriaisCollapsed);
+  if (materiaisBtn) {
+    materiaisBtn.setAttribute('aria-expanded', obraMateriaisCollapsed ? 'false' : 'true');
+    materiaisBtn.innerHTML = '<i class="fa-solid ' + (obraMateriaisCollapsed ? 'fa-chevron-down' : 'fa-chevron-up') + '"></i> ' +
+      (obraMateriaisCollapsed ? 'Expandir' : 'Recolher');
+  }
+}
+
+function toggleObraWorkersSection() {
+  obraWorkersCollapsed = !obraWorkersCollapsed;
+  applyObraSectionCollapseState_();
+}
+
+function toggleObraMateriaisSection() {
+  obraMateriaisCollapsed = !obraMateriaisCollapsed;
+  applyObraSectionCollapseState_();
+}
+
+function isObraAtiva_(nome) {
+  const info = (DATA && DATA.obras_info || []).find(o => o.Obra_ID === nome);
+  if (!info || !info.Ativa) return true;
+  const v = String(info.Ativa || '').trim().toLowerCase();
+  return v === 'sim' || v === 'true' || v === '1';
+}
+
+function obraHasDataInCurrentFilter_(nome) {
+  if (!DATA || !DATA.obras || !DATA.obras[nome]) return false;
+  const obra = DATA.obras[nome];
+
+  const hasDaily = (obra.daily || []).some(d => {
+    const dateKey = d.DATA_str || d.Data || d.data || '';
+    return dateInRange(dateKey);
+  });
+  if (hasDaily) return true;
+
+  const hasAssid = (obra.assiduidade || []).some(w =>
+    Object.keys(w.dias || {}).some(dateStr => dateInRange(dateStr))
+  );
+  if (hasAssid) return true;
+
+  const hasDeslocacoes = (DATA.deslocacoes || []).some(d =>
+    d.obra === nome && dateInRange(d.data)
+  );
+  if (hasDeslocacoes) return true;
+
+  const hasMateriais = filterAllMateriaisByDate().some(m => m.obra === nome);
+  return hasMateriais;
+}
+
+function getVisibleObraNames_() {
+  if (!DATA || !DATA.obras) return [];
+  const allNames = Object.keys(DATA.obras).sort();
+  let names = allNames.filter(isObraAtiva_);
+  if (!names.length) names = allNames;
+  return names.filter(obraHasDataInCurrentFilter_);
+}
+
+function buildObraButtons() {
+  const container = document.getElementById('obra-buttons');
+  if (!container || !DATA || !DATA.obras) return;
+
+  const names = getVisibleObraNames_();
+
+  if (currentObraName && names.indexOf(currentObraName) === -1) {
+    currentObraName = names.length ? names[0] : null;
+  } else if (!currentObraName && names.length) {
+    currentObraName = names[0];
+  }
+
+  if (!names.length) {
+    container.innerHTML = '<span class="obra-empty">Sem obras com dados no filtro atual.</span>';
+    return;
+  }
+
+  container.innerHTML = names.map(nome =>
+    `<button type="button" class="period-btn obra-btn${currentObraName === nome ? ' active' : ''}" onclick="openObra('${nome.replace(/'/g, "\\'")}')">${nome}</button>`
+  ).join('');
+}
+
+function renderObraNoDataState_() {
+  const badge = document.getElementById('obra-status-badge');
+  if (badge) {
+    badge.textContent = '';
+    badge.className = 'obra-status';
+  }
+
+  const kpi = document.getElementById('obra-kpis');
+  if (kpi) kpi.innerHTML = '<div class="obra-empty">Sem dados para o filtro atual.</div>';
+
+  destroyObraCharts();
+  const chartWrap = document.getElementById('chart-fases-wrap');
+  if (chartWrap) chartWrap.innerHTML = '<div class="no-chart-data">Sem fases no periodo</div>';
+
+  const faseFilter = document.getElementById('obra-fase-filter-wrap');
+  if (faseFilter) faseFilter.innerHTML = '<div class="obra-fase-filter-empty">Sem fases para filtrar</div>';
+
+  const workersCard = document.getElementById('obra-workers-card');
+  if (workersCard) workersCard.style.display = 'none';
+
+  const materiaisCard = document.getElementById('obra-materiais-card');
+  if (materiaisCard) materiaisCard.style.display = 'none';
+
+  obraWorkerPopupClose();
+}
+
+/* ══════════════════════════════════════════════════════════
+   OBRA — KPIs
+   ══════════════════════════════════════════════════════════ */
+function buildObraKpis(nome) {
+  const o = DATA.obras[nome];
+  const container = document.getElementById('obra-kpis');
+
+  // Se não há filtro activo, usar totais brutos directamente
+  const semFiltro = !globalDateFrom && !globalDateTo;
+
+  let custoMO = 0, horas = 0, faltas = 0, atrasos = 0, custoDesl = 0, custoMat = 0;
+  let workerSet = new Set();
+  let diasSet = new Set();
+
+  if (semFiltro) {
+    custoMO    = o.custo_mao_obra    || 0;
+    horas      = o.horas_total       || 0;
+    faltas     = o.faltas            || 0;
+    atrasos    = o.atraso_total      || 0;
+    custoDesl  = o.custo_deslocacoes || 0;
+    custoMat   = o.custo_materiais   || 0;
+    workerSet  = { size: o.trabalhadores || 0 };
+    diasSet    = { size: o.dias          || 0 };
+  } else {
+    // Agregar a partir dos dados daily filtrados
+    (o.daily || []).forEach(d => {
+      if (!dateInRange(d.DATA_str)) return;
+      custoMO += d.Custo  || 0;
+      horas   += d.Horas  || 0;
+      diasSet.add(d.DATA_str);
+    });
+
+    // Faltas, atrasos e workers a partir da assiduidade filtrada
+    (o.assiduidade || []).forEach(w => {
+      Object.entries(w.dias || {}).forEach(([dateStr, dayData]) => {
+        if (!dateInRange(dateStr)) return;
+        if (dayData.falta)      faltas++;
+        if (dayData.atraso_min) atrasos += dayData.atraso_min;
+        if ((Number(dayData.horas) || 0) > 0 || (Number(dayData.custo) || 0) > 0) workerSet.add(w.nome);
+      });
+    });
+
+    // Deslocações filtradas
+    (DATA.deslocacoes || []).forEach(d => {
+      if (d.obra === nome && dateInRange(d.data)) custoDesl += d.custo || 0;
+    });
+
+    // Materiais CONSUMO filtrados por obra
+    custoMat = sumMateriaisByObra(nome);
+  }
+
+  const custoTotal = custoMO + custoDesl + custoMat;
+  const nWorkers   = semFiltro ? workerSet.size : workerSet.size;
+  const nDias      = semFiltro ? diasSet.size   : diasSet.size;
+
+  const items = [
+    { val: fmt(custoTotal),        label: 'Custo Total' },
+    { val: fmt(custoMO),           label: 'Custo Mão de Obra' },
+    { val: fmt(custoMat),          label: 'Custo Materiais' },
+    { val: fmt(custoDesl),         label: 'Deslocações' },
+    { val: nWorkers,               label: 'Trabalhadores' },
+    { val: fmtN(horas) + 'h',      label: 'Horas' },
+    { val: faltas,                 label: 'Faltas' },
+    { val: nDias,                  label: 'Dias Trabalhados' },
+  ];
+  container.innerHTML = items.map(i => `
+    <div class="obra-kpi">
+      <div class="obra-kpi-val">${i.val}</div>
+      <div class="obra-kpi-label">${i.label}</div>
+    </div>
+  `).join('');
+
+}
+
+/* ══════════════════════════════════════════════════════════
+   OBRA — CHARTS
+   ══════════════════════════════════════════════════════════ */
+function destroyObraCharts() {
+  Object.values(obraCharts).forEach(c => { if (c) c.destroy(); });
+  obraCharts = {};
+  // Restore canvases that may have been replaced with no-data messages
+  ['fases'].forEach(key => {
+    const wrap = document.getElementById('chart-' + key + '-wrap');
+    if (wrap && !document.getElementById('chart-' + key)) {
+      wrap.innerHTML = '<canvas id="chart-' + key + '"></canvas>';
+    }
+  });
+}
+
+function formatDateShortPt_(dateKey) {
+  const d = normalizeDateKey_(dateKey);
+  if (!d || d.length < 10) return '';
+  return d.slice(8, 10) + '/' + d.slice(5, 7);
+}
+
+function getObraFasePeriodLabel_() {
+  const from = normalizeDateKey_(globalDateFrom);
+  const to = normalizeDateKey_(globalDateTo);
+  if (!from && !to) return 'Periodo: sem filtro';
+  if (from && to && from === to) return 'Periodo: ' + formatDateShortPt_(from);
+  if (from && to) return 'Periodo: ' + formatDateShortPt_(from) + ' - ' + formatDateShortPt_(to);
+  if (from) return 'Periodo: desde ' + formatDateShortPt_(from);
+  return 'Periodo: ate ' + formatDateShortPt_(to);
+}
+
+function updateObraFasePeriodLabel_() {
+  const el = document.getElementById('obra-fase-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
+
+function abbreviateChartLabel_(label, maxLen) {
+  const txt = String(label || '').trim();
+  const lim = maxLen || 14;
+  if (txt.length <= lim) return txt;
+  return txt.slice(0, Math.max(3, lim - 1)).trimEnd() + '…';
+}
+
+function compactFasesForMobile_(fases) {
+  const list = Array.isArray(fases) ? fases.slice() : [];
+  if (!isMobile() || list.length <= MOBILE_OBRA_CHART_TOP_PHASES) return list;
+
+  const sorted = list.sort((a, b) => (b.Custo || 0) - (a.Custo || 0));
+  const top = sorted.slice(0, MOBILE_OBRA_CHART_TOP_PHASES);
+  const rest = sorted.slice(MOBILE_OBRA_CHART_TOP_PHASES);
+  const restCost = rest.reduce((s, f) => s + (Number(f.Custo) || 0), 0);
+  const restHours = rest.reduce((s, f) => s + (Number(f.Horas) || 0), 0);
+  if (restCost > 0 || restHours > 0) {
+    top.push({ Fase: 'Outras Fases', Custo: restCost, Horas: restHours, _isGroupedOther: true });
+  }
+  return top;
+}
+
+function setObraFaseTypeAvailability_(fases) {
+  const doughnutBtn = document.getElementById('obra-fase-type-doughnut');
+  const count = Array.isArray(fases) ? fases.length : 0;
+  obraFaseDoughnutEnabled = !isMobile() || count <= MOBILE_OBRA_CHART_MAX_DOUGHNUT;
+
+  if (doughnutBtn) {
+    doughnutBtn.disabled = !obraFaseDoughnutEnabled;
+    doughnutBtn.setAttribute('aria-disabled', obraFaseDoughnutEnabled ? 'false' : 'true');
+    doughnutBtn.title = obraFaseDoughnutEnabled
+      ? 'Mostrar grafico circular'
+      : 'No mobile, o circular so e ativado com ate ' + MOBILE_OBRA_CHART_MAX_DOUGHNUT + ' fases';
+  }
+
+  if (!obraFaseDoughnutEnabled && obraFaseChartType === 'doughnut') {
+    obraFaseChartType = 'bar';
+  }
+}
+
+function escapeHtml_(raw) {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getObraFaseHiddenStateKey_(obraNome) {
+  return String(obraNome || '') + '::' + String(obraFaseMetric || '');
+}
+
+function getObraFaseHiddenSet_(obraNome) {
+  const stateKey = getObraFaseHiddenStateKey_(obraNome);
+  if (!obraFaseHiddenByKey[stateKey]) obraFaseHiddenByKey[stateKey] = new Set();
+  return obraFaseHiddenByKey[stateKey];
+}
+
+function renderObraFaseFilterControls_(obraNome, fases) {
+  const wrap = document.getElementById('obra-fase-filter-wrap');
+  if (!wrap) return;
+
+  const list = Array.isArray(fases) ? fases.slice().sort((a, b) => (b.Custo || 0) - (a.Custo || 0)) : [];
+  if (!list.length) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  const hiddenSet = getObraFaseHiddenSet_(obraNome);
+  const validKeys = new Set(list.map(f => normalizeFaseKey_(f.Fase)));
+  [...hiddenSet].forEach(k => { if (!validKeys.has(k)) hiddenSet.delete(k); });
+
+  const hiddenCount = hiddenSet.size;
+  const chips = list.map(f => {
+    const label = String(f.Fase || 'Sem Fase');
+    const phaseKey = normalizeFaseKey_(label);
+    const hidden = hiddenSet.has(phaseKey);
+    const safeLabel = escapeHtml_(label);
+    const encoded = encodeURIComponent(label);
+    return '<button type="button" class="obra-fase-chip' + (hidden ? ' hidden' : '') + '"' +
+      ' onclick="toggleObraFaseVisibility(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (hidden ? 'true' : 'false') + '"' +
+      ' title="' + safeLabel + ' · ' + fmt(Number(f.Custo) || 0) + '">' + safeLabel + '</button>';
+  }).join('');
+
+  wrap.innerHTML =
+    '<div class="obra-fase-filter-head">' +
+      '<span class="obra-fase-filter-title">Fases visiveis' + (hiddenCount ? ' (' + hiddenCount + ' oculta(s))' : '') + '</span>' +
+      '<button type="button" class="obra-fase-reset-btn" onclick="clearObraFaseVisibilityFilters()">Mostrar todas</button>' +
+    '</div>' +
+    '<div class="obra-fase-chip-row">' + chips + '</div>';
+}
+
+function toggleObraFaseVisibility(faseEncoded) {
+  if (!currentObraName) return;
+  const label = decodeURIComponent(String(faseEncoded || ''));
+  if (!label) return;
+  const hiddenSet = getObraFaseHiddenSet_(currentObraName);
+  const key = normalizeFaseKey_(label);
+  if (hiddenSet.has(key)) hiddenSet.delete(key);
+  else hiddenSet.add(key);
+  buildObraCharts(currentObraName);
+}
+
+function clearObraFaseVisibilityFilters() {
+  if (!currentObraName) return;
+  const hiddenSet = getObraFaseHiddenSet_(currentObraName);
+  hiddenSet.clear();
+  buildObraCharts(currentObraName);
+}
+
+function syncObraFaseChartControls_() {
+  const metricBtns = [
+    ['mao_obra', 'obra-fase-metric-mao_obra'],
+    ['materiais', 'obra-fase-metric-materiais'],
+    ['total', 'obra-fase-metric-total']
+  ];
+  metricBtns.forEach(([metric, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', obraFaseMetric === metric);
+  });
+
+  const typeBtns = [
+    ['bar', 'obra-fase-type-bar'],
+    ['doughnut', 'obra-fase-type-doughnut']
+  ];
+  typeBtns.forEach(([type, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', obraFaseChartType === type);
+  });
+}
+
+function setObraFaseMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, total: true };
+  if (!allowed[metric]) return;
+  obraFaseMetric = metric;
+  syncObraFaseChartControls_();
+  if (currentObraName && DATA && DATA.obras && DATA.obras[currentObraName]) {
+    buildObraCharts(currentObraName);
+  }
+}
+
+function setObraFaseChartType(type) {
+  const allowed = { bar: true, doughnut: true };
+  if (!allowed[type]) return;
+  if (type === 'doughnut' && !obraFaseDoughnutEnabled) return;
+  obraFaseChartType = type;
+  syncObraFaseChartControls_();
+  if (currentObraName && DATA && DATA.obras && DATA.obras[currentObraName]) {
+    buildObraCharts(currentObraName);
+  }
+}
+
+function normalizeFaseKey_(raw) {
+  const label = String(raw || '').trim() || 'Sem Fase';
+  return label
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function addFaseCost_(agg, faseLabel, custo, horas) {
+  const label = String(faseLabel || '').trim() || 'Sem Fase';
+  const key = normalizeFaseKey_(label);
+  if (!agg[key]) agg[key] = { Fase: label, Custo: 0, Horas: 0 };
+  agg[key].Custo += Number(custo) || 0;
+  agg[key].Horas += Number(horas) || 0;
+}
+
+function buildObraCharts(nome) {
+  const obra = DATA.obras[nome];
+  if (!obra) return;
+  destroyObraCharts();
+  updateObraFasePeriodLabel_();
+
+  // Aggregate mao de obra por fase from raw rows + legacy rows (date-filtered)
+  const faseAgg = {};
+  (DATA.registos || []).forEach(r => {
+    if (String(r.obra || '').trim() !== nome) return;
+    const dateStr = String(r.data || '').slice(0, 10);
+    if (!dateInRange(dateStr)) return;
+    if (r.falta) return;
+    addFaseCost_(faseAgg, r.fase || 'Sem Fase', r.custo, r.horas);
+  });
+  (DATA.legacy_mao_obra || []).forEach(r => {
+    if (String(r.obra || '').trim() !== nome) return;
+    const dateStr = String(r.data || '').slice(0, 10);
+    if (!dateInRange(dateStr)) return;
+    addFaseCost_(faseAgg, r.fase || 'Sem Fase', r.custo, r.horas);
+  });
+
+  // Aggregate materiais por fase (date-filtered)
+  const matFaseAgg = {};
+  filterAllMateriaisByDate().forEach(m => {
+    if (m.obra !== nome) return;
+    const fase = String(m.fase || '').trim() || 'Sem Fase';
+    addFaseCost_(matFaseAgg, fase, matCost(m), 0);
+  });
+
+  let filteredFases = [];
+  if (obraFaseMetric === 'materiais') {
+    filteredFases = Object.values(matFaseAgg).filter(f => f.Custo > 0);
+  } else if (obraFaseMetric === 'total') {
+    const totalMap = {};
+    Object.values(faseAgg).forEach(f => {
+      addFaseCost_(totalMap, f.Fase, f.Custo, f.Horas);
+    });
+    Object.values(matFaseAgg).forEach(f => {
+      addFaseCost_(totalMap, f.Fase, f.Custo, 0);
+    });
+    filteredFases = Object.values(totalMap).filter(f => f.Custo > 0 || f.Horas > 0);
+  } else {
+    filteredFases = Object.values(faseAgg).filter(f => f.Custo > 0 || f.Horas > 0);
+  }
+
+  renderObraFaseFilterControls_(nome, filteredFases);
+
+  const hiddenSet = getObraFaseHiddenSet_(nome);
+  const visibleFases = filteredFases.filter(f => !hiddenSet.has(normalizeFaseKey_(f.Fase)));
+
+  const compacted = compactFasesForMobile_(visibleFases);
+  setObraFaseTypeAvailability_(compacted);
+  syncObraFaseChartControls_();
+
+  if (isMobile() && obraFaseChartType === 'doughnut' && !obraFaseDoughnutEnabled) {
+    obraFaseChartType = 'bar';
+    syncObraFaseChartControls_();
+  }
+
+  buildFasesChart(compacted, obraFaseMetric, obraFaseChartType);
+}
+
+/* â”€â”€ Daily line chart â€” disabled (card removed) â”€â”€â”€â”€â”€â”€â”€â”€ */
+function buildDailyChart(daily) { /* disabled */ }
+function setDailyPeriod(days) { /* disabled */ }
+function updatePeriodBtns() { /* disabled */ }
+
+/* â”€â”€ Weekly bar chart â€” disabled (card removed) â”€â”€â”€â”€â”€â”€â”€â”€ */
+function buildWeeklyChart(weekly) { /* disabled */ }
+
+/* â”€â”€ Horizontal bar â€” top 10 workers by cost â€” disabled (card removed) â”€â”€ */
+function buildWorkersChart(workers) { /* disabled */ }
+
+/* â”€â”€ Bar chart â€” cost by phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function buildFasesChart(fases, metric, chartType) {
+  if (obraCharts.fases) obraCharts.fases.destroy();
+  const canvas = document.getElementById('chart-fases');
+  if (!canvas) return;
+  if (!fases || !fases.length) {
+    canvas.parentElement.innerHTML =
+      '<div class="no-chart-data">Sem fases no periodo</div>';
+    return;
+  }
+
+  const metricLabelMap = {
+    mao_obra: 'Mao de Obra',
+    materiais: 'Materiais',
+    total: 'Total'
+  };
+  const datasetLabel = metricLabelMap[metric] || 'Custo';
+  const type = chartType === 'doughnut' ? 'doughnut' : 'bar';
+  const sorted = fases.slice().sort((a, b) => b.Custo - a.Custo);
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  obraCharts.fases = new Chart(canvas, {
+    type: type,
+    data: {
+      labels: sorted.map(f => f.Fase),
+      datasets: [{
+        label: datasetLabel,
+        data: sorted.map(f => f.Custo),
+        backgroundColor: sorted.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+        borderRadius: type === 'bar' ? 4 : 0,
+        borderWidth: type === 'doughnut' ? 1 : 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      cutout: type === 'doughnut' ? '56%' : undefined,
+      plugins: {
+        legend: type === 'doughnut'
+          ? {
+              display: true,
+              position: 'bottom',
+              labels: {
+                boxWidth: 10,
+                font: { size: isMobile() ? 10 : 11 },
+                padding: isMobile() ? 6 : 8,
+                generateLabels: chart => {
+                  const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                  if (!isMobile()) return base;
+                  return base.map(it => Object.assign({}, it, { text: abbreviateChartLabel_(it.text, 12) }));
+                }
+              }
+            }
+          : { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              if (!items || !items.length) return '';
+              return String(items[0].label || '');
+            },
+            label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
+          }
+        }
+      },
+      scales: type === 'bar'
+        ? {
+            y: {
+              grid: { color: 'rgba(255,255,255,.04)' },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: val => {
+                  const idx = Number(val);
+                  const label = Number.isFinite(idx) && sorted[idx] ? sorted[idx].Fase : String(val);
+                  return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+                }
+              }
+            }
+          }
+        : undefined
+    }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   OBRA — WORKERS TABLE (sort, filter, export)
+   ══════════════════════════════════════════════════════════ */
+function buildObraWorkersTable(nome) {
+  const workersCard = document.getElementById('obra-workers-card');
+  if (workersCard) workersCard.style.display = '';
+
+  const obra = DATA.obras[nome];
+  const assid = obra.assiduidade || [];
+  const workers = obra.workers || [];
+
+  // Aggregate from assiduidade (date-filtered) instead of pre-aggregated workers
+  const agg = {};
+  assid.forEach(w => {
+    const wName = w.nome;
+    if (!agg[wName]) {
+      const wInfo = workers.find(ww => ww['Nome (auto)'] === wName);
+      agg[wName] = {
+        nome: wName,
+        funcao: (wInfo && wInfo['Função (auto)']) || w.funcao || '\u2014',
+        fase: (wInfo && wInfo.Fase) || '\u2014',
+        horas: 0, custo: 0, atraso: 0, dias: 0, faltas: 0, dispensados: 0, faltasList: []
+      };
+    }
+    Object.entries(w.dias || {}).forEach(([dateStr, d]) => {
+      if (!dateInRange(dateStr)) return;
+      const horasDia = Number(d.horas) || 0;
+      const custoDia = Number(d.custo) || 0;
+      if (d.dispensado) agg[wName].dispensados++;
+      if (d.falta) {
+        agg[wName].faltas++;
+        agg[wName].faltasList.push({
+          dataSort: dateStr,
+          data: dateStr.slice(8, 10) + '/' + dateStr.slice(5, 7),
+          motivo: d.motivo || '\u2014',
+          dispensado: !!d.dispensado,
+          obra: nome,
+          fase: (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '\u2014',
+          observacao: d.observacao || '\u2014'
+        });
+      } else if (horasDia > 0 || custoDia > 0) {
+        // Legacy-safe: treat cost-only entries as worked day for period filtering.
+        agg[wName].horas += horasDia;
+        agg[wName].custo += custoDia;
+        agg[wName].dias++;
+      }
+      if (d.atraso_min) agg[wName].atraso += Number(d.atraso_min) || 0;
+    });
+  });
+
+  const prevExpanded = new Set(expandedWorkerNames);
+  currentObraWorkers = Object.values(agg).filter(w => w.dias > 0 || w.faltas > 0 || w.dispensados > 0);
+  expandedWorkerNames = new Set(
+    currentObraWorkers.map(w => w.nome).filter(n => prevExpanded.has(n))
+  );
+  workerSortCol = 'custo';
+  workerSortAsc = false;
+  document.getElementById('worker-search').value = '';
+  renderWorkerRows();
+  applyObraSectionCollapseState_();
+}
+
+function getFilteredWorkerRows_() {
+  const filter = (document.getElementById('worker-search').value || '').toLowerCase();
+  let rows = currentObraWorkers.filter(w => w.nome.toLowerCase().includes(filter));
+
+  rows.sort((a, b) => {
+    let va = a[workerSortCol], vb = b[workerSortCol];
+    if (typeof va === 'string') return workerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return workerSortAsc ? va - vb : vb - va;
+  });
+  return rows;
+}
+
+function splitWorkerRows_(rows) {
+  return {
+    presentes: rows.filter(w => w.dias > 0 && w.faltas === 0 && w.dispensados === 0),
+    ausentes: rows.filter(w => w.faltas > 0 || w.dispensados > 0 || w.dias === 0)
+  };
+}
+
+function updateWorkerTabsUI_(presentesCount, ausentesCount) {
+  const p = document.getElementById('worker-tab-presentes');
+  const a = document.getElementById('worker-tab-ausentes');
+  if (!p || !a) return;
+
+  p.textContent = 'Presentes (' + presentesCount + ')';
+  a.textContent = 'Faltas/Disp. (' + ausentesCount + ')';
+
+  p.classList.toggle('active', workerActiveTab === 'presentes');
+  a.classList.toggle('active', workerActiveTab === 'ausentes');
+}
+
+function renderWorkerRows() {
+  const rows = getFilteredWorkerRows_();
+  const groups = splitWorkerRows_(rows);
+
+  if (workerActiveTab === 'presentes' && !groups.presentes.length && groups.ausentes.length) {
+    workerActiveTab = 'ausentes';
+  } else if (workerActiveTab === 'ausentes' && !groups.ausentes.length && groups.presentes.length) {
+    workerActiveTab = 'presentes';
+  }
+  updateWorkerTabsUI_(groups.presentes.length, groups.ausentes.length);
+
+  const rowsToShow = workerActiveTab === 'ausentes' ? groups.ausentes : groups.presentes;
+
+  const tbody = document.getElementById('workers-tbody');
+  if (!rowsToShow.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="td-center" style="padding:14px;color:var(--text-dim)">Sem trabalhadores para o filtro atual</td></tr>';
+  } else {
+    tbody.innerHTML = rowsToShow.map(w => {
+      const expanded = expandedWorkerNames.has(w.nome);
+      const safeName = w.nome.replace(/'/g, "\\'");
+      return `
+        <tr class="worker-item-row">
+          <td colspan="8">
+            <div class="worker-item ${expanded ? 'expanded' : ''}">
+              <button type="button" class="worker-summary-btn" onclick="toggleWorkerDetails('${safeName}')" aria-expanded="${expanded ? 'true' : 'false'}">
+                <span class="worker-summary-main">
+                  <span class="worker-summary-title">
+                    <span class="worker-summary-role">${w.funcao}</span>
+                    <span class="worker-summary-name">${w.nome}</span>
+                  </span>
+                </span>
+                <i class="fa-solid ${expanded ? 'fa-chevron-up' : 'fa-chevron-down'} worker-summary-chevron"></i>
+              </button>
+              <div class="worker-detail">
+                <ul class="worker-detail-list">
+                  <li class="worker-detail-line"><span class="worker-detail-label">Função</span><span class="worker-detail-value"><span class="tag tag-blue">${w.funcao}</span></span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Fase</span><span class="worker-detail-value" style="color:var(--text-muted);font-weight:600">${w.fase}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Horas</span><span class="worker-detail-value td-mono">${w.horas > 0 ? fmtN(w.horas) + 'h' : '—'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Custo</span><span class="worker-detail-value td-mono td-euro">${w.custo > 0 ? fmt(w.custo) : '—'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Atrasos</span><span class="worker-detail-value td-mono">${w.atraso > 0 ? fmtMin(w.atraso) : '—'}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Dias</span><span class="worker-detail-value td-mono">${w.dias}</span></li>
+                  <li class="worker-detail-line"><span class="worker-detail-label">Faltas</span><span class="worker-detail-value">${w.faltas > 0 ? '<span class="tag tag-red" style="cursor:pointer" onclick="event.stopPropagation();obraShowWorkerFaltas(\'' + safeName + '\',event)" title="Ver detalhe">' + w.faltas + '</span>' : '0'}</span></li>
+                </ul>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Update sort indicators
+  const colMap = { nome: 0, funcao: 1, fase: 2, horas: 3, custo: 4, atraso: 5, dias: 6, faltas: 7 };
+  const ths = document.querySelectorAll('#workers-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[workerSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const icon = ths[idx].querySelector('.sort-icon');
+    if (icon) icon.className = 'fa-solid ' + (workerSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+
+function sortWorkers(col) {
+  if (workerSortCol === col) {
+    workerSortAsc = !workerSortAsc;
+  } else {
+    workerSortCol = col;
+    workerSortAsc = (col === 'nome' || col === 'funcao' || col === 'fase');
+  }
+  renderWorkerRows();
+}
+
+function toggleWorkerDetails(nome) {
+  if (expandedWorkerNames.has(nome)) expandedWorkerNames.delete(nome);
+  else expandedWorkerNames.add(nome);
+  renderWorkerRows();
+}
+
+function setWorkerTab(tab) {
+  workerActiveTab = tab === 'ausentes' ? 'ausentes' : 'presentes';
+  renderWorkerRows();
+}
+
+function expandAllWorkers() {
+  const groups = splitWorkerRows_(getFilteredWorkerRows_());
+  const rows = workerActiveTab === 'ausentes' ? groups.ausentes : groups.presentes;
+  rows.forEach(w => expandedWorkerNames.add(w.nome));
+  renderWorkerRows();
+}
+
+function collapseAllWorkers() {
+  const groups = splitWorkerRows_(getFilteredWorkerRows_());
+  const rows = workerActiveTab === 'ausentes' ? groups.ausentes : groups.presentes;
+  rows.forEach(w => expandedWorkerNames.delete(w.nome));
+  renderWorkerRows();
+}
+
+function filterWorkers() { renderWorkerRows(); }
+
+function exportWorkersCSV() { /* disabled */ }
+
+function obraShowWorkerFaltas(nome, event) {
+  const row = currentObraWorkers.find(r => r.nome === nome);
+  if (!row || !row.faltasList || !row.faltasList.length) return;
+
+  const clickRect = event && event.currentTarget
+    ? event.currentTarget.getBoundingClientRect() : null;
+
+  const sorted = row.faltasList.slice().sort((a, b) => b.dataSort.localeCompare(a.dataSort));
+  const bodyHtml = sorted.map(f =>
+    '<div class="assid-popup-item">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">' +
+        '<span style="color:var(--accent);font-weight:700;min-width:42px">' + f.data + '</span>' +
+        (f.dispensado ? '<span class="tag tag-amber">Dispensado</span>' : '') +
+      '</div>' +
+      '<div style="color:var(--text);font-size:12px;line-height:1.45">' +
+        '<div><span style="color:var(--text-dim)">Motivo:</span> ' + (f.motivo || '\u2014') + '</div>' +
+        '<div><span style="color:var(--text-dim)">Obra:</span> ' + (f.obra || '\u2014') + '</div>' +
+        '<div><span style="color:var(--text-dim)">Fase:</span> ' + (f.fase || '\u2014') + '</div>' +
+        '<div><span style="color:var(--text-dim)">Observa\u00E7\u00F5es:</span> ' + (f.observacao || '\u2014') + '</div>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+
+  const container = document.getElementById('obra-worker-popup-container');
+  if (!container) return;
+  container.innerHTML =
+    '<div class="assid-popup-overlay" onclick="obraWorkerPopupClose()"></div>' +
+    '<div class="assid-popup" id="obra-worker-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="assid-popup-header">' +
+        '<span><i class="fa-solid fa-calendar-xmark" style="margin-right:8px;color:var(--accent)"></i>Faltas de ' +
+        nome.split(' ').slice(0, 2).join(' ') + ' (' + row.faltas + ')</span>' +
+        '<button class="assid-popup-close" onclick="obraWorkerPopupClose()"><i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="assid-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('obra-worker-popup-inner');
+    if (!popup || !clickRect) return;
+    const pw = popup.offsetWidth || 300;
+    const ph = popup.offsetHeight || 220;
+    let top = clickRect.bottom + 8;
+    let left = clickRect.left;
+    if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+    if (left < 12) left = 12;
+    if (top + ph > window.innerHeight - 12) top = clickRect.top - ph - 8;
+    if (top < 12) top = 12;
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function obraWorkerPopupClose() {
+  const container = document.getElementById('obra-worker-popup-container');
+  if (container) container.innerHTML = '';
+}
+
+/* ══════════════════════════════════════════════════════════
+   OBRA — MATERIAIS (consumo) por fase
+   ══════════════════════════════════════════════════════════ */
+function buildObraMateriais(nome) {
+  const card  = document.getElementById('obra-materiais-card');
+  const list = document.getElementById('obra-materiais-list');
+  if (!card || !list) return;
+  if (expandedMateriaisObra !== nome) {
+    expandedMateriaisFases = new Set();
+    expandedMateriaisObra = nome;
+    const searchInput = document.getElementById('materiais-search');
+    if (searchInput) searchInput.value = '';
+  }
+  const searchInput = document.getElementById('materiais-search');
+  const materialFilter = String(searchInput && searchInput.value || '').trim().toLowerCase();
+
+  // Filtrar CONSUMO da obra, respeitando filtro de datas global
+  const rows = filterAllMateriaisByDate().filter(m => m.obra === nome);
+
+  if (!rows.length) {
+    card.style.display = 'none';
+    list.innerHTML = '';
+    currentMateriaisFases = [];
+    applyObraSectionCollapseState_();
+    return;
+  }
+
+  // Agrupar por fase (detalhe por registo de consumo)
+  const fasesMap = {};
+  rows.forEach(m => {
+    const fase = m.fase || '\u2014';
+    if (!fasesMap[fase]) fasesMap[fase] = { total: 0, items: [] };
+    const qtd = parseFloat(m.quantidade) || 0;
+    const custo = matCost(m);
+    fasesMap[fase].total += custo;
+    fasesMap[fase].items.push({
+      data: m.data || '',
+      material: m.material || '\u2014',
+      unidade: m.unidade || '\u2014',
+      quantidade: qtd,
+      custo: custo
+    });
+  });
+
+  const fasesFiltradasMap = {};
+  Object.keys(fasesMap).forEach(fase => {
+    const items = materialFilter
+      ? fasesMap[fase].items.filter(it => String(it.material || '').toLowerCase().includes(materialFilter))
+      : fasesMap[fase].items.slice();
+    if (!items.length) return;
+    fasesFiltradasMap[fase] = {
+      total: items.reduce((sum, it) => sum + (Number(it.custo) || 0), 0),
+      items: items
+    };
+  });
+
+  const fases = Object.keys(fasesFiltradasMap).sort((a, b) => {
+    const diff = (fasesFiltradasMap[b].total || 0) - (fasesFiltradasMap[a].total || 0);
+    return diff !== 0 ? diff : a.localeCompare(b);
+  });
+  currentMateriaisFases = fases.slice();
+
+  const prevExpanded = new Set(expandedMateriaisFases);
+  expandedMateriaisFases = new Set(fases.filter(f => prevExpanded.has(f)));
+
+  const fmtDate = s => {
+    const raw = String(s || '');
+    if (raw.length < 10) return '\u2014';
+    const p = raw.slice(0, 10).split('-');
+    return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : raw;
+  };
+
+  if (!fases.length) {
+    list.innerHTML = '<div class="mat-empty">Sem materiais para o filtro atual</div>';
+    card.style.display = '';
+    applyObraSectionCollapseState_();
+    return;
+  }
+
+  list.innerHTML = fases.map(fase => {
+    const faseKey = encodeURIComponent(fase);
+    const data = fasesFiltradasMap[fase];
+    const expanded = expandedMateriaisFases.has(fase);
+    const items = (data.items || []).slice().sort((a, b) => {
+      const d = String(b.data || '').localeCompare(String(a.data || ''));
+      return d !== 0 ? d : String(a.material || '').localeCompare(String(b.material || ''));
+    });
+    const itemsHtml = items.map(it =>
+      '<div class="mat-item">' +
+        '<div class="mat-item-title">' + (it.material || '\u2014') + '</div>' +
+        '<ul class="mat-item-lines">' +
+          '<li class="mat-item-line"><span class="mat-item-label">Data</span><span class="mat-item-value td-mono">' + fmtDate(it.data) + '</span></li>' +
+          '<li class="mat-item-line"><span class="mat-item-label">Unidade</span><span class="mat-item-value">' + (it.unidade || '\u2014') + '</span></li>' +
+          '<li class="mat-item-line"><span class="mat-item-label">Quantidade</span><span class="mat-item-value td-mono">' + (it.quantidade > 0 ? fmtN(it.quantidade) : '\u2014') + '</span></li>' +
+          '<li class="mat-item-line"><span class="mat-item-label">Custo</span><span class="mat-item-value td-mono td-euro">' + (it.custo > 0 ? fmt(it.custo) : '\u2014') + '</span></li>' +
+        '</ul>' +
+      '</div>'
+    ).join('');
+
+    return '<div class="mat-fase ' + (expanded ? 'expanded' : '') + '">' +
+      '<button type="button" class="mat-fase-btn" onclick="toggleObraMateriaisFase(\'' + faseKey + '\')">' +
+        '<span class="mat-fase-title">' + fase + '</span>' +
+        '<span class="mat-fase-meta">' +
+          '<span class="mat-fase-count">' + items.length + ' reg.</span>' +
+          '<span class="mat-fase-total">' + fmt(data.total || 0) + '</span>' +
+        '</span>' +
+        '<i class="fa-solid ' + (expanded ? 'fa-chevron-up' : 'fa-chevron-down') + ' mat-fase-chevron"></i>' +
+      '</button>' +
+      '<div class="mat-fase-body">' + itemsHtml + '</div>' +
+    '</div>';
+  }).join('');
+
+  card.style.display = '';
+  applyObraSectionCollapseState_();
+}
+
+function filterObraMateriais() {
+  if (currentObraName) buildObraMateriais(currentObraName);
+}
+
+function toggleObraMateriaisFase(faseKey) {
+  const fase = decodeURIComponent(String(faseKey || ''));
+  if (!fase) return;
+  if (expandedMateriaisFases.has(fase)) expandedMateriaisFases.delete(fase);
+  else expandedMateriaisFases.add(fase);
+  if (currentObraName) buildObraMateriais(currentObraName);
+}
+
+function expandAllMateriaisFases() {
+  currentMateriaisFases.forEach(f => expandedMateriaisFases.add(f));
+  if (currentObraName) buildObraMateriais(currentObraName);
+}
+
+function collapseAllMateriaisFases() {
+  expandedMateriaisFases = new Set();
+  if (currentObraName) buildObraMateriais(currentObraName);
+}
+
+/* ── SECTION BUILDERS (placeholders) ────────────────────── */
+function buildOverview() {
+  if (!DATA || !DATA.global) return;
+  const g = computeFilteredGlobal();
+
+  const pctMO   = g.custo_total > 0 ? ((g.custo_mao_obra / g.custo_total) * 100).toFixed(1) : '0';
+  const pctDesl = g.custo_total > 0 ? ((g.custo_deslocacoes / g.custo_total) * 100).toFixed(1) : '0';
+  const pctMat  = g.custo_total > 0 ? (((g.custo_materiais || 0) / g.custo_total) * 100).toFixed(1) : '0';
+
+  const cards = [
+    { icon: 'fa-coins',                theme: 'warning', label: 'Custo Total',       value: g.custo_total,            format: 'euro',    sub: g.obras_ativas + ' obras ativas', link: 'contabilidade' },
+    { icon: 'fa-hammer',               theme: 'info',    label: 'Mão de Obra',       value: g.custo_mao_obra,         format: 'euro',    sub: pctMO + '% do custo total' },
+    { icon: 'fa-car',                  theme: 'accent',  label: 'Deslocações',       value: g.custo_deslocacoes,      format: 'euro',    sub: pctDesl + '% do custo total', link: 'deslocacoes' },
+    { icon: 'fa-boxes-stacked',        theme: 'info',    label: 'Materiais',         value: g.custo_materiais || 0,   format: 'euro',    sub: pctMat + '% do custo total' },
+    { icon: 'fa-clock',                theme: 'success', label: 'Horas Trabalhadas', value: g.horas_total,            format: 'hours',   sub: 'Total acumulado' },
+    { icon: 'fa-building',             theme: 'info',    label: 'Obras Ativas',      value: g.obras_ativas,           format: 'int',     sub: 'Em andamento' },
+    { icon: 'fa-users',                theme: 'success', label: 'Colaboradores',     value: g.colaboradores,          format: 'int',     sub: 'Trabalhadores únicos', link: 'equipa' },
+    { icon: 'fa-user-xmark',           theme: 'accent',  label: 'Faltas Totais',     value: g.faltas,                 format: 'int',     sub: 'Registos de ausência', badge: g.faltas > 5, link: 'assiduidade' },
+    { icon: 'fa-triangle-exclamation', theme: 'warning', label: 'Total Atrasos',     value: g.total_atrasos,          format: 'minutes', sub: fmtMin(g.total_atrasos) + ' acumulados' },
+  ];
+
+  let html = '<div class="kpi-grid">';
+  cards.forEach(c => {
+    const tooltip = KPI_TOOLTIPS[c.label] || '';
+    const tooltipHtml = tooltip
+      ? '<div class="kpi-info-btn">?</div><div class="kpi-info-tooltip">' + tooltip + '</div>'
+      : '';
+    const linkAttr = c.link
+      ? ' onclick="showSection(\'' + c.link + '\')" style="position:relative;cursor:pointer"'
+      : ' style="position:relative"';
+    html += `
+      <div class="kpi-card" data-theme="${c.theme}"${linkAttr}>
+        ${tooltipHtml}
+        <div class="kpi-icon"><i class="fa-solid ${c.icon}"></i></div>
+        <div class="kpi-label">${c.label}</div>
+        <div class="kpi-value" data-target="${c.value}" data-format="${c.format}">\u2014</div>
+        <div class="kpi-sub">${c.sub}</div>
+        ${c.badge ? '<div class="kpi-badge"><i class="fa-solid fa-exclamation"></i> Atenção</div>' : ''}
+      </div>`;
+  });
+  html += '</div>';
+
+  document.getElementById('section-overview').innerHTML = html;
+  animateCounters();
+}
+
+function buildDevSection() {
+  const section = document.getElementById('section-dev');
+  if (!section) return;
+
+  const diagnostics = DATA.diagnostics || normalizeDiagnostics_();
+  let html = '';
+  html += '<div class="dev-head">';
+  html += '  <div>';
+  html += '    <div class="dev-title"><i class="fa-solid fa-code"></i> Area Dev</div>';
+  html += '    <p class="dev-note">Esta area e para consulta interna. Nao aparece na Visao Geral do cliente.</p>';
+  html += '  </div>';
+  html += '</div>';
+  html += renderDataQualityPanel_(diagnostics, { sampleLimit: 25 });
+  html += renderDiagnosticsGuide_();
+  section.innerHTML = html;
+}
+
+function renderDataQualityPanel_(diagnostics, options) {
+  options = options || {};
+  const total = Number(diagnostics && diagnostics.total_issues) || 0;
+  const summary = diagnostics && diagnostics.summary ? diagnostics.summary : {};
+  const sampleLimit = Number(options.sampleLimit) || 8;
+  const samples = diagnostics && Array.isArray(diagnostics.samples) ? diagnostics.samples.slice(0, sampleLimit) : [];
+
+  if (!total) {
+    return '' +
+      '<div class="card diagnostics-card diagnostics-card-ok">' +
+        '<div class="diagnostics-head">' +
+          '<div class="diagnostics-title"><i class="fa-solid fa-shield-heart"></i> Avisos dos Dados</div>' +
+          '<div class="diagnostics-total ok">Sem avisos</div>' +
+        '</div>' +
+        '<p class="diagnostics-note">O sistema nao encontrou problemas nas linhas lidas agora.</p>' +
+      '</div>';
+  }
+
+  const summaryOrder = [
+    'registos_missing_obra',
+    'registos_invalid_date',
+    'registos_invalid_horas',
+    'registos_invalid_custo_dia'
+  ];
+
+  const summaryHtml = summaryOrder
+    .filter(code => Number(summary[code]) > 0)
+    .map(code => {
+      return '' +
+        '<div class="diagnostics-chip">' +
+          '<span class="diagnostics-chip-label">' + escapeHtml_(getDiagnosticsLabel_(code)) + '</span>' +
+          '<strong>' + Number(summary[code]) + '</strong>' +
+        '</div>';
+    })
+    .join('');
+
+  const sampleHtml = samples.length
+    ? samples.map(item => {
+        return '' +
+          '<div class="diagnostics-item">' +
+            '<div class="diagnostics-item-title">' + escapeHtml_(getDiagnosticsLabel_(item.code)) + '</div>' +
+            '<div class="diagnostics-item-meta">' + escapeHtml_(formatDiagnosticsSample_(item)) + '</div>' +
+          '</div>';
+      }).join('')
+    : '<div class="diagnostics-empty">Ainda nao existem exemplos guardados para mostrar.</div>';
+
+  return '' +
+    '<div class="card diagnostics-card">' +
+      '<div class="diagnostics-head">' +
+        '<div class="diagnostics-title"><i class="fa-solid fa-triangle-exclamation"></i> Avisos dos Dados</div>' +
+        '<div class="diagnostics-total">' + total + ' aviso(s)</div>' +
+      '</div>' +
+      '<p class="diagnostics-note">Isto nao bloqueia o dashboard. Serve para te mostrar linhas estranhas que vale a pena rever.</p>' +
+      '<div class="diagnostics-chip-row">' + summaryHtml + '</div>' +
+      '<div class="diagnostics-list">' + sampleHtml + '</div>' +
+    '</div>';
+}
+
+function getDiagnosticsLabel_(code) {
+  const labels = {
+    registos_missing_obra: 'Linha sem obra',
+    registos_invalid_date: 'Data estranha',
+    registos_invalid_horas: 'Horas mal escritas',
+    registos_invalid_custo_dia: 'Custo Dia mal escrito'
+  };
+  return labels[code] || 'Aviso';
+}
+
+function formatDiagnosticsSample_(item) {
+  if (!item || typeof item !== 'object') return 'Sem detalhe.';
+
+  const parts = [];
+  if (item.row) parts.push('Linha ' + item.row);
+  if (item.nome) parts.push('Nome: ' + item.nome);
+  if (item.obra) parts.push('Obra: ' + item.obra);
+
+  const dateValue = item.resolved_date || item.data_registo_raw || item.data_arquivo_raw || '';
+  if (dateValue) parts.push('Data: ' + String(dateValue));
+
+  if (item.raw_value) parts.push('Valor: ' + String(item.raw_value));
+  return parts.join(' | ') || 'Sem detalhe.';
+}
+
+function renderDiagnosticsGuide_() {
+  return '' +
+    '<div class="card dev-guide-card">' +
+      '<div class="dev-guide-title"><i class="fa-solid fa-list-check"></i> Como encontrar isto na Google Sheet</div>' +
+      '<div class="dev-guide-step">1. Abre a sheet <strong>REGISTOS_POR_DIA</strong>.</div>' +
+      '<div class="dev-guide-step">2. Vai ate a linha indicada no aviso. Exemplo: "Linha 363" quer dizer a linha 363 da sheet.</div>' +
+      '<div class="dev-guide-step">3. Se o aviso disser "Linha sem obra", olha para a coluna <strong>Obra</strong>.</div>' +
+      '<div class="dev-guide-step">4. Se a linha estiver incompleta e nao fizer falta, apaga-a. Se fizer falta, preenche a obra correta.</div>' +
+      '<div class="dev-guide-step">5. Atualiza o dashboard e confirma se o aviso desapareceu.</div>' +
+    '</div>';
+}
+
+function animateCounters() {
+  document.querySelectorAll('.kpi-value[data-target]').forEach(el => {
+    const target = parseFloat(el.dataset.target) || 0;
+    const format = el.dataset.format;
+    const duration = 1200;
+    const start = performance.now();
+
+    function tick(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const cur = target * eased;
+
+      switch (format) {
+        case 'euro':
+          el.textContent = fmt(cur);
+          break;
+        case 'hours':
+          el.textContent = fmtN(cur) + 'h';
+          break;
+        case 'minutes': {
+          const h = Math.floor(cur / 60);
+          const m = Math.round(cur % 60);
+          el.textContent = h > 0 ? h + 'h ' + m + 'm' : Math.round(cur) + 'm';
+          break;
+        }
+        default:
+          el.textContent = Math.round(cur).toLocaleString('pt-PT');
+      }
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+
+    if (target > 0) requestAnimationFrame(tick);
+    else el.textContent = format === 'euro' ? fmt(0) : '0';
+  });
+}
+
+function buildDeslocacoes() {
+  if (!DATA || !DATA.deslocacoes) return;
+  const desl = DATA.deslocacoes.filter(d => dateInRange(d.data));
+
+  if (!desl.length) {
+    const empty = '<div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-route" style="font-size:28px;display:block;margin-bottom:12px;opacity:.4"></i>Sem deslocacoes no periodo selecionado</div>';
+    document.getElementById('desl-kpis').innerHTML = empty;
+    const list = document.getElementById('desl-obra-list');
+    if (list) list.innerHTML = '<div class="obra-empty">Sem obras com deslocacoes neste periodo.</div>';
+    deslAllRows = [];
+    deslSelectedObra = '';
+    const tbody = document.getElementById('desl-tbody');
+    if (tbody) tbody.innerHTML = '';
+    applyDeslRegistoCollapseState_();
+    destroyDeslCharts();
+    return;
+  }
+
+  deslAllRows = desl.slice();
+  deslSortCol = 'data';
+  deslSortAsc = false;
+
+  const obras = [...new Set(desl.map(d => d.obra).filter(Boolean))].sort();
+  if (!deslSelectedObra || obras.indexOf(deslSelectedObra) === -1) {
+    deslSelectedObra = obras.length ? obras[0] : '';
+  }
+  renderDeslObraSelector_(obras);
+
+  const totalViagens = desl.reduce((s, d) => s + (Number(d.qtd) || 0), 0);
+  const totalCusto = desl.reduce((s, d) => s + (Number(d.custo) || 0), 0);
+  const custoMedio = totalViagens > 0 ? totalCusto / totalViagens : 0;
+
+  const obraCounts = {};
+  desl.forEach(d => {
+    if (!obraCounts[d.obra]) obraCounts[d.obra] = { qtd: 0 };
+    obraCounts[d.obra].qtd += Number(d.qtd) || 0;
+  });
+  const obraTop = Object.entries(obraCounts).sort((a, b) => b[1].qtd - a[1].qtd);
+  const obraMaisDesl = obraTop.length > 0 ? obraTop[0][0] : '\u2014';
+
+  const origemCounts = {};
+  desl.forEach(d => {
+    const o = d.origem || 'Desconhecida';
+    origemCounts[o] = (origemCounts[o] || 0) + (Number(d.qtd) || 0);
+  });
+  const origemTop = Object.entries(origemCounts).sort((a, b) => b[1] - a[1]);
+  const origemFreq = origemTop.length > 0 ? origemTop[0][0] : '\u2014';
+
+  const kpiItems = [
+    { val: Number(totalViagens || 0).toLocaleString('pt-PT'), label: 'Total Viagens' },
+    { val: fmt(custoMedio), label: 'Custo Medio Viagens' },
+    { val: obraMaisDesl, label: 'Obra c/ Mais Deslocacoes' },
+    { val: origemFreq, label: 'Origem Mais Frequente' },
+  ];
+
+  document.getElementById('desl-kpis').innerHTML = kpiItems.map(k => `
+    <div class="obra-kpi">
+      <div class="obra-kpi-val">${k.val}</div>
+      <div class="obra-kpi-label">${k.label}</div>
+    </div>
+  `).join('');
+
+  applyDeslRegistoCollapseState_();
+  renderDeslTable();
+}
+
+function renderDeslObraSelector_(obras) {
+  const list = document.getElementById('desl-obra-list');
+  if (!list) return;
+  if (!obras || !obras.length) {
+    list.innerHTML = '<div class="obra-empty">Sem obras para mostrar.</div>';
+    return;
+  }
+  list.innerHTML = obras.map(nome => {
+    const safe = nome.replace(/'/g, "\\'");
+    const active = nome === deslSelectedObra ? ' active' : '';
+    return '<button type="button" class="period-btn desl-obra-btn' + active + '" onclick="selectDeslObra(\'' + safe + '\')">' + nome + '</button>';
+  }).join('');
+}
+
+function selectDeslObra(nome) {
+  deslSelectedObra = nome || '';
+  renderDeslObraSelector_([...new Set(deslAllRows.map(d => d.obra).filter(Boolean))].sort());
+  renderDeslTable();
+}
+
+function getFilteredDeslRows_() {
+  return deslAllRows.filter(d => !deslSelectedObra || d.obra === deslSelectedObra);
+}
+
+function isDeslMobileCards_() {
+  return window.innerWidth <= 600;
+}
+
+function applyDeslRegistoCollapseState_() {
+  const card = document.getElementById('desl-registo-card');
+  const btn = document.getElementById('desl-registo-toggle-btn');
+  if (card) card.classList.toggle('section-collapsed', !!deslRegistoCollapsed);
+  if (btn) {
+    btn.setAttribute('aria-expanded', deslRegistoCollapsed ? 'false' : 'true');
+    btn.innerHTML = '<i class="fa-solid ' + (deslRegistoCollapsed ? 'fa-chevron-down' : 'fa-chevron-up') + '"></i> ' +
+      (deslRegistoCollapsed ? 'Expandir' : 'Recolher');
+  }
+}
+
+function toggleDeslRegistoSection() {
+  deslRegistoCollapsed = !deslRegistoCollapsed;
+  applyDeslRegistoCollapseState_();
+}
+
+function buildDeslOrigens(desl) {
+  // Group: obra -> { origem -> { qtd, custo } }
+  const map = {};
+  desl.forEach(d => {
+    if (!map[d.obra]) map[d.obra] = {};
+    const o = d.origem || 'Desconhecida';
+    if (!map[d.obra][o]) map[d.obra][o] = { qtd: 0, custo: 0 };
+    map[d.obra][o].qtd += d.qtd;
+    map[d.obra][o].custo += d.custo;
+  });
+
+  // Sort obras by total cost desc
+  const obrasArr = Object.keys(map).map(obra => {
+    const origens = map[obra];
+    const totalCusto = Object.values(origens).reduce((s, v) => s + v.custo, 0);
+    const totalQtd = Object.values(origens).reduce((s, v) => s + v.qtd, 0);
+    return { obra, origens, totalCusto, totalQtd };
+  }).sort((a, b) => b.totalCusto - a.totalCusto);
+
+  const html = obrasArr.map(o => {
+    const origensArr = Object.entries(o.origens)
+      .map(([nome, stats]) => ({ nome, ...stats }))
+      .sort((a, b) => b.custo - a.custo);
+
+    return `
+      <div class="desl-obra-group">
+        <div class="desl-obra-group-header">
+          <div class="desl-obra-group-name">
+            <i class="fa-solid fa-building" style="color:var(--info);font-size:11px"></i>
+            ${o.obra}
+            <span class="tag tag-blue">${o.totalQtd} viagens</span>
+          </div>
+          <div class="desl-obra-group-total">${fmt(o.totalCusto)}</div>
+        </div>
+        <div class="desl-obra-group-rows">
+          ${origensArr.map(or => `
+            <div class="desl-origem-row">
+              <span class="desl-origem-name"><i class="fa-solid fa-location-dot" style="font-size:9px;margin-right:4px;color:var(--text-dim)"></i>${or.nome}</span>
+              <div class="desl-origem-stats">
+                <span class="desl-origem-qtd">${or.qtd} viagens</span>
+                <span class="desl-origem-custo">${fmt(or.custo)}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('desl-origens').innerHTML = html || '<div class="assid-empty-msg"><i class="fa-solid fa-route"></i>Sem dados de deslocações.</div>';
+}
+
+/* ── Charts destruction ──────────────────────────────── */
+function destroyDeslCharts() {
+  Object.values(deslCharts).forEach(c => { if (c) c.destroy(); });
+  deslCharts = {};
+  ['obra','time'].forEach(key => {
+    const wrap = document.getElementById('desl-chart-' + key + '-wrap');
+    if (wrap && !document.getElementById('desl-chart-' + key)) {
+      wrap.innerHTML = '<canvas id="desl-chart-' + key + '"></canvas>';
+    }
+  });
+}
+
+/* ── Stacked bar: Mão de Obra vs Deslocações by obra — disabled (card removed) ── */
+function buildDeslObraChart(desl) { /* disabled */ }
+
+/* ── Line chart: daily deslocações cost — disabled (card removed) ── */
+function buildDeslTimeChart(desl) { /* disabled */ }
+
+/* ── Table filters populate ──────────────────────────── */
+/* Table render */
+function renderDeslTable() {
+  let rows = getFilteredDeslRows_();
+  const mobileCards = isDeslMobileCards_();
+
+  rows.sort((a, b) => {
+    let va = a[deslSortCol], vb = b[deslSortCol];
+    if (typeof va === 'string') return deslSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return deslSortAsc ? va - vb : vb - va;
+  });
+
+  const tbody = document.getElementById('desl-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="td-center" style="padding:14px;color:var(--text-dim)">Sem deslocacoes para o filtro atual</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map((d, idx) => {
+    const dateParts = d.data.split('-');
+    const dateDisplay = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : d.data;
+    const dateShort = dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] : dateDisplay;
+    const hasExtra = d.veiculo || d.motorista;
+    const rowClass = hasExtra && !mobileCards ? ' class="desl-row-clickable"' : '';
+    const clickAttr = hasExtra && !mobileCards ? ' onclick="deslShowPopup(event,' + idx + ')"' : '';
+    const infoBtn = '<button type="button" class="desl-info-btn" onclick="deslShowPopup(event,' + idx + ')" title="Ver detalhe de deslocacao" aria-label="Ver detalhe de deslocacao"><i class="fa-solid fa-circle-info"></i></button>';
+
+    if (mobileCards) {
+      return '<tr>' +
+        '<td colspan="5" class="desl-mobile-rowline">' +
+          '<span class="desl-mobile-inline">' + dateShort + '</span>' +
+          '<span class="desl-mobile-pipe">|</span>' +
+          '<span class="desl-mobile-inline">' + (d.origem || '\u2014') + '</span>' +
+          '<span class="desl-mobile-pipe">|</span>' +
+          '<span class="desl-mobile-inline desl-mobile-cost">' + fmt(d.custo) + '</span>' +
+          infoBtn +
+        '</td>' +
+      '</tr>';
+    }
+
+    return '<tr' + rowClass + clickAttr + '>' +
+      '<td data-label="Data" class="td-mono">' + dateDisplay + '</td>' +
+      '<td data-label="Obra"><strong>' + (d.obra || '\u2014') + '</strong>' + infoBtn + '</td>' +
+      '<td data-label="Origem">' + (d.origem || '\u2014') + '</td>' +
+      '<td data-label="Viagens" class="td-right td-mono">' + d.qtd + '</td>' +
+      '<td data-label="Custo" class="td-right td-euro td-mono">' + fmt(d.custo) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const colMap = { data: 0, obra: 1, origem: 2, qtd: 3, custo: 4 };
+  const ths = document.querySelectorAll('#desl-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[deslSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const icon = ths[idx].querySelector('.sort-icon');
+    if (icon) icon.className = 'fa-solid ' + (deslSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+function sortDesl(col) {
+  if (deslSortCol === col) {
+    deslSortAsc = !deslSortAsc;
+  } else {
+    deslSortCol = col;
+    deslSortAsc = (col === 'data' || col === 'obra' || col === 'origem');
+  }
+  renderDeslTable();
+}
+
+function exportDeslCSV() { /* disabled */ }
+
+function deslShowPopup(event, idx) {
+  event.stopPropagation();
+
+  // Reconstituir rows filtradas (mesma lógica de renderDeslTable)
+  let rows = getFilteredDeslRows_();
+  rows.sort((a, b) => {
+    let va = a[deslSortCol], vb = b[deslSortCol];
+    if (typeof va === 'string') return deslSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return deslSortAsc ? va - vb : vb - va;
+  });
+
+  const d = rows[idx];
+  if (!d) return;
+
+  const dateParts = d.data.split('-');
+  const dateDisplay = dateParts.length === 3
+    ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0]
+    : d.data;
+
+  const row = (label, icon, color, val) =>
+    '<div class="desl-popup-row">' +
+      '<i class="fa-solid ' + icon + '" style="color:' + color + ';font-size:11px;margin-top:2px"></i>' +
+      '<span class="desl-popup-label">' + label + '</span>' +
+      '<span class="desl-popup-val">' + (val || '\u2014') + '</span>' +
+    '</div>';
+
+  const bodyHtml =
+    row('Data',     'fa-calendar',         'var(--info)',    dateDisplay) +
+    row('Destino',  'fa-building',         'var(--info)',    d.obra) +
+    row('Origem',   'fa-location-dot',     'var(--success)', d.origem) +
+    row('Viagens',  'fa-route',            'var(--warning)', String(d.qtd)) +
+    row('Custo',    'fa-money-bill-wave',  'var(--warning)', fmt(d.custo)) +
+    row('Veículo',  'fa-van-shuttle',      'var(--accent)',  d.veiculo || '\u2014') +
+    row('Motorista','fa-id-card',          'var(--accent)',  d.motorista || '\u2014');
+
+  const container = document.getElementById('desl-popup-container');
+  container.innerHTML =
+    '<div class="desl-popup-overlay" onclick="deslPopupClose()"></div>' +
+    '<div class="desl-popup" id="desl-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="desl-popup-header">' +
+        '<span><i class="fa-solid fa-route" style="margin-right:8px;color:var(--info)"></i>Deslocação — ' + dateDisplay + '</span>' +
+        '<button class="desl-popup-close" onclick="deslPopupClose()">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="desl-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('desl-popup-inner');
+    if (!popup) return;
+    const pw = popup.offsetWidth  || 300;
+    const ph = popup.offsetHeight || 200;
+    let top  = event.clientY + 12;
+    let left = event.clientX - pw / 2;
+    if (left + pw > window.innerWidth  - 12) left = window.innerWidth  - pw - 12;
+    if (left < 12) left = 12;
+    if (top  + ph > window.innerHeight - 12) top  = event.clientY - ph - 12;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function deslPopupClose() {
+  document.getElementById('desl-popup-container').innerHTML = '';
+}
+
+function buildEquipa() {
+  if (!DATA) return;
+  const colabs = DATA.colaboradores || [];
+  const obras = DATA.obras || {};
+
+  // ── Cross-reference: aggregate per collaborator from assiduidade (date-filtered) ──
+  const workerAgg = {};   // nome -> { funcao, eurH, horas, custo, faltas, atrasos, dias, obrasList[], faltasList[] }
+  colabs.forEach(c => {
+    workerAgg[c.Nome] = { funcao: c.Funcao, eurH: c.Eur_h, horas: 0, custo: 0, faltas: 0, atrasos: 0, dias: 0, obrasSet: new Set(), fasesSet: new Set(), faltasList: [] };
+  });
+
+  Object.keys(obras).forEach(obraNome => {
+    const assid = obras[obraNome].assiduidade || [];
+    assid.forEach(w => {
+      const nome = w.nome;
+      if (!workerAgg[nome]) {
+        // Worker not in COLABORADORES sheet — create entry
+        const colabInfo = colabs.find(c => c.Nome === nome);
+        workerAgg[nome] = {
+          funcao: colabInfo ? colabInfo.Funcao : '\u2014',
+          eurH: colabInfo ? colabInfo.Eur_h : 0,
+          horas: 0, custo: 0, faltas: 0, atrasos: 0, dias: 0,
+          obrasSet: new Set(), fasesSet: new Set(), faltasList: []
+        };
+      }
+      Object.entries(w.dias).forEach(([dateStr, dayData]) => {
+        if (!dateInRange(dateStr)) return;
+        if (dayData.falta) {
+          workerAgg[nome].faltas++;
+          workerAgg[nome].faltasList.push({ data: dateStr, obra: obraNome, motivo: dayData.motivo || '', fase: (dayData.fases && dayData.fases.length > 0) ? dayData.fases.join(', ') : '\u2014' });
+        } else if (dayData.horas > 0) {
+          workerAgg[nome].horas += dayData.horas;
+          workerAgg[nome].custo += dayData.custo || 0;
+          workerAgg[nome].dias++;
+        }
+        if (dayData.atraso_min) workerAgg[nome].atrasos += dayData.atraso_min;
+        workerAgg[nome].obrasSet.add(obraNome);
+      });
+
+      // Recolher fase deste worker nesta obra
+      const wInfo = (obras[obraNome].workers || [])
+        .find(ww => ww['Nome (auto)'] === nome);
+      if (wInfo && wInfo.Fase) workerAgg[nome].fasesSet.add(wInfo.Fase);
+    });
+  });
+
+  // Build rows array
+  equipaAllRows = Object.entries(workerAgg)
+    .filter(([, agg]) => agg.dias > 0 || agg.faltas > 0) // Only show workers with data in period
+    .map(([nome, agg]) => {
+      const obrasList = [...agg.obrasSet].sort();
+      return {
+        nome, funcao: agg.funcao, eurH: agg.eurH,
+        fase: [...agg.fasesSet].sort().join(', ') || '\u2014',
+        obras: obrasList.length, horas: agg.horas, custo: agg.custo,
+        faltas: agg.faltas, atrasos: agg.atrasos, dias: agg.dias,
+        obrasList, faltasList: agg.faltasList
+      };
+    });
+
+  equipaSortCol = 'custo';
+  equipaSortAsc = false;
+  equipaExpandedRow = null;
+
+  // ── Table ──
+  populateEquipaFuncaoFilter();
+  document.getElementById('equipa-search').value = '';
+  renderEquipaTable();
+}
+
+/* ── Aggregate stats for cards (disabled — UI removed) ── */
+function buildEquipaStats() {
+  /* body commented out — stats cards removed from equipa section */
+}
+
+/* ── Charts destruction (disabled — charts removed) ──── */
+function destroyEquipaCharts() {
+  /* body commented out — charts removed from equipa section */
+}
+
+/* ── Donut: distribution by Funcao (disabled) ────────── */
+function buildEquipaFuncaoChart() {
+  /* body commented out — chart removed from equipa section */
+}
+
+/* ── Horizontal bar: top 10 by cost (disabled) ───────── */
+function buildEquipaTopChart() {
+  /* body commented out — chart removed from equipa section */
+}
+
+/* ── Populate funcao filter ──────────────────────────── */
+function populateEquipaFuncaoFilter() {
+  const funcoes = [...new Set(equipaAllRows.map(r => r.funcao))].filter(Boolean).sort();
+  const sel = document.getElementById('equipa-filter-funcao');
+  sel.innerHTML = '<option value="">Todas as funções</option>' +
+    funcoes.map(f => `<option value="${f}">${f}</option>`).join('');
+}
+
+/* ── Table render ────────────────────────────────────── */
+function renderEquipaTable() {
+  const search = (document.getElementById('equipa-search').value || '').toLowerCase();
+  const funcaoFilter = document.getElementById('equipa-filter-funcao').value;
+
+  let rows = equipaAllRows.filter(r => {
+    if (funcaoFilter && r.funcao !== funcaoFilter) return false;
+    if (search && !r.nome.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    let va = a[equipaSortCol], vb = b[equipaSortCol];
+    if (typeof va === 'string') return equipaSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return equipaSortAsc ? va - vb : vb - va;
+  });
+
+  const tbody = document.getElementById('equipa-tbody');
+  const OBRAS_MAX = 24; // caracteres antes de colapsar para popup
+  let html = '';
+  rows.forEach(r => {
+    const escNome = r.nome.replace(/'/g, "\\'");
+
+    // Coluna Obras: inline se couber, popup se não couber
+    const obrasText = r.obrasList.join(', ');
+    let obrasCell;
+    if (!r.obrasList.length) {
+      obrasCell = '\u2014';
+    } else if (obrasText.length <= OBRAS_MAX) {
+      obrasCell = '<span style="font-size:12px">' + obrasText + '</span>';
+    } else {
+      const preview = r.obrasList[0] +
+        (r.obrasList.length > 1
+          ? ', <span style="color:var(--text-dim)">+' + (r.obrasList.length - 1) + '</span>'
+          : '');
+      obrasCell = '<span style="cursor:pointer;font-size:12px;' +
+        'text-decoration:underline dotted;color:var(--text)"' +
+        ' onclick="event.stopPropagation();equipaShowObras(\'' + escNome + '\')"' +
+        ' title="Ver todas as obras">' + preview + '</span>';
+    }
+
+    // Coluna Faltas: clicável se houver faltas
+    const faltasCell = r.faltas > 0
+      ? '<span class="tag tag-red" style="cursor:pointer"' +
+        ' onclick="event.stopPropagation();equipaShowFaltas(\'' + escNome + '\')"' +
+        ' title="Ver detalhe">' + r.faltas + '</span>'
+      : '0';
+
+    // Coluna Atrasos
+    const atrasosCell = r.atrasos > 0 ? fmtMin(r.atrasos) : '\u2014';
+
+    html += '<tr>' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong></td>' +
+      '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
+      '<td data-label="Obras">' + obrasCell + '</td>' +
+      '<td data-label="Fase" class="td-right" style="font-size:12px;color:var(--text-muted)">' + r.fase + '</td>' +
+      '<td data-label="Total Horas" class="td-right td-mono">' + (r.horas > 0 ? r.horas.toFixed(1) + 'h' : '\u2014') + '</td>' +
+      '<td data-label="Total Custo" class="td-right td-mono">' + (r.custo > 0 ? fmt(r.custo) : '\u2014') + '</td>' +
+      '<td data-label="Faltas" class="td-center">' + faltasCell + '</td>' +
+      '<td data-label="Atrasos" class="td-right td-mono">' + atrasosCell + '</td>' +
+      '</tr>';
+  });
+  tbody.innerHTML = html;
+
+  // Update sort indicators
+  const colMap = { nome: 0, funcao: 1, obras: 2, fase: 3,
+                   horas: 4, custo: 5, faltas: 6, atrasos: 7 };
+  const ths = document.querySelectorAll('#equipa-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[equipaSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const icon = ths[idx].querySelector('.sort-icon');
+    if (icon) icon.className = 'fa-solid ' + (equipaSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+
+function filterEquipa() { renderEquipaTable(); }
+
+/* ── Equipa Popup System ────────────────────────────── */
+function equipaPopupOpen(title, bodyHtml) {
+  const container = document.getElementById('equipa-popup-container');
+  container.innerHTML =
+    '<div class="equipa-popup-overlay" onclick="equipaPopupClose()">' +
+      '<div class="equipa-popup" onclick="event.stopPropagation()">' +
+        '<div class="equipa-popup-header">' +
+          '<span>' + title + '</span>' +
+          '<button class="equipa-popup-close" onclick="equipaPopupClose()"><i class="fa-solid fa-xmark"></i></button>' +
+        '</div>' +
+        '<div class="equipa-popup-body">' + bodyHtml + '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function equipaPopupClose() {
+  document.getElementById('equipa-popup-container').innerHTML = '';
+}
+
+function equipaShowObras(nome) {
+  const row = equipaAllRows.find(r => r.nome === nome);
+  if (!row || !row.obrasList || !row.obrasList.length) return;
+
+  let html = '';
+  row.obrasList.forEach(obraNome => {
+    html += '<div class="equipa-popup-item">' +
+      '<span><i class="fa-solid fa-building" style="font-size:10px;margin-right:6px;color:var(--info)"></i>' + obraNome + '</span>' +
+      '<span style="cursor:pointer;color:var(--accent);font-size:11px;font-weight:600" onclick="equipaPopupClose();openObra(\'' + obraNome.replace(/'/g, "\\'") + '\')">' +
+        '<i class="fa-solid fa-arrow-right" style="font-size:9px"></i> Ver' +
+      '</span>' +
+    '</div>';
+  });
+  equipaPopupOpen('<i class="fa-solid fa-building" style="margin-right:8px;color:var(--info)"></i>Obras de ' + nome.split(' ').slice(0, 2).join(' '), html);
+}
+
+function equipaShowFaltas(nome) {
+  const row = equipaAllRows.find(r => r.nome === nome);
+  if (!row || !row.faltasList || !row.faltasList.length) return;
+
+  const sorted = row.faltasList.slice().sort((a, b) => b.data.localeCompare(a.data));
+  let html = '';
+  sorted.forEach(f => {
+    const parts = f.data.split('-');
+    const dateDisplay = parts[2] + '/' + parts[1] + '/' + parts[0];
+    html += '<div class="equipa-popup-item">' +
+      '<span><span style="color:var(--accent);font-weight:600">' + dateDisplay + '</span>' +
+        ' <span style="color:var(--text-dim);font-size:11px">\u2022 ' + (f.motivo || '\u2014') + '</span>' +
+        ' <span style="color:var(--info);font-size:11px">\u2022 ' + f.obra + '</span>' +
+        ' <span style="color:var(--text-muted);font-size:11px">\u2022 ' + f.fase + '</span>' +
+      '</span>' +
+    '</div>';
+  });
+  equipaPopupOpen('<i class="fa-solid fa-user-xmark" style="margin-right:8px;color:var(--accent)"></i>Faltas de ' + nome.split(' ').slice(0, 2).join(' ') + ' (' + sorted.length + ')', html);
+}
+
+function sortEquipa(col) {
+  if (equipaSortCol === col) {
+    equipaSortAsc = !equipaSortAsc;
+  } else {
+    equipaSortCol = col;
+    equipaSortAsc = (col === 'nome' || col === 'funcao');
+  }
+  renderEquipaTable();
+}
+
+/* ── Detail panel toggle ─────────────────────────────── */
+function toggleEquipaDetail(nome) {
+  /* body commented out — expand/collapse removed from equipa section */
+}
+
+/* ── Build detail HTML for expanded row ──────────────── */
+function buildEquipaDetailHTML(row) {
+  /* body commented out — detail panel removed from equipa section */
+}
+
+/* ── Detail mini chart: horas por obra ───────────────── */
+function renderEquipaDetailChart(row) {
+  /* body commented out — detail chart removed from equipa section */
+}
+
+/* ── CSV export — disabled ────────────────────────────── */
+function exportEquipaCSV() { /* disabled */ }
+
+/* ══════════════════════════════════════════════════════════
+   MAPA MENSAL
+   ══════════════════════════════════════════════════════════ */
+
+function buildMapaMensal() {
+  const monthSelect = document.getElementById('mapa-mensal-month');
+  const meta = document.getElementById('mapa-mensal-summary-meta');
+  const tbody = document.getElementById('mapa-mensal-tbody');
+  const tfoot = document.getElementById('mapa-mensal-tfoot');
+  if (!monthSelect || !meta || !tbody || !tfoot) return;
+
+  const months = getMapaMensalMonths_();
+  if (!months.length) {
+    monthSelect.innerHTML = '<option value="">Sem meses disponíveis</option>';
+    meta.innerHTML = '<span class="mapa-mensal-meta-chip"><i class="fa-solid fa-circle-info"></i><strong>Sem dados</strong> nos registos disponíveis.</span>';
+    tbody.innerHTML = '<tr><td colspan="9" class="mapa-mensal-empty"><i class="fa-solid fa-file-invoice-dollar"></i>Sem dados suficientes para construir o mapa mensal.</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  if (!months.includes(mapaMensalMonth)) {
+    mapaMensalMonth = getMapaMensalDefaultMonth_(months);
+    mapaMensalStatus = getMapaMensalDefaultStatus_(mapaMensalMonth);
+  }
+
+  renderMapaMensalControls_(months);
+  renderMapaMensalSummary_(buildMapaMensalData_(mapaMensalMonth, mapaMensalStatus));
+}
+
+function getMapaMensalMonths_() {
+  if (!DATA || !Array.isArray(DATA.registos)) return [];
+  return [...new Set((DATA.registos || []).map(r => String(r.data || '').slice(0, 7)).filter(v => /^\d{4}-\d{2}$/.test(v)))].sort().reverse();
+}
+
+function getMapaMensalDefaultMonth_(months) {
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  return months.includes(currentMonthKey) ? currentMonthKey : (months[0] || '');
+}
+
+function getMapaMensalDefaultStatus_(monthKey) {
+  return monthKey === new Date().toISOString().slice(0, 7) ? 'provisorio' : 'fechado';
+}
+
+function renderMapaMensalControls_(months) {
+  const monthSelect = document.getElementById('mapa-mensal-month');
+  if (!monthSelect) return;
+
+  monthSelect.innerHTML = months.map(monthKey => {
+    const selected = monthKey === mapaMensalMonth ? ' selected' : '';
+    return '<option value="' + monthKey + '"' + selected + '>' + escapeHtml_(formatMapaMensalMonthLabel_(monthKey)) + '</option>';
+  }).join('');
+
+  ['provisorio', 'fechado'].forEach(status => {
+    const btn = document.getElementById('mapa-mensal-status-' + status);
+    if (!btn) return;
+    btn.classList.toggle('active', mapaMensalStatus === status);
+  });
+}
+
+function setMapaMensalMonth(monthKey) {
+  if (!monthKey || monthKey === mapaMensalMonth) return;
+  mapaMensalMonth = monthKey;
+  mapaMensalStatus = getMapaMensalDefaultStatus_(monthKey);
+  buildMapaMensal();
+}
+
+function setMapaMensalStatus(status) {
+  if (status !== 'provisorio' && status !== 'fechado') return;
+  mapaMensalStatus = status;
+  buildMapaMensal();
+}
+
+function buildMapaMensalData_(monthKey, status) {
+  const cacheKey = monthKey + '|' + status;
+  if (mapaMensalCache[cacheKey]) return mapaMensalCache[cacheKey];
+
+  const range = getMapaMensalRange_(monthKey, status);
+  const registos = (DATA && Array.isArray(DATA.registos) ? DATA.registos : []).filter(r => {
+    const dateKey = String(r.data || '').slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && dateKey >= range.start && dateKey <= range.effective_end;
+  });
+
+  const dayMap = {};
+  registos.forEach(r => {
+    const nome = String(r.nome || '').trim();
+    const dateKey = String(r.data || '').slice(0, 10);
+    if (!nome || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+
+    const workerDayKey = nome + '||' + dateKey;
+    if (!dayMap[workerDayKey]) {
+      dayMap[workerDayKey] = {
+        nome: nome,
+        date: dateKey,
+        raw_minutes: 0,
+        atraso_min: 0,
+        has_dps: false,
+        absence_codes: new Set()
+      };
+    }
+
+    const day = dayMap[workerDayKey];
+    day.raw_minutes += Math.max(0, Math.round((Number(r.horas) || 0) * 60));
+    day.atraso_min += Number(r.atraso_min) || 0;
+
+    if (r.dispensado) day.has_dps = true;
+
+    const absenceCode = getMapaAusenciaCode_(r);
+    if (absenceCode === 'Dps') day.has_dps = true;
+    else if (absenceCode) day.absence_codes.add(absenceCode);
+  });
+
+  const workerMap = {};
+  Object.keys(dayMap).forEach(key => {
+    const rawDay = dayMap[key];
+    const finalDay = consolidateMapaMensalDay_(rawDay);
+    const nome = rawDay.nome;
+
+    if (!workerMap[nome]) {
+      workerMap[nome] = {
+        nome: nome,
+        total_minutes_valid: 0,
+        atrasos_min: 0,
+        counts: { F: 0, FJ: 0, Bxa: 0, Fer: 0, Dps: 0 },
+        cells: {}
+      };
+    }
+
+    const worker = workerMap[nome];
+    worker.total_minutes_valid += finalDay.valid_minutes;
+    worker.atrasos_min += rawDay.atraso_min;
+    if (finalDay.code) worker.counts[finalDay.code] += 1;
+    worker.cells[rawDay.date] = finalDay;
+  });
+
+  const workers = Object.values(workerMap)
+    .filter(worker => {
+      const hasValidHours = worker.total_minutes_valid > 0;
+      const hasBlockingAbsence = !!(
+        (worker.counts && worker.counts.F > 0) ||
+        (worker.counts && worker.counts.FJ > 0) ||
+        (worker.counts && worker.counts.Bxa > 0) ||
+        (worker.counts && worker.counts.Fer > 0)
+      );
+      return hasValidHours || hasBlockingAbsence;
+    })
+    .sort((a, b) => {
+      const aHasValidHours = a.total_minutes_valid > 0 ? 1 : 0;
+      const bHasValidHours = b.total_minutes_valid > 0 ? 1 : 0;
+      if (aHasValidHours !== bHasValidHours) return bHasValidHours - aHasValidHours;
+
+      const aHasDps = (a.counts && a.counts.Dps > 0) ? 1 : 0;
+      const bHasDps = (b.counts && b.counts.Dps > 0) ? 1 : 0;
+      if (aHasValidHours && bHasValidHours && aHasDps !== bHasDps) return aHasDps - bHasDps;
+
+      return a.nome.localeCompare(b.nome, 'pt-PT');
+    })
+    .map(worker => {
+      const diasInteiros = Math.floor(worker.total_minutes_valid / 480);
+      const resto = worker.total_minutes_valid % 480;
+      return {
+        nome: worker.nome,
+        total_minutes_valid: worker.total_minutes_valid,
+        total_horas_label: formatMapaTotalHoursLabel_(worker.total_minutes_valid),
+        dias_equiv_int: diasInteiros,
+        horas_remanescentes_label: formatMapaRemainderLabel_(resto),
+        atrasos_min: worker.atrasos_min,
+        atrasos_label: formatMapaAtrasoDisplay_(worker.atrasos_min),
+        counts: worker.counts,
+        cells: worker.cells
+      };
+    });
+
+  const totals = {
+    workers: workers.length,
+    minutes_valid: workers.reduce((sum, worker) => sum + worker.total_minutes_valid, 0),
+    counts: workers.reduce((acc, worker) => {
+      acc.F += worker.counts.F;
+      acc.FJ += worker.counts.FJ;
+      acc.Bxa += worker.counts.Bxa;
+      acc.Fer += worker.counts.Fer;
+      acc.Dps += worker.counts.Dps;
+      return acc;
+    }, { F: 0, FJ: 0, Bxa: 0, Fer: 0, Dps: 0 }),
+    atrasos_min: workers.reduce((sum, worker) => sum + worker.atrasos_min, 0)
+  };
+
+  const out = {
+    month: monthKey,
+    month_label: formatMapaMensalMonthLabel_(monthKey),
+    status: status,
+    generated_at: (DATA && DATA.generated_at) || '',
+    period: range,
+    days: buildMapaMensalDays_(monthKey),
+    workers: workers,
+    totals: totals
+  };
+
+  mapaMensalCache[cacheKey] = out;
+  return out;
+}
+
+function getMapaMensalRange_(monthKey, status) {
+  const [year, month] = String(monthKey || '').split('-').map(Number);
+  const start = monthKey + '-01';
+  const endDate = new Date(year, month, 0);
+  const end = monthKey + '-' + String(endDate.getDate()).padStart(2, '0');
+  const todayKey = new Date().toISOString().slice(0, 10);
+  let effectiveEnd = end;
+
+  if (status === 'provisorio' && todayKey < end) {
+    effectiveEnd = todayKey < start ? start : todayKey;
+  }
+
+  return {
+    start: start,
+    end: end,
+    effective_end: effectiveEnd
+  };
+}
+
+function buildMapaMensalDays_(monthKey) {
+  const [year, month] = String(monthKey || '').split('-').map(Number);
+  if (!year || !month) return [];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+  const out = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day);
+    const weekday = date.getDay();
+    out.push({
+      date: monthKey + '-' + String(day).padStart(2, '0'),
+      day_number: day,
+      weekday_short: weekdayNames[weekday],
+      weekend_type: weekday === 0 ? 'dom' : (weekday === 6 ? 'sab' : 'weekday')
+    });
+  }
+  return out;
+}
+
+function getMapaAusenciaCode_(registo) {
+  if (!registo) return '';
+  if (registo.dispensado) return 'Dps';
+
+  const motivo = normalizeMapaMotivo_(registo.motivo);
+  const compact = motivo.replace(/[^a-z]/g, '');
+
+  if (compact === 'fj' || motivo.indexOf('justificada') !== -1) return 'FJ';
+  if (compact === 'bxa' || motivo.indexOf('baixa') !== -1) return 'Bxa';
+  if (compact === 'fer' || motivo.indexOf('ferias') !== -1 || motivo.indexOf('feria') !== -1) return 'Fer';
+  if (compact === 'f') return 'F';
+  if (registo.falta) return 'F';
+  return '';
+}
+
+function normalizeMapaMotivo_(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function consolidateMapaMensalDay_(day) {
+  const blockingCode = pickMapaBlockingCode_(day.absence_codes);
+  if (day.has_dps) {
+    return {
+      raw_minutes: day.raw_minutes,
+      valid_minutes: 0,
+      atraso_min: day.atraso_min || 0,
+      code: 'Dps',
+      display: 'Dsp',
+      suppress_hours: true,
+      is_dps_with_hours: false
+    };
+  }
+
+  if (blockingCode) {
+    return {
+      raw_minutes: day.raw_minutes,
+      valid_minutes: 0,
+      atraso_min: day.atraso_min || 0,
+      code: blockingCode,
+      display: blockingCode,
+      suppress_hours: true,
+      is_dps_with_hours: false
+    };
+  }
+
+  return {
+    raw_minutes: day.raw_minutes,
+    valid_minutes: day.raw_minutes,
+    atraso_min: day.atraso_min || 0,
+    code: '',
+    display: day.raw_minutes > 0 ? formatMapaDayHoursLabel_(day.raw_minutes) : '',
+    suppress_hours: false,
+    is_dps_with_hours: false
+  };
+}
+
+function pickMapaBlockingCode_(codes) {
+  const set = codes instanceof Set ? codes : new Set(codes || []);
+  const order = ['F', 'FJ', 'Bxa', 'Fer'];
+  for (let i = 0; i < order.length; i++) {
+    if (set.has(order[i])) return order[i];
+  }
+  return '';
+}
+
+function formatMapaMensalMonthLabel_(monthKey) {
+  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ''))) return monthKey || '—';
+  const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const [year, month] = monthKey.split('-').map(Number);
+  return months[month - 1] + ' ' + year;
+}
+
+function formatMapaDayHoursLabel_(minutes) {
+  const total = Math.max(0, Number(minutes) || 0);
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  return mins ? (hours + ':' + String(mins).padStart(2, '0')) : String(hours);
+}
+
+function formatMapaTotalHoursLabel_(minutes) {
+  return formatMapaDayHoursLabel_(minutes);
+}
+
+function formatMapaRemainderLabel_(minutes) {
+  const total = Math.max(0, Number(minutes) || 0);
+  if (!total) return '—';
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  const parts = [];
+  if (hours) parts.push(hours + ' h');
+  if (mins) parts.push(mins + ' m');
+  return parts.join(' ');
+}
+
+function formatMapaAtrasoDisplay_(minutes) {
+  return minutes > 0 ? fmtMin(minutes) : '—';
+}
+
+function renderMapaMensalSummary_(mapaData) {
+  const meta = document.getElementById('mapa-mensal-summary-meta');
+  const tbody = document.getElementById('mapa-mensal-tbody');
+  const tfoot = document.getElementById('mapa-mensal-tfoot');
+  if (!meta || !tbody || !tfoot) return;
+
+  meta.innerHTML = [
+    '<span class="mapa-mensal-meta-chip"><i class="fa-solid fa-calendar-days"></i><strong>' + escapeHtml_(mapaData.month_label) + '</strong></span>',
+    '<span class="mapa-mensal-meta-chip"><i class="fa-solid fa-flag"></i><strong>' + escapeHtml_(mapaData.status === 'provisorio' ? 'Provisório' : 'Fechado') + '</strong></span>',
+    '<span class="mapa-mensal-meta-chip"><i class="fa-solid fa-users"></i><strong>' + mapaData.totals.workers + '</strong> trabalhador(es)</span>',
+    '<span class="mapa-mensal-meta-chip"><i class="fa-solid fa-clock"></i><strong>' + escapeHtml_(formatMapaTotalHoursLabel_(mapaData.totals.minutes_valid)) + '</strong> horas válidas</span>',
+    '<span class="mapa-mensal-meta-chip"><i class="fa-solid fa-calendar-day"></i><strong>' + escapeHtml_(mapaData.period.start.split('-').reverse().join('/')) + '</strong> até <strong>' + escapeHtml_(mapaData.period.effective_end.split('-').reverse().join('/')) + '</strong></span>'
+  ].join('');
+
+  if (!mapaData.workers.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="mapa-mensal-empty"><i class="fa-solid fa-file-invoice-dollar"></i>Sem trabalhadores com horas válidas neste mês.</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = mapaData.workers.map(worker => {
+    return '<tr>' +
+      '<td data-label="Trabalhador"><span class="mapa-mensal-worker-name">' + escapeHtml_(worker.nome) + '</span></td>' +
+      '<td data-label="Dias" class="td-center td-mono">' + worker.dias_equiv_int + '</td>' +
+      '<td data-label="Horas" class="td-right td-mono' + (worker.horas_remanescentes_label === '—' ? ' mapa-mensal-hours-muted' : '') + '">' + escapeHtml_(worker.horas_remanescentes_label) + '</td>' +
+        '<td data-label="F" class="td-center td-mono' + (worker.counts.F > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + worker.counts.F + '</td>' +
+        '<td data-label="FJ" class="td-center td-mono' + (worker.counts.FJ > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + worker.counts.FJ + '</td>' +
+        '<td data-label="Bxa" class="td-center td-mono' + (worker.counts.Bxa > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + worker.counts.Bxa + '</td>' +
+        '<td data-label="Fér" class="td-center td-mono' + (worker.counts.Fer > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + worker.counts.Fer + '</td>' +
+        '<td data-label="Dsp" class="td-center td-mono">' + worker.counts.Dps + '</td>' +
+      '<td data-label="Atrasos" class="td-right td-mono">' + escapeHtml_(worker.atrasos_label) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const totalDays = Math.floor(mapaData.totals.minutes_valid / 480);
+  const totalRemainder = mapaData.totals.minutes_valid % 480;
+  tfoot.innerHTML = '<tr class="mapa-mensal-totals-row">' +
+    '<td>Total</td>' +
+    '<td class="td-center td-mono">' + totalDays + '</td>' +
+    '<td class="td-right td-mono">' + escapeHtml_(formatMapaRemainderLabel_(totalRemainder)) + '</td>' +
+    '<td class="td-center td-mono' + (mapaData.totals.counts.F > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + mapaData.totals.counts.F + '</td>' +
+    '<td class="td-center td-mono' + (mapaData.totals.counts.FJ > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + mapaData.totals.counts.FJ + '</td>' +
+    '<td class="td-center td-mono' + (mapaData.totals.counts.Bxa > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + mapaData.totals.counts.Bxa + '</td>' +
+    '<td class="td-center td-mono' + (mapaData.totals.counts.Fer > 0 ? ' mapa-mensal-absence-cell' : '') + '">' + mapaData.totals.counts.Fer + '</td>' +
+    '<td class="td-center td-mono">' + mapaData.totals.counts.Dps + '</td>' +
+    '<td class="td-right td-mono">' + escapeHtml_(formatMapaAtrasoDisplay_(mapaData.totals.atrasos_min)) + '</td>' +
+    '</tr>';
+
+  renderMapaMensalPrintView_(mapaData);
+}
+
+function renderMapaMensalPrintView_(mapaData) {
+  const container = document.getElementById('mapa-mensal-print-view');
+  if (!container) return;
+
+  const days = Array.isArray(mapaData.days) ? mapaData.days : [];
+  const headerWeekdays = days.map(day => {
+    const cls = day.weekend_type === 'sab' ? ' is-sab' : (day.weekend_type === 'dom' ? ' is-dom' : '');
+    return '<th class="mapa-print-day-col' + cls + '">' + escapeHtml_(day.weekday_short) + '</th>';
+  }).join('');
+  const headerNumbers = days.map(day => {
+    const cls = day.weekend_type === 'sab' ? ' is-sab' : (day.weekend_type === 'dom' ? ' is-dom' : '');
+    return '<th class="mapa-print-day-col' + cls + '">' + day.day_number + '</th>';
+  }).join('');
+
+  const rowsHtml = mapaData.workers.map(worker => {
+    const cells = days.map(day => {
+      const cell = (worker.cells && worker.cells[day.date]) || null;
+      const cls = day.weekend_type === 'sab' ? ' is-sab' : (day.weekend_type === 'dom' ? ' is-dom' : '');
+      const absenceCls = cell && /^(F|FJ|Bxa|Fer)$/.test(cell.code || '') ? ' mapa-mensal-absence-day' : '';
+      const content = cell && cell.display ? escapeHtml_(cell.display) : '<span class="mapa-print-cell-empty">·</span>';
+      const atrasoTag = cell && !cell.suppress_hours && cell.atraso_min > 0
+        ? '<span class="mapa-print-day-atraso">' + cell.atraso_min + '</span>'
+        : '';
+      return '<td class="mapa-print-day-cell' + cls + absenceCls + '">' + content + atrasoTag + '</td>';
+    }).join('');
+
+    return '<tr>' +
+      '<td class="mapa-print-name-col"><strong>' + escapeHtml_(worker.nome) + '</strong></td>' +
+      cells +
+      '<td class="mapa-print-summary-col">' + escapeHtml_(worker.total_horas_label) + '</td>' +
+      '<td class="mapa-print-summary-col">' + worker.dias_equiv_int + '</td>' +
+      '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (worker.counts.F > 0 ? '' : ' is-zero') + '">' + worker.counts.F + '</td>' +
+      '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (worker.counts.FJ > 0 ? '' : ' is-zero') + '">' + worker.counts.FJ + '</td>' +
+      '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (worker.counts.Bxa > 0 ? '' : ' is-zero') + '">' + worker.counts.Bxa + '</td>' +
+      '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (worker.counts.Fer > 0 ? '' : ' is-zero') + '">' + worker.counts.Fer + '</td>' +
+      '<td class="mapa-print-summary-col">' + worker.counts.Dps + '</td>' +
+      '<td class="mapa-print-summary-col">' + escapeHtml_(worker.atrasos_label) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const totalDays = Math.floor(mapaData.totals.minutes_valid / 480);
+
+  container.innerHTML =
+    '<div class="mapa-print-sheet">' +
+      '<div class="mapa-print-header">' +
+        '<div>' +
+          '<div class="mapa-print-title">Mapa Mensal de Pagamento</div>' +
+          '<div class="mapa-print-subtitle">Doutor Martelo · ' + escapeHtml_(mapaData.month_label) + '</div>' +
+        '</div>' +
+        '<div class="mapa-print-meta">' +
+          '<span class="mapa-print-pill"><i class="fa-solid fa-flag"></i>' + escapeHtml_(mapaData.status === 'provisorio' ? 'Provisório' : 'Fechado') + '</span>' +
+          '<span class="mapa-print-pill"><i class="fa-solid fa-users"></i>' + mapaData.totals.workers + ' trabalhadores</span>' +
+          '<span class="mapa-print-pill"><i class="fa-solid fa-clock"></i>' + escapeHtml_(formatMapaTotalHoursLabel_(mapaData.totals.minutes_valid)) + ' h válidas</span>' +
+          '<span class="mapa-print-pill"><i class="fa-solid fa-calendar-day"></i>' + escapeHtml_(mapaData.generated_at || '') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mapa-print-table-wrap">' +
+        '<table class="mapa-print-table">' +
+          '<thead>' +
+            '<tr>' +
+              '<th class="mapa-print-name-col">Nome</th>' +
+              headerWeekdays +
+              '<th class="mapa-print-summary-col">Total</th>' +
+              '<th class="mapa-print-summary-col">Dias</th>' +
+              '<th class="mapa-print-summary-col is-absence">F</th>' +
+              '<th class="mapa-print-summary-col is-absence">FJ</th>' +
+              '<th class="mapa-print-summary-col is-absence">Bxa</th>' +
+              '<th class="mapa-print-summary-col is-absence">Fér</th>' +
+              '<th class="mapa-print-summary-col">Dsp</th>' +
+              '<th class="mapa-print-summary-col">Atr.</th>' +
+            '</tr>' +
+            '<tr>' +
+              '<th class="mapa-print-name-col">Nomes</th>' +
+              headerNumbers +
+              '<th class="mapa-print-summary-col">Horas</th>' +
+              '<th class="mapa-print-summary-col">Dias</th>' +
+              '<th class="mapa-print-summary-col is-absence">F</th>' +
+              '<th class="mapa-print-summary-col is-absence">FJ</th>' +
+              '<th class="mapa-print-summary-col is-absence">Bxa</th>' +
+              '<th class="mapa-print-summary-col is-absence">Fér</th>' +
+              '<th class="mapa-print-summary-col">Dsp</th>' +
+              '<th class="mapa-print-summary-col">Atr.</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+          '<tfoot>' +
+            '<tr class="mapa-print-total-row">' +
+              '<td class="mapa-print-name-col">Total</td>' +
+              days.map(() => '<td></td>').join('') +
+              '<td class="mapa-print-summary-col">' + escapeHtml_(formatMapaTotalHoursLabel_(mapaData.totals.minutes_valid)) + '</td>' +
+              '<td class="mapa-print-summary-col">' + totalDays + '</td>' +
+              '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (mapaData.totals.counts.F > 0 ? '' : ' is-zero') + '">' + mapaData.totals.counts.F + '</td>' +
+              '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (mapaData.totals.counts.FJ > 0 ? '' : ' is-zero') + '">' + mapaData.totals.counts.FJ + '</td>' +
+              '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (mapaData.totals.counts.Bxa > 0 ? '' : ' is-zero') + '">' + mapaData.totals.counts.Bxa + '</td>' +
+              '<td class="mapa-print-summary-col mapa-print-summary-cell is-absence' + (mapaData.totals.counts.Fer > 0 ? '' : ' is-zero') + '">' + mapaData.totals.counts.Fer + '</td>' +
+              '<td class="mapa-print-summary-col">' + mapaData.totals.counts.Dps + '</td>' +
+              '<td class="mapa-print-summary-col">' + escapeHtml_(formatMapaAtrasoDisplay_(mapaData.totals.atrasos_min)) + '</td>' +
+            '</tr>' +
+          '</tfoot>' +
+        '</table>' +
+      '</div>' +
+      '<div class="mapa-print-legend">' +
+        '<span>F = Injustificada</span>' +
+        '<span>FJ = Justificada</span>' +
+        '<span>Bxa = Baixa</span>' +
+        '<span>Fér = Férias</span>' +
+        '<span>Dsp = Dispensado</span>' +
+      '</div>' +
+    '</div>';
+}
+
+function printMapaMensal() {
+  if (!mapaMensalMonth) return;
+  renderMapaMensalPrintView_(buildMapaMensalData_(mapaMensalMonth, mapaMensalStatus));
+  showSection('mapa-mensal');
+  window.print();
+}
+
+/* ══════════════════════════════════════════════════════════
+   ANÁLISE COMPARATIVA
+   ══════════════════════════════════════════════════════════ */
+
+function generateDistinctColors(n) {
+  const colors = [];
+  for (let i = 0; i < n; i++) {
+    const hue = (i * 360 / n + 10) % 360;
+    colors.push('hsl(' + hue + ', 70%, 60%)');
+  }
+  return colors;
+}
+
+function buildComparativa() {
+  if (!DATA || !DATA.obras) return;
+  destroyCompCharts();
+  buildCompObras();
+}
+
+function switchCompTab(tab) { /* disabled */ }
+
+function destroyCompCharts() {
+  Object.values(compCharts).forEach(c => { if (c) c.destroy(); });
+  compCharts = {};
+  const custosCanvasWrap = document.getElementById('comp-custos-canvas-wrap');
+  if (custosCanvasWrap && !document.getElementById('comp-chart-custos')) {
+    custosCanvasWrap.innerHTML = '<canvas id="comp-chart-custos"></canvas>';
+  }
+  const fasesCanvasWrap = document.getElementById('comp-fases-canvas-wrap');
+  if (fasesCanvasWrap && !document.getElementById('comp-chart-fasesobra')) {
+    fasesCanvasWrap.innerHTML = '<canvas id="comp-chart-fasesobra"></canvas>';
+  }
+  const diasCanvasWrap = document.getElementById('comp-dias-canvas-wrap');
+  if (diasCanvasWrap && !document.getElementById('comp-chart-diasfase')) {
+    diasCanvasWrap.innerHTML = '<canvas id="comp-chart-diasfase"></canvas>';
+  }
+}
+
+/* ── PART A: Comparison of Obras ─────────────────────── */
+
+function buildCompObras() {
+  if (!DATA || !DATA.obras) return;
+  const obraNames = Object.keys(DATA.obras).sort();
+  if (!obraNames.length) return;
+  buildCompCustosChart(obraNames);
+  buildCompFasesObraChart(obraNames);
+  buildCompDiasFaseChart(obraNames);
+}
+
+function getCompObraNames_() {
+  if (!DATA || !DATA.obras) return [];
+  return Object.keys(DATA.obras).sort();
+}
+
+function updateCompCustosPeriodLabel_() {
+  const el = document.getElementById('comp-custos-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
+
+function compactCompCustosObrasForMobile_(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!isMobile() || list.length <= MOBILE_COMP_CUSTOS_TOP_OBRAS) return list;
+
+  const sorted = list.sort((a, b) => (b.value || 0) - (a.value || 0));
+  const top = sorted.slice(0, MOBILE_COMP_CUSTOS_TOP_OBRAS);
+  const rest = sorted.slice(MOBILE_COMP_CUSTOS_TOP_OBRAS);
+  const restValue = rest.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+  if (restValue > 0) top.push({ name: 'Outras Obras', value: restValue, _isGroupedOther: true });
+  return top;
+}
+
+function setCompCustosTypeAvailability_(items) {
+  const doughnutBtn = document.getElementById('comp-custos-type-doughnut');
+  const count = Array.isArray(items) ? items.length : 0;
+  compCustosDoughnutEnabled = !isMobile() || count <= MOBILE_COMP_CUSTOS_MAX_DOUGHNUT;
+
+  if (doughnutBtn) {
+    doughnutBtn.disabled = !compCustosDoughnutEnabled;
+    doughnutBtn.setAttribute('aria-disabled', compCustosDoughnutEnabled ? 'false' : 'true');
+    doughnutBtn.title = compCustosDoughnutEnabled
+      ? 'Mostrar grafico circular'
+      : 'No mobile, o circular so e ativado com ate ' + MOBILE_COMP_CUSTOS_MAX_DOUGHNUT + ' obras';
+  }
+
+  if (!compCustosDoughnutEnabled && compCustosChartType === 'doughnut') {
+    compCustosChartType = 'bar';
+  }
+}
+
+function pruneCompCustosObraState_(obraNames) {
+  const valid = new Set(obraNames || []);
+  Object.keys(compCustosHiddenObras).forEach(name => {
+    if (!valid.has(name)) delete compCustosHiddenObras[name];
+  });
+}
+
+function getVisibleCompObraNames_(obraNames) {
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  const visible = list.filter(name => !compCustosHiddenObras[name]);
+  if (visible.length) return visible;
+  if (list.length) {
+    compCustosHiddenObras[list[0]] = false;
+    return [list[0]];
+  }
+  return [];
+}
+
+function syncCompCustosControls_(obraNames) {
+  pruneCompCustosObraState_(obraNames);
+
+  ['mao_obra', 'materiais', 'deslocacoes', 'total'].forEach(metric => {
+    const btn = document.getElementById('comp-custos-metric-' + metric);
+    if (!btn) return;
+    btn.classList.toggle('active', compCustosMetric === metric);
+  });
+
+  [['bar', 'comp-custos-type-bar'], ['doughnut', 'comp-custos-type-doughnut']].forEach(([type, id]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle('active', compCustosChartType === type);
+  });
+
+  const label = document.getElementById('comp-custos-obras-label');
+  if (label) {
+    const hiddenCount = (obraNames || []).reduce((acc, name) => acc + (compCustosHiddenObras[name] ? 1 : 0), 0);
+    label.textContent = 'Obras visiveis' + (hiddenCount ? ' (' + hiddenCount + ' oculta(s))' : '');
+  }
+
+  const row = document.getElementById('comp-custos-obras-row');
+  if (!row) return;
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  if (!list.length) {
+    row.innerHTML = '<span class="obra-fase-filter-empty">Sem obras disponiveis.</span>';
+    return;
+  }
+
+  row.innerHTML = list.map(name => {
+    const hidden = !!compCustosHiddenObras[name];
+    const safeName = escapeHtml_(name);
+    const encoded = encodeURIComponent(name);
+    return '<button type="button" class="obra-fase-chip' + (hidden ? ' hidden' : '') + '"' +
+      ' onclick="toggleCompCustosObra(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (hidden ? 'true' : 'false') + '"' +
+      ' title="' + safeName + '">' + safeName + '</button>';
+  }).join('');
+}
+
+function setCompCustosMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, deslocacoes: true, total: true };
+  if (!allowed[metric]) return;
+  compCustosMetric = metric;
+  buildCompCustosChart(getCompObraNames_());
+}
+
+function setCompCustosChartType(type) {
+  const allowed = { bar: true, doughnut: true };
+  if (!allowed[type]) return;
+  if (type === 'doughnut' && !compCustosDoughnutEnabled) return;
+  compCustosChartType = type;
+  buildCompCustosChart(getCompObraNames_());
+}
+
+function toggleCompCustosObra(obraEncoded) {
+  const obraName = decodeURIComponent(String(obraEncoded || ''));
+  if (!obraName) return;
+  const obraNames = getCompObraNames_();
+  if (!obraNames.includes(obraName)) return;
+
+  const hideObra = !compCustosHiddenObras[obraName];
+  if (hideObra) {
+    const visibleCount = obraNames.reduce((acc, name) => acc + (compCustosHiddenObras[name] ? 0 : 1), 0);
+    if (visibleCount <= 1) return;
+  }
+  compCustosHiddenObras[obraName] = hideObra;
+  buildCompCustosChart(obraNames);
+}
+
+function resetCompCustosObrasVisibility() {
+  Object.keys(compCustosHiddenObras).forEach(name => {
+    compCustosHiddenObras[name] = false;
+  });
+  buildCompCustosChart(getCompObraNames_());
+}
+
+function buildCompCustosChart(obraNames) {
+  if (compCharts.custos) compCharts.custos.destroy();
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+
+  pruneCompCustosObraState_(allObraNames);
+  const visibleObraNames = getVisibleCompObraNames_(allObraNames);
+  updateCompCustosPeriodLabel_();
+  syncCompCustosControls_(allObraNames);
+
+  // Aggregate deslocações (date-filtered)
+  const deslPerObra = {};
+  (DATA.deslocacoes || []).forEach(d => {
+    if (!dateInRange(d.data)) return;
+    deslPerObra[d.obra] = (deslPerObra[d.obra] || 0) + d.custo;
+  });
+
+  // Aggregate labour from obra daily totals (date-filtered)
+  const labourPerObra = {};
+  allObraNames.forEach(n => {
+    labourPerObra[n] = 0;
+    (DATA.obras[n].daily || []).forEach(d => {
+      if (!dateInRange(d.DATA_str)) return;
+      labourPerObra[n] += Number(d.Custo) || 0;
+    });
+  });
+
+  const metricLabelMap = {
+    mao_obra: 'Mao de Obra',
+    materiais: 'Materiais',
+    deslocacoes: 'Deslocacoes',
+    total: 'Total'
+  };
+  const metricColorMap = {
+    mao_obra: 'rgba(99,179,237,.78)',
+    materiais: 'rgba(72,187,120,.78)',
+    deslocacoes: 'rgba(246,173,85,.78)',
+    total: 'rgba(233,69,96,.78)'
+  };
+
+  const chartBaseItems = visibleObraNames.map(name => {
+    const maoObra = labourPerObra[name] || 0;
+    const materiais = sumMateriaisByObra(name) || 0;
+    const deslocacoes = deslPerObra[name] || 0;
+    const total = maoObra + materiais + deslocacoes;
+    return {
+      name,
+      value: Number(({ mao_obra: maoObra, materiais, deslocacoes, total })[compCustosMetric]) || 0
+    };
+  }).filter(item => item.value > 0);
+
+  const chartItems = compactCompCustosObrasForMobile_(chartBaseItems).sort((a, b) => (b.value || 0) - (a.value || 0));
+  setCompCustosTypeAvailability_(chartItems);
+  syncCompCustosControls_(allObraNames);
+
+  if (isMobile() && compCustosChartType === 'doughnut' && !compCustosDoughnutEnabled) {
+    compCustosChartType = 'bar';
+    syncCompCustosControls_(allObraNames);
+  }
+
+  const ctx = document.getElementById('comp-chart-custos');
+  if (!ctx) return;
+  if (!chartItems.length) {
+    const wrap = document.getElementById('comp-custos-canvas-wrap');
+    if (wrap) wrap.innerHTML = '<div class="no-chart-data">Sem obras no periodo</div>';
+    return;
+  }
+
+  const datasetLabel = metricLabelMap[compCustosMetric] || 'Custo';
+  const chartType = compCustosChartType === 'doughnut' ? 'doughnut' : 'bar';
+  compCharts.custos = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels: chartItems.map(item => item.name),
+      datasets: [{
+        label: datasetLabel,
+        data: chartItems.map(item => item.value),
+        backgroundColor: chartType === 'doughnut'
+          ? chartItems.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length])
+          : metricColorMap[compCustosMetric] || 'rgba(99,179,237,.78)',
+        borderRadius: chartType === 'bar' ? 4 : 0,
+        borderWidth: chartType === 'doughnut' ? 1 : 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        ? false
+        : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      cutout: chartType === 'doughnut' ? '56%' : undefined,
+      plugins: {
+        legend: chartType === 'doughnut'
+          ? {
+              display: true,
+              position: 'bottom',
+              labels: {
+                boxWidth: 10,
+                font: { size: isMobile() ? 10 : 11 },
+                padding: isMobile() ? 6 : 8,
+                generateLabels: chart => {
+                  const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                  if (!isMobile()) return base;
+                  return base.map(it => Object.assign({}, it, { text: abbreviateChartLabel_(it.text, 12) }));
+                }
+              }
+            }
+          : { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              if (!items || !items.length) return '';
+              return String(items[0].label || '');
+            },
+            label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
+          }
+        }
+      },
+      scales: chartType === 'bar'
+        ? {
+            y: {
+              grid: { color: 'rgba(255,255,255,.04)' },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { size: isMobile() ? 9 : 10 },
+                callback: val => {
+                  const idx = Number(val);
+                  const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+                  return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+                }
+              }
+            }
+          }
+        : undefined
+    }
+  });
+}
+
+/* ── Radar chart — disabled (card removed) ────────────── */
+function buildCompRadarChart(obraNames) { /* disabled */ }
+
+function updateCompFasesPeriodLabel_() {
+  const el = document.getElementById('comp-fases-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
+
+function getSelectedCompFasesObras_(obraNames) {
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  return list.filter(name => !!compFasesSelectedObras[name]);
+}
+
+function compactCompFasesForMobile_(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!isMobile() || list.length <= MOBILE_OBRA_CHART_TOP_PHASES) return list;
+
+  const sorted = list.sort((a, b) => (b.total || 0) - (a.total || 0));
+  const top = sorted.slice(0, MOBILE_OBRA_CHART_TOP_PHASES);
+  const rest = sorted.slice(MOBILE_OBRA_CHART_TOP_PHASES);
+  if (!rest.length) return top;
+
+  const grouped = { name: 'Outras Fases', total: 0, valuesByObra: {}, _isGroupedOther: true };
+  rest.forEach(item => {
+    grouped.total += Number(item.total) || 0;
+    Object.entries(item.valuesByObra || {}).forEach(([obra, value]) => {
+      grouped.valuesByObra[obra] = (grouped.valuesByObra[obra] || 0) + (Number(value) || 0);
+    });
+  });
+  top.push(grouped);
+  return top;
+}
+
+function getCompFaseSortRank_(label) {
+  const key = normalizeFaseKey_(label);
+  const idx = DEFAULT_COMP_FASES.findIndex(fase => normalizeFaseKey_(fase) === key);
+  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+}
+
+function sortCompFaseItems_(items) {
+  return (Array.isArray(items) ? items.slice() : []).sort((a, b) => {
+    const rankDiff = getCompFaseSortRank_(a && a.name) - getCompFaseSortRank_(b && b.name);
+    if (rankDiff !== 0) return rankDiff;
+    return String(a && a.name || '').localeCompare(String(b && b.name || ''), 'pt');
+  });
+}
+
+function shouldIncludeCompFase_(label) {
+  return normalizeFaseKey_(label) !== 'sem fase';
+}
+
+function syncCompFasesControls_(obraNames, faseItems) {
+  const selectedObrasCount = Object.keys(compFasesSelectedObras).reduce((acc, name) => acc + (compFasesSelectedObras[name] ? 1 : 0), 0);
+
+  ['mao_obra', 'materiais', 'total'].forEach(metric => {
+    const btn = document.getElementById('comp-fases-metric-' + metric);
+    if (btn) btn.classList.toggle('active', compFasesMetric === metric);
+  });
+
+  const obrasRow = document.getElementById('comp-fases-obras-row');
+  if (obrasRow) {
+    const list = Array.isArray(obraNames) ? obraNames : [];
+    if (!list.length) {
+      obrasRow.innerHTML = '<span class="obra-fase-filter-empty">Sem obras disponiveis.</span>';
+    } else {
+      obrasRow.innerHTML = list.map(name => {
+        const active = !!compFasesSelectedObras[name];
+        const safeName = escapeHtml_(name);
+        const encoded = encodeURIComponent(name);
+        return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+          ' onclick="toggleCompFasesObra(\'' + encoded + '\')"' +
+          ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+          ' title="' + safeName + '">' + safeName + '</button>';
+      }).join('');
+    }
+  }
+
+  const label = document.getElementById('comp-fases-label');
+  if (label) {
+    const selectedCount = Object.keys(compFasesSelectedKeys).reduce((acc, key) => acc + (compFasesSelectedKeys[key] ? 1 : 0), 0);
+    label.textContent = selectedCount
+      ? 'Fases visiveis (' + selectedCount + ' selecionada(s))'
+      : 'Fases disponiveis';
+  }
+
+  const fasesWrap = document.getElementById('comp-fases-filter-wrap');
+  if (fasesWrap) {
+    const shouldShow = selectedObrasCount > 0;
+    fasesWrap.classList.toggle('is-collapsed', !shouldShow);
+    fasesWrap.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  }
+
+  const fasesRow = document.getElementById('comp-fases-row');
+  if (!fasesRow) return;
+  const fallbackList = DEFAULT_COMP_FASES.map(fase => ({
+    key: normalizeFaseKey_(fase),
+    name: fase,
+    total: 0
+  }));
+  const list = ((Array.isArray(faseItems) && faseItems.length) ? faseItems : fallbackList)
+    .filter(item => shouldIncludeCompFase_(item && item.name));
+
+  fasesRow.innerHTML = list.map(item => {
+    const labelTxt = String(item.name || 'Sem Fase');
+    const key = normalizeFaseKey_(labelTxt);
+    const active = !!compFasesSelectedKeys[key];
+    const safeLabel = escapeHtml_(labelTxt);
+    const encoded = encodeURIComponent(labelTxt);
+    return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+      ' onclick="toggleCompFaseSelection(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+      ' title="' + safeLabel + ' · ' + fmt(Number(item.total) || 0) + '">' + safeLabel + '</button>';
+  }).join('');
+}
+
+function setCompFasesMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, total: true };
+  if (!allowed[metric]) return;
+  compFasesMetric = metric;
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function toggleCompFasesObra(obraEncoded) {
+  const obraName = decodeURIComponent(String(obraEncoded || ''));
+  if (!obraName) return;
+  const obraNames = getCompObraNames_();
+  if (!obraNames.includes(obraName)) return;
+  compFasesSelectedObras[obraName] = !compFasesSelectedObras[obraName];
+  buildCompFasesObraChart(obraNames);
+}
+
+function resetCompFasesObrasSelection() {
+  compFasesSelectedObras = {};
+  compFasesSelectedKeys = {};
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function toggleCompFaseSelection(faseEncoded) {
+  const faseName = decodeURIComponent(String(faseEncoded || ''));
+  if (!faseName) return;
+  const key = normalizeFaseKey_(faseName);
+  compFasesSelectedKeys[key] = !compFasesSelectedKeys[key];
+  if (!compFasesSelectedKeys[key]) delete compFasesSelectedKeys[key];
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function resetCompFasesSelection() {
+  compFasesSelectedKeys = {};
+  buildCompFasesObraChart(getCompObraNames_());
+}
+
+function getDayPhaseList_(dayEntry, fallbackPhase) {
+  const phases = Array.isArray(dayEntry && dayEntry.fases)
+    ? dayEntry.fases.map(f => String(f || '').trim()).filter(Boolean)
+    : [];
+  if (phases.length) return [...new Set(phases)];
+  return [String(fallbackPhase || 'Sem Fase').trim() || 'Sem Fase'];
+}
+
+function ensureCompFasesCanvas_() {
+  const wrap = document.getElementById('comp-fases-canvas-wrap');
+  if (!wrap) return null;
+  if (!document.getElementById('comp-chart-fasesobra')) {
+    wrap.innerHTML = '<canvas id="comp-chart-fasesobra"></canvas>';
+  }
+  return document.getElementById('comp-chart-fasesobra');
+}
+
+function clearCompFasesCanvas_() {
+  const canvas = ensureCompFasesCanvas_();
+  if (!canvas) return null;
+  const ctx = canvas.getContext('2d');
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function renderCompFasesPlaceholder_(message) {
+  const wrap = document.getElementById('comp-fases-canvas-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="no-chart-data">' + escapeHtml_(message || 'Sem dados para mostrar') + '</div>';
+}
+
+function getFallbackCompFaseItems_() {
+  return DEFAULT_COMP_FASES.map(fase => {
+    const label = String(fase || '').trim() || 'Sem Fase';
+    return { key: normalizeFaseKey_(label), name: label, total: 0 };
+  });
+}
+
+function collectAvailableCompFases_(selectedObras) {
+  const selected = Array.isArray(selectedObras) ? selectedObras : [];
+  const phaseMap = {};
+
+  DEFAULT_COMP_FASES.forEach(fase => {
+    const label = String(fase || '').trim() || 'Sem Fase';
+    const key = normalizeFaseKey_(label);
+    phaseMap[key] = { key, name: label, total: 0 };
+  });
+
+  selected.forEach(nome => {
+    const obra = DATA && DATA.obras ? DATA.obras[nome] : null;
+    if (!obra) return;
+
+    (obra.fases || []).forEach(item => {
+      const fase = String(item && item.Fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
+      phaseMap[key].total += Number(item && item.Custo) || 0;
+    });
+
+    (obra.materiais_fases || []).forEach(item => {
+      const fase = String(item && item.Fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
+      phaseMap[key].total += Number(item && item.Custo) || 0;
+    });
+
+    (obra.assiduidade || []).forEach(worker => {
+      Object.values(worker.dias || {}).forEach(day => {
+        getDayPhaseList_(day, 'Sem Fase').forEach(fase => {
+          if (!shouldIncludeCompFase_(fase)) return;
+          const key = normalizeFaseKey_(fase);
+          if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0 };
+        });
+      });
+    });
+  });
+
+  return sortCompFaseItems_(Object.values(phaseMap));
+}
+
+function collectCompFasesData_(selectedObras) {
+  const selected = Array.isArray(selectedObras) ? selectedObras : [];
+  const selectedSet = new Set(selected);
+  const perObra = {};
+  const phaseMap = {};
+
+  selected.forEach(nome => {
+    perObra[nome] = {};
+    if (compFasesMetric !== 'materiais') {
+      (DATA.registos || []).forEach(r => {
+        if (String(r.obra || '').trim() !== nome) return;
+        const dateStr = String(r.data || '').slice(0, 10);
+        if (!dateInRange(dateStr) || r.falta) return;
+        const fase = String(r.fase || '').trim() || 'Sem Fase';
+        if (!shouldIncludeCompFase_(fase)) return;
+        if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+        perObra[nome][fase].mao_obra += Number(r.custo) || 0;
+      });
+      (DATA.legacy_mao_obra || []).forEach(r => {
+        if (String(r.obra || '').trim() !== nome) return;
+        const dateStr = String(r.data || '').slice(0, 10);
+        if (!dateInRange(dateStr)) return;
+        const fase = String(r.fase || '').trim() || 'Sem Fase';
+        if (!shouldIncludeCompFase_(fase)) return;
+        if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+        perObra[nome][fase].mao_obra += Number(r.custo) || 0;
+      });
+    }
+  });
+
+  if (compFasesMetric !== 'mao_obra') {
+    filterAllMateriaisByDate().forEach(m => {
+      if (!selectedSet.has(m.obra)) return;
+      const fase = String(m.fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      if (!perObra[m.obra]) perObra[m.obra] = {};
+      if (!perObra[m.obra][fase]) perObra[m.obra][fase] = { mao_obra: 0, materiais: 0, total: 0 };
+      perObra[m.obra][fase].materiais += matCost(m);
+    });
+  }
+
+  selected.forEach(nome => {
+    Object.keys(perObra[nome] || {}).forEach(fase => {
+      const entry = perObra[nome][fase];
+      entry.total = (Number(entry.mao_obra) || 0) + (Number(entry.materiais) || 0);
+      const value = Number(entry[compFasesMetric]) || 0;
+      if (value <= 0) return;
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0, valuesByObra: {} };
+      phaseMap[key].total += value;
+      phaseMap[key].valuesByObra[nome] = value;
+    });
+  });
+
+  return sortCompFaseItems_(Object.values(phaseMap));
+}
+
+function buildCompFasesObraChart(obraNames) {
+  if (compCharts.fasesobra) compCharts.fasesobra.destroy();
+
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+  updateCompFasesPeriodLabel_();
+
+  Object.keys(compFasesSelectedObras).forEach(name => {
+    if (!allObraNames.includes(name)) delete compFasesSelectedObras[name];
+  });
+
+  const selectedObras = getSelectedCompFasesObras_(allObraNames);
+  const availablePhases = collectAvailableCompFases_(allObraNames);
+  const chartPhaseData = collectCompFasesData_(selectedObras);
+  const validPhaseKeys = new Set(availablePhases.map(item => item.key));
+  Object.keys(compFasesSelectedKeys).forEach(key => {
+    if (!validPhaseKeys.has(key)) delete compFasesSelectedKeys[key];
+  });
+
+  syncCompFasesControls_(allObraNames, availablePhases);
+
+  const ctx = ensureCompFasesCanvas_();
+  if (!ctx) return;
+
+  if (!selectedObras.length) {
+    renderCompFasesPlaceholder_('Selecione obras para comparar');
+    return;
+  }
+  if (!availablePhases.length) {
+    renderCompFasesPlaceholder_('Sem fases no periodo');
+    return;
+  }
+
+  const selectedPhaseItems = chartPhaseData.filter(item => !!compFasesSelectedKeys[item.key]);
+  if (!selectedPhaseItems.length) {
+    renderCompFasesPlaceholder_('Selecione fases para visualizar');
+    return;
+  }
+
+  const chartItems = compactCompFasesForMobile_(selectedPhaseItems);
+  syncCompFasesControls_(allObraNames, availablePhases);
+
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const metricLabelMap = { mao_obra: 'Mao de Obra', materiais: 'Materiais', total: 'Total' };
+  const datasetLabel = metricLabelMap[compFasesMetric] || 'Custo';
+
+  compCharts.fasesobra = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: chartItems.map(item => item.name),
+      datasets: selectedObras.map((obraName, index) => ({
+        label: obraName,
+        data: chartItems.map(item => Number(item.valuesByObra[obraName]) || 0),
+        backgroundColor: CHART_PALETTE[index % CHART_PALETTE.length],
+        borderRadius: 4
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      plugins: {
+        legend: mLegend({ position: isMobile() ? 'bottom' : 'top' }),
+        tooltip: {
+          callbacks: {
+            title: items => items && items[0] ? String(items[0].label || '') : '',
+            label: tipCtx => tipCtx.dataset.label + ': ' + fmt(tipCtx.raw)
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k \u20ac' : v + ' \u20ac'
+          }
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: val => {
+              const idx = Number(val);
+              const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+              return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Stacked bar: Dias por Fase de Obra ──────────────── */
+function updateCompDiasPeriodLabel_() {
+  const el = document.getElementById('comp-dias-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
+
+function getSelectedCompDiasObras_(obraNames) {
+  const list = Array.isArray(obraNames) ? obraNames : [];
+  return list.filter(name => !!compDiasSelectedObras[name]);
+}
+
+function ensureCompDiasCanvas_() {
+  const wrap = document.getElementById('comp-dias-canvas-wrap');
+  if (!wrap) return null;
+  if (!document.getElementById('comp-chart-diasfase')) {
+    wrap.innerHTML = '<canvas id="comp-chart-diasfase"></canvas>';
+  }
+  return document.getElementById('comp-chart-diasfase');
+}
+
+function renderCompDiasPlaceholder_(message) {
+  const wrap = document.getElementById('comp-dias-canvas-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="no-chart-data">' + escapeHtml_(message || 'Sem dados para mostrar') + '</div>';
+}
+
+function syncCompDiasControls_(obraNames, faseItems) {
+  const selectedObrasCount = Object.keys(compDiasSelectedObras).reduce((acc, name) => acc + (compDiasSelectedObras[name] ? 1 : 0), 0);
+
+  const obrasRow = document.getElementById('comp-dias-obras-row');
+  if (obrasRow) {
+    const list = Array.isArray(obraNames) ? obraNames : [];
+    if (!list.length) {
+      obrasRow.innerHTML = '<span class="obra-fase-filter-empty">Sem obras disponiveis.</span>';
+    } else {
+      obrasRow.innerHTML = list.map(name => {
+        const active = !!compDiasSelectedObras[name];
+        const safeName = escapeHtml_(name);
+        const encoded = encodeURIComponent(name);
+        return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+          ' onclick="toggleCompDiasObra(\'' + encoded + '\')"' +
+          ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+          ' title="' + safeName + '">' + safeName + '</button>';
+      }).join('');
+    }
+  }
+
+  const label = document.getElementById('comp-dias-label');
+  if (label) {
+    const selectedCount = Object.keys(compDiasSelectedKeys).reduce((acc, key) => acc + (compDiasSelectedKeys[key] ? 1 : 0), 0);
+    label.textContent = selectedCount
+      ? 'Fases visiveis (' + selectedCount + ' selecionada(s))'
+      : 'Fases disponiveis';
+  }
+
+  const fasesWrap = document.getElementById('comp-dias-filter-wrap');
+  if (fasesWrap) {
+    const shouldShow = selectedObrasCount > 0;
+    fasesWrap.classList.toggle('is-collapsed', !shouldShow);
+    fasesWrap.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  }
+
+  const fasesRow = document.getElementById('comp-dias-row');
+  if (!fasesRow) return;
+  const fallbackList = DEFAULT_COMP_FASES.map(fase => ({
+    key: normalizeFaseKey_(fase),
+    name: fase,
+    total: 0
+  }));
+  const list = ((Array.isArray(faseItems) && faseItems.length) ? faseItems : fallbackList)
+    .filter(item => shouldIncludeCompFase_(item && item.name));
+
+  fasesRow.innerHTML = list.map(item => {
+    const labelTxt = String(item.name || 'Sem Fase');
+    const key = normalizeFaseKey_(labelTxt);
+    const active = !!compDiasSelectedKeys[key];
+    const safeLabel = escapeHtml_(labelTxt);
+    const encoded = encodeURIComponent(labelTxt);
+    return '<button type="button" class="obra-fase-chip' + (active ? ' active' : '') + '"' +
+      ' onclick="toggleCompDiasFaseSelection(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (active ? 'true' : 'false') + '"' +
+      ' title="' + safeLabel + ' · ' + (Number(item.total) || 0) + ' dias">' + safeLabel + '</button>';
+  }).join('');
+}
+
+function toggleCompDiasObra(obraEncoded) {
+  const obraName = decodeURIComponent(String(obraEncoded || ''));
+  if (!obraName) return;
+  const obraNames = getCompObraNames_();
+  if (!obraNames.includes(obraName)) return;
+  compDiasSelectedObras[obraName] = !compDiasSelectedObras[obraName];
+  buildCompDiasFaseChart(obraNames);
+}
+
+function resetCompDiasObrasSelection() {
+  compDiasSelectedObras = {};
+  compDiasSelectedKeys = {};
+  buildCompDiasFaseChart(getCompObraNames_());
+}
+
+function toggleCompDiasFaseSelection(faseEncoded) {
+  const faseName = decodeURIComponent(String(faseEncoded || ''));
+  if (!faseName) return;
+  const key = normalizeFaseKey_(faseName);
+  compDiasSelectedKeys[key] = !compDiasSelectedKeys[key];
+  if (!compDiasSelectedKeys[key]) delete compDiasSelectedKeys[key];
+  buildCompDiasFaseChart(getCompObraNames_());
+}
+
+function resetCompDiasSelection() {
+  compDiasSelectedKeys = {};
+  buildCompDiasFaseChart(getCompObraNames_());
+}
+
+function collectCompDiasData_(selectedObras) {
+  const selected = Array.isArray(selectedObras) ? selectedObras : [];
+  const phaseMap = {};
+
+  selected.forEach(nome => {
+    const phaseDaysByName = {};
+    (DATA.registos || []).forEach(r => {
+      if (String(r.obra || '').trim() !== nome) return;
+      const dateStr = String(r.data || '').slice(0, 10);
+      if (!dateInRange(dateStr) || r.falta) return;
+      if ((Number(r.horas) || 0) <= 0 && (Number(r.custo) || 0) <= 0) return;
+      const fase = String(r.fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
+      phaseDaysByName[fase].add(dateStr);
+    });
+    (DATA.legacy_mao_obra || []).forEach(r => {
+      if (String(r.obra || '').trim() !== nome) return;
+      const dateStr = String(r.data || '').slice(0, 10);
+      if (!dateInRange(dateStr)) return;
+      if ((Number(r.horas) || 0) <= 0 && (Number(r.custo) || 0) <= 0) return;
+      const fase = String(r.fase || '').trim() || 'Sem Fase';
+      if (!shouldIncludeCompFase_(fase)) return;
+      if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
+      phaseDaysByName[fase].add(dateStr);
+    });
+
+    Object.keys(phaseDaysByName).forEach(fase => {
+      const value = phaseDaysByName[fase].size;
+      if (value <= 0) return;
+      const key = normalizeFaseKey_(fase);
+      if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0, valuesByObra: {} };
+      phaseMap[key].total += value;
+      phaseMap[key].valuesByObra[nome] = value;
+    });
+  });
+
+  return sortCompFaseItems_(Object.values(phaseMap));
+}
+
+function buildCompDiasFaseChart(obraNames) {
+  if (compCharts.diasfase) compCharts.diasfase.destroy();
+
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+  updateCompDiasPeriodLabel_();
+
+  Object.keys(compDiasSelectedObras).forEach(name => {
+    if (!allObraNames.includes(name)) delete compDiasSelectedObras[name];
+  });
+
+  const selectedObras = getSelectedCompDiasObras_(allObraNames);
+  const availablePhases = collectAvailableCompFases_(allObraNames);
+  const chartPhaseData = collectCompDiasData_(selectedObras);
+  const validPhaseKeys = new Set(availablePhases.map(item => item.key));
+  Object.keys(compDiasSelectedKeys).forEach(key => {
+    if (!validPhaseKeys.has(key)) delete compDiasSelectedKeys[key];
+  });
+
+  syncCompDiasControls_(allObraNames, availablePhases);
+
+  const ctx = ensureCompDiasCanvas_();
+  if (!ctx) return;
+  if (!selectedObras.length) {
+    renderCompDiasPlaceholder_('Selecione obras para comparar');
+    return;
+  }
+  if (!availablePhases.length) {
+    renderCompDiasPlaceholder_('Sem fases no periodo');
+    return;
+  }
+
+  const selectedPhaseItems = chartPhaseData.filter(item => !!compDiasSelectedKeys[item.key]);
+  if (!selectedPhaseItems.length) {
+    renderCompDiasPlaceholder_('Selecione fases para visualizar');
+    return;
+  }
+
+  const chartItems = compactCompFasesForMobile_(selectedPhaseItems);
+  syncCompDiasControls_(allObraNames, availablePhases);
+
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  compCharts.diasfase = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: chartItems.map(item => item.name),
+      datasets: selectedObras.map((obraName, index) => ({
+        label: obraName,
+        data: chartItems.map(item => Number(item.valuesByObra[obraName]) || 0),
+        backgroundColor: CHART_PALETTE[index % CHART_PALETTE.length],
+        borderRadius: 4
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      plugins: {
+        legend: mLegend({ position: isMobile() ? 'bottom' : 'top' }),
+        tooltip: {
+          callbacks: {
+            title: items => items && items[0] ? String(items[0].label || '') : '',
+            label: tipCtx => tipCtx.dataset.label + ': ' + tipCtx.raw + ' dias'
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: val => {
+              const idx = Number(val);
+              const label = Number.isFinite(idx) && chartItems[idx] ? chartItems[idx].name : String(val);
+              return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+            }
+          }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { font: { size: isMobile() ? 9 : 10 }, stepSize: 1 }
+        }
+      }
+    }
+  });
+}
+
+/* ── Comparison table — disabled (card removed) ──────── */
+function buildCompTable(obraNames) { /* disabled */ }
+
+/* ── PART B: Phase Analysis — disabled (panel removed) ── */
+function buildCompFases(obraNome) { /* disabled */ }
+function buildCompFaseCustoChart(fases) { /* disabled */ }
+function buildCompFaseHorasChart(fases) { /* disabled */ }
+function buildCompFaseTable(fases, maisCara, maisEficiente) { /* disabled */ }
+
+/* ── PART C: Temporal Evolution ──────────────────────── */
+
+/* ── Evolução Temporal — disabled (panel removed) ── */
+function buildCompEvo() { /* disabled */ }
+function toggleCompEvoSerie(nome, index) { /* disabled */ }
+function switchCompEvoMetric(metric) { /* disabled */ }
+
+/* ══════════════════════════════════════════════════════════
+   ASSIDUIDADE — HEATMAP CALENDAR
+   ══════════════════════════════════════════════════════════ */
+const MONTH_NAMES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                        'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const WEEKDAYS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+function initAssiduidade() {
+  buildAssidTable();
+}
+
+/* ── Variáveis de estado da tabela de assiduidade ── */
+let assidAllRows  = [];
+let assidSortCol  = 'faltas';
+let assidSortAsc  = false;
+
+function buildAssidTable() {
+  if (!DATA || !DATA.obras) return;
+  const obras = DATA.obras;
+
+  // nome → { funcao, faltas, faltasList[] }
+  const agg = {};
+
+  Object.keys(obras).forEach(obraNome => {
+    const assid = obras[obraNome].assiduidade || [];
+    assid.forEach(w => {
+      if (!agg[w.nome]) {
+        agg[w.nome] = { funcao: w.funcao || '—', faltas: 0, faltasList: [] };
+      }
+      Object.entries(w.dias).forEach(([dateStr, d]) => {
+        if (!dateInRange(dateStr)) return;
+        if (d.dispensado) agg[w.nome].dispensados = (agg[w.nome].dispensados || 0) + 1;
+        if (!d.falta) return;
+        agg[w.nome].faltas++;
+        const parts = dateStr.split('-');
+        agg[w.nome].faltasList.push({
+          dataSort: dateStr,
+          data:     parts[2] + '/' + parts[1],   // DD/MM
+          motivo:   d.motivo  || '—',
+          observacao: d.observacao || '\u2014',
+          dispensado: !!d.dispensado,
+          obra:     obraNome,
+          fase:     (d.fases && d.fases.length > 0)
+                      ? d.fases.join(', ')
+                      : '—'
+        });
+      });
+    });
+  });
+
+  // Apenas workers com faltas > 0
+  assidAllRows = Object.entries(agg)
+    .filter(([, a]) => a.faltas > 0 || (a.dispensados || 0) > 0)
+    .map(([nome, a]) => ({
+      nome,
+      funcao:     a.funcao,
+      faltas:     a.faltas,
+      dispensados: a.dispensados || 0,
+      faltasList: a.faltasList.sort((x, y) => y.dataSort.localeCompare(x.dataSort))
+    }));
+
+  assidSortCol = 'faltas';
+  assidSortAsc = false;
+  renderAssidTable();
+}
+
+function renderAssidTable() {
+  const search = (document.getElementById('assid-search').value || '').toLowerCase();
+
+  let rows = assidAllRows.filter(r =>
+    !search || r.nome.toLowerCase().includes(search)
+  );
+
+  rows.sort((a, b) => {
+    const va = a[assidSortCol], vb = b[assidSortCol];
+    if (typeof va === 'string')
+      return assidSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return assidSortAsc ? va - vb : vb - va;
+  });
+
+  const tbody = document.getElementById('assid-tbody');
+
+  if (!rows.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--text-dim)">' +
+      '<i class="fa-solid fa-circle-check" style="font-size:28px;display:block;' +
+      'margin-bottom:12px;color:var(--success);opacity:.6"></i>' +
+      'Sem faltas no período seleccionado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const escNome = r.nome.replace(/'/g, "\\'");
+    const faltasCell = r.faltas > 0
+      ? '<span class="tag tag-red" style="cursor:pointer"' +
+        ' onclick="event.stopPropagation();assidShowFaltas(\'' + escNome + '\',event)"' +
+        ' title="Ver detalhe">' + r.faltas + '</span>'
+      : '0';
+    const dispBadge = r.dispensados > 0
+      ? ' <span class="tag tag-amber" title="Registos com dispensado">Disp ' + r.dispensados + '</span>'
+      : '';
+    return '<tr>' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong>' + dispBadge + '</td>' +
+      '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
+      '<td data-label="Faltas" class="td-center">' + faltasCell + '</td>' +
+      '</tr>';
+  }).join('');
+
+  // Indicadores de ordenação
+  const colMap = { nome: 0, funcao: 1, faltas: 2 };
+  const ths = document.querySelectorAll('#assid-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const ic = th.querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[assidSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const ic = ths[idx].querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid ' +
+      (assidSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+
+function sortAssid(col) {
+  assidSortAsc = assidSortCol === col ? !assidSortAsc
+    : (col === 'nome' || col === 'funcao');
+  assidSortCol = col;
+  renderAssidTable();
+}
+
+function assidShowFaltas(nome, event) {
+  const row = assidAllRows.find(r => r.nome === nome);
+  if (!row || !row.faltasList.length) return;
+
+  // Capturar rect antes do requestAnimationFrame (currentTarget é limpo após o handler)
+  const clickRect = event && event.currentTarget
+    ? event.currentTarget.getBoundingClientRect() : null;
+
+  const bodyHtml = row.faltasList.map(f =>
+    '<div class="assid-popup-item">' +
+      '<span style="color:var(--accent);font-weight:700;min-width:42px">' + f.data + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--text)">'  + f.motivo + '</span>' +
+      (f.dispensado ? '<span class="tag tag-amber">Dispensado</span>' : '') +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--info)">'  + f.obra   + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--text-muted);font-size:11px">' + f.fase + '</span>' +
+      '<span style="color:var(--text-dim)">\u203a</span>' +
+      '<span style="color:var(--text-muted);font-size:11px">Obs: ' + (f.observacao || '\u2014') + '</span>' +
+    '</div>'
+  ).join('');
+
+  const container = document.getElementById('assid-popup-container');
+  container.innerHTML =
+    '<div class="assid-popup-overlay" onclick="assidPopupClose()"></div>' +
+    '<div class="assid-popup" id="assid-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="assid-popup-header">' +
+        '<span><i class="fa-solid fa-calendar-xmark" style="margin-right:8px;' +
+        'color:var(--accent)"></i>Faltas de ' +
+        nome.split(' ').slice(0, 2).join(' ') + ' (' + row.faltas + ')</span>' +
+        '<button class="assid-popup-close" onclick="assidPopupClose()">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="assid-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  // Posicionar perto do elemento clicado
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('assid-popup-inner');
+    if (!popup || !clickRect) return;
+    const pw    = popup.offsetWidth  || 300;
+    const ph    = popup.offsetHeight || 200;
+    let top  = clickRect.bottom + 8;
+    let left = clickRect.left;
+    if (left + pw > window.innerWidth  - 12) left = window.innerWidth  - pw - 12;
+    if (left < 12) left = 12;
+    if (top  + ph > window.innerHeight - 12) top  = clickRect.top - ph - 8;
+    if (top  < 12) top  = 12;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function assidPopupClose() {
+  document.getElementById('assid-popup-container').innerHTML = '';
+}
+
+function assidSelectObra(obraNome) {
+  /* disabled */
+}
+
+function assidSelectWorker(nome) {
+  /* disabled */
+}
+
+function renderAssidHeatmap() {
+  /* disabled */
+}
+
+function computeAssidStats(worker, year, month) {
+  /* disabled */
+}
+
+function assidPrevMonth() {
+  /* disabled */
+}
+
+function assidNextMonth() {
+  /* disabled */
+}
+
+function assidShowTooltip(event, dateStr) {
+  /* disabled */
+}
+
+function assidHideTooltip() {
+  /* disabled */
+}
+
+/* ══════════════════════════════════════════════════════════
+   THEME SYSTEM
+   ══════════════════════════════════════════════════════════ */
+function initTheme() {
+  try {
+    const saved = localStorage.getItem('dm-theme');
+    if (saved === 'light' || saved === 'dark') currentTheme = saved;
+  } catch (e) { /* localStorage may be blocked in GAS sandbox */ }
+  applyTheme();
+}
+
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  applyTheme();
+  try { localStorage.setItem('dm-theme', currentTheme); } catch (e) {}
+  updateAllChartsTheme();
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  const icon = document.getElementById('theme-toggle-icon');
+  if (icon) {
+    icon.className = currentTheme === 'dark'
+      ? 'fa-solid fa-moon'
+      : 'fa-solid fa-sun';
+  }
+
+  if (currentTheme === 'light') {
+    Chart.defaults.color = '#4a5568';
+    Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
+  } else {
+    Chart.defaults.color = '#a0aec0';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+  }
+}
+
+function updateAllChartsTheme() {
+  const gridColor = currentTheme === 'light' ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.04)';
+  const tickColor = currentTheme === 'light' ? '#4a5568' : '#a0aec0';
+
+  const allChartDicts = [obraCharts, deslCharts, equipaCharts, compCharts];
+  allChartDicts.forEach(dict => {
+    Object.values(dict).forEach(chart => {
+      if (!chart) return;
+      // Update scales
+      Object.values(chart.options.scales || {}).forEach(scale => {
+        if (scale.grid) scale.grid.color = gridColor;
+        if (scale.ticks) scale.ticks.color = tickColor;
+        if (scale.pointLabels) scale.pointLabels.color = tickColor;
+      });
+      chart.update('none');
+    });
+  });
+  // Also update standalone equipaDetailChart
+  if (equipaDetailChart) {
+    Object.values(equipaDetailChart.options.scales || {}).forEach(scale => {
+      if (scale.grid) scale.grid.color = gridColor;
+      if (scale.ticks) scale.ticks.color = tickColor;
+    });
+    equipaDetailChart.update('none');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   GLOBAL DATE FILTER
+   ══════════════════════════════════════════════════════════ */
+function dateInRange(dateStr) {
+  if (!globalDateFrom && !globalDateTo) return true;
+  const d = normalizeDateKey_(dateStr);
+  if (!d) return true;
+  const from = normalizeDateKey_(globalDateFrom);
+  const to = normalizeDateKey_(globalDateTo);
+  if (from && d < from) return false;
+  if (to && d > to) return false;
+  return true;
+}
+
+function normalizeDateKey_(raw) {
+  if (!raw) return '';
+
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    const y = raw.getFullYear();
+    const m = String(raw.getMonth() + 1).padStart(2, '0');
+    const d = String(raw.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const s = String(raw).trim();
+  if (!s) return '';
+
+  // ISO or timestamp-like
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
+  // dd/mm/yyyy or dd-mm-yyyy
+  const pt = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (pt) {
+    const d = String(pt[1]).padStart(2, '0');
+    const m = String(pt[2]).padStart(2, '0');
+    const y = pt[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return s.slice(0, 10);
+}
+
+function syncFilterInputsUI_() {
+  const topFrom = document.getElementById('global-date-from');
+  const topTo = document.getElementById('global-date-to');
+  if (topFrom) topFrom.value = globalDateFrom;
+  if (topTo) topTo.value = globalDateTo;
+}
+
+function syncQuickFilterButtonsUI_() {
+  document.querySelectorAll('.quick-date-btn').forEach(b => b.classList.remove('active'));
+  if (activeQuickFilter) {
+    const btn = document.querySelector('.quick-date-btn[onclick*="' + activeQuickFilter + '"]');
+    if (btn) btn.classList.add('active');
+  }
+}
+
+function applyGlobalFilter() {
+  globalDateFrom = document.getElementById('global-date-from').value || '';
+  globalDateTo = document.getElementById('global-date-to').value || '';
+
+  activeQuickFilter = '';
+  if (!globalDateFrom && !globalDateTo) {
+    activeQuickFilter = 'tudo';
+  }
+  syncFilterInputsUI_();
+  syncQuickFilterButtonsUI_();
+
+  if (DATA) {
+    buildAll();
+    if (currentSection === 'obra-detail') {
+      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
+      else renderObraNoDataState_();
+    }
+  }
+}
+
+function setQuickFilter(preset) {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = yyyy + '-' + mm + '-' + dd;
+
+  activeQuickFilter = preset;
+
+  switch (preset) {
+    case 'hoje':
+      globalDateFrom = todayStr;
+      globalDateTo = todayStr;
+      break;
+    case 'semana': {
+      const dow = today.getDay() || 7; // monday=1
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (dow - 1));
+      globalDateFrom = monday.getFullYear() + '-' +
+        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
+        String(monday.getDate()).padStart(2, '0');
+      globalDateTo = todayStr;
+      break;
+    }
+    case 'mes':
+      globalDateFrom = yyyy + '-' + mm + '-01';
+      globalDateTo = todayStr;
+      break;
+    case 'tudo':
+    default:
+      globalDateFrom = '';
+      globalDateTo = '';
+      break;
+  }
+
+  syncFilterInputsUI_();
+  syncQuickFilterButtonsUI_();
+
+  if (DATA) {
+    buildAll();
+    if (currentSection === 'obra-detail') {
+      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
+      else renderObraNoDataState_();
+    }
+  }
+}
+
+function clearGlobalFilter() {
+  setQuickFilter('tudo');
+}
+
+/* ── MATERIAIS HELPERS ──────────────────────────────────── */
+function filterMateriaisByDate() {
+  return matMovAll.filter(m =>
+    isDashboardMaterialMov_(m) && dateInRange(m.data)
+  );
+}
+function filterLegacyMateriaisByDate() {
+  return legacyMatAll.filter(m => dateInRange(m.data));
+}
+function filterAllMateriaisByDate() {
+  return filterMateriaisByDate().concat(filterLegacyMateriaisByDate());
+}
+function matCost(m) {
+  const raw = (m && m.custo_total_com_iva != null && m.custo_total_com_iva !== '')
+    ? m.custo_total_com_iva
+    : (m ? m.custo_total : 0);
+  const n = parseFloat(raw);
+  return isNaN(n) ? 0 : n;
+}
+function sumMateriaisGlobal() {
+  return filterAllMateriaisByDate().reduce((s, m) => s + matCost(m), 0);
+}
+function sumMateriaisByObra(nome) {
+  return filterAllMateriaisByDate()
+    .filter(m => m.obra === nome)
+    .reduce((s, m) => s + matCost(m), 0);
+}
+
+function computeFilteredGlobal() {
+  if (!DATA || !DATA.obras) return DATA ? DATA.global : {};
+  if (!globalDateFrom && !globalDateTo) return DATA.global;
+
+  // Re-aggregate from daily data
+  let custoMO = 0, horasTotal = 0, faltas = 0, totalAtrasos = 0;
+  const workerSet = new Set();
+  const obraSet = new Set();
+  let custoDesl = 0;
+
+  Object.keys(DATA.obras).forEach(nome => {
+    const obra = DATA.obras[nome];
+    (obra.daily || []).forEach(d => {
+      if (!dateInRange(d.DATA_str)) return;
+      custoMO += d.Custo || 0;
+      horasTotal += d.Horas || 0;
+      obraSet.add(nome);
+    });
+    // Workers and faltas from assiduidade if available
+    (obra.assiduidade || []).forEach(w => {
+      Object.entries(w.dias || {}).forEach(([dateStr, dayData]) => {
+        if (!dateInRange(dateStr)) return;
+        if (dayData.falta) faltas++;
+        if (dayData.atraso_min) totalAtrasos += dayData.atraso_min;
+        if ((Number(dayData.horas) || 0) > 0 || (Number(dayData.custo) || 0) > 0) workerSet.add(w.nome);
+      });
+    });
+  });
+
+  // Deslocações cost
+  (DATA.deslocacoes || []).forEach(d => {
+    if (dateInRange(d.data)) custoDesl += d.custo || 0;
+  });
+
+  // Materiais CONSUMO filtrados
+  const custoMat = sumMateriaisGlobal();
+
+  const custoTotal = custoMO + custoDesl + custoMat;
+
+  return {
+    custo_total: custoTotal,
+    custo_mao_obra: custoMO,
+    custo_deslocacoes: custoDesl,
+    custo_materiais: custoMat,
+    horas_total: horasTotal,
+    obras_ativas: obraSet.size,
+    colaboradores: workerSet.size,
+    faltas: faltas,
+    total_atrasos: totalAtrasos,
+    last_update: DATA.global.last_update,
+  };
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ══════════════════════════════════════════════════════════ */
+function showToast(message, type, duration) {
+  type = type || 'info';
+  duration = duration || 6000;
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const icons = {
+    warning: 'fa-triangle-exclamation',
+    danger:  'fa-circle-exclamation',
+    info:    'fa-circle-info',
+    success: 'fa-circle-check'
+  };
+
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.innerHTML = '<i class="fa-solid ' + (icons[type] || icons.info) + '"></i>' +
+    '<span>' + message + '</span>' +
+    '<button class="toast-close" onclick="this.parentElement.classList.add(\'removing\');setTimeout(()=>this.parentElement.remove(),300)">' +
+    '<i class="fa-solid fa-xmark"></i></button>';
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add('removing');
+      setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
+    }
+  }, duration);
+}
+
+function checkAlerts() {
+  if (!DATA || !DATA.global) return;
+  const g = DATA.global;
+
+  // Check deslocações > 20% of total cost
+  if (g.custo_total > 0 && g.custo_deslocacoes > 0) {
+    const pctDesl = (g.custo_deslocacoes / g.custo_total) * 100;
+    if (pctDesl > 20) {
+      showToast('Deslocações representam ' + pctDesl.toFixed(1) + '% do custo total (acima de 20%)', 'warning', 8000);
+    }
+  }
+
+}
+
+/* ══════════════════════════════════════════════════════════
+   SKELETON LOADING
+   ══════════════════════════════════════════════════════════ */
+function showSkeletons() {
+  // Overview section
+  const overview = document.getElementById('section-overview');
+  if (overview && !DATA) {
+    let skHtml = '<div class="kpi-grid">';
+    for (let i = 0; i < 8; i++) skHtml += '<div class="skeleton skeleton-kpi"></div>';
+    skHtml += '</div>';
+    overview.innerHTML = skHtml;
+  }
+}
+
+function startRefreshSpinner() {
+  const icon = document.getElementById('refresh-icon');
+  if (icon) icon.classList.add('fa-spin');
+}
+
+function stopRefreshSpinner() {
+  const icon = document.getElementById('refresh-icon');
+  if (icon) icon.classList.remove('fa-spin');
+}
+
+/* ── Print — disabled (button removed) ── */
+function printReport() { /* disabled */ }
+
+/* ══════════════════════════════════════════════════════════
+   KEYBOARD NAVIGATION
+   ══════════════════════════════════════════════════════════ */
+function initKeyboardNav() {
+  document.addEventListener('keydown', function(e) {
+    // Alt + number for sections
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      const sectionMap = {
+        '1': 'overview',
+        '2': 'obra-detail',
+        '3': 'deslocacoes',
+        '4': 'equipa',
+        '5': 'assiduidade',
+        '6': 'comparativa'
+      };
+      if (sectionMap[e.key]) {
+        e.preventDefault();
+        showSection(sectionMap[e.key]);
+      }
+    }
+    // Escape to close expanded panels
+    if (e.key === 'Escape') {
+      if (equipaExpandedRow) {
+        equipaExpandedRow = null;
+        renderEquipaTable();
+      }
+    }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   BREADCRUMB
+   ══════════════════════════════════════════════════════════ */
+function updateBreadcrumb() {
+  const el = document.getElementById('breadcrumb');
+  if (!el) return;
+
+  const parts = [{ label: 'Dashboard', section: 'overview' }];
+  const sectionLabels = {
+    overview:      'Visão Geral',
+    'obra-detail': 'Obras',
+    deslocacoes:   'Deslocações',
+    equipa:        'Equipa',
+    assiduidade:   'Assiduidade',
+    comparativa:   'Comparativa'
+  };
+
+  if (currentSection !== 'overview') {
+    parts.push({ label: sectionLabels[currentSection] || currentSection, section: currentSection });
+  }
+
+  if (currentSection === 'obra-detail' && currentObraName) {
+    parts.push({ label: currentObraName });
+  }
+
+  if (currentSection === 'assiduidade') {
+    if (assidCurrentObra) parts.push({ label: assidCurrentObra });
+    if (assidCurrentWorker) parts.push({ label: assidCurrentWorker });
+  }
+
+  let html = '';
+  parts.forEach((p, i) => {
+    const isLast = i === parts.length - 1;
+    if (i > 0) html += '<span class="breadcrumb-sep"><i class="fa-solid fa-chevron-right"></i></span>';
+    if (isLast) {
+      html += '<span class="breadcrumb-item active">' + p.label + '</span>';
+    } else if (p.section) {
+      html += '<span class="breadcrumb-item" style="cursor:pointer" onclick="showSection(\'' + p.section + '\')">' + p.label + '</span>';
+    } else {
+      html += '<span class="breadcrumb-item">' + p.label + '</span>';
+    }
+  });
+
+  el.innerHTML = html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE NAV
+   ══════════════════════════════════════════════════════════ */
+function updateMobileNav() {
+  document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+    const sec = btn.dataset.mobilesec;
+    btn.classList.toggle('active', sec === currentSection);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   RESIZE OBSERVERS
+   ══════════════════════════════════════════════════════════ */
+function initResizeObservers() {
+  if (typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(() => {
+    // Resize all active charts
+    [obraCharts, deslCharts, equipaCharts, compCharts].forEach(dict => {
+      Object.values(dict).forEach(chart => {
+        if (chart && chart.canvas && chart.canvas.offsetParent) {
+          chart.resize();
+        }
+      });
+    });
+    if (equipaDetailChart && equipaDetailChart.canvas && equipaDetailChart.canvas.offsetParent) {
+      equipaDetailChart.resize();
+    }
+  });
+  // Observe main content for size changes
+  const main = document.getElementById('main-content');
+  if (main) observer.observe(main);
+}
+
+/* ══════════════════════════════════════════════════════════
+   FÉRIAS
+   ══════════════════════════════════════════════════════════ */
+
+function buildFerias() {
+  if (!DATA || !DATA.ferias) return;
+  const colabs = DATA.colaboradores || [];
+
+  // Mapa nome → funcao
+  const funcaoMap = {};
+  colabs.forEach(c => { funcaoMap[c.Nome] = c.Funcao || '—'; });
+
+  feriasAllRows = DATA.ferias.map(f => ({
+    nome:             f.nome,
+    funcao:           funcaoMap[f.nome] || '—',
+    data_admissao:    f.data_admissao,
+    ano_ref_inicio:   f.ano_ref_inicio,
+    ano_ref_fim:      f.ano_ref_fim,
+    dias_total:       f.dias_total,
+    dias_usados:      f.dias_usados,
+    dias_disponiveis: f.dias_disponiveis
+  }));
+
+  feriasSortCol = 'nome';
+  feriasSortAsc = true;
+  feriasSelected = null;
+
+  document.getElementById('ferias-cal-card').style.display = 'none';
+  document.getElementById('ferias-search').value = '';
+  renderFeriasTable();
+}
+
+function renderFeriasTable() {
+  const search = (document.getElementById('ferias-search').value || '').toLowerCase();
+
+  let rows = feriasAllRows.filter(r =>
+    !search || r.nome.toLowerCase().includes(search)
+  );
+
+  rows.sort((a, b) => {
+    const va = a[feriasSortCol], vb = b[feriasSortCol];
+    if (typeof va === 'string')
+      return feriasSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return feriasSortAsc ? va - vb : vb - va;
+  });
+
+  const fmtDate = s => {
+    if (!s || s.length < 10) return '—';
+    const p = s.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  };
+
+  const saldoBadge = d => {
+    if (d > 5)  return '<span class="ferias-saldo-badge ok">' + d + ' dias</span>';
+    if (d >= 1) return '<span class="ferias-saldo-badge warn">' + d + ' dias</span>';
+    return '<span class="ferias-saldo-badge neg"><i class="fa-solid fa-triangle-exclamation"></i>' + d + ' dias</span>';
+  };
+
+  const tbody = document.getElementById('ferias-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;' +
+      'color:var(--text-dim)">Sem dados de férias. Preenche a aba FERIAS no ficheiro central.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const isSelected = feriasSelected === r.nome;
+    const periodo = fmtDate(r.ano_ref_inicio) + ' → ' + fmtDate(r.ano_ref_fim);
+    const escNome = r.nome.replace(/'/g, "\\'");
+    return '<tr style="cursor:pointer' + (isSelected ? ';background:rgba(99,179,237,.08)' : '') + '"' +
+      ' onclick="feriasSelectWorker(\'' + escNome + '\')">' +
+      '<td data-label="Nome"><strong>' + r.nome + '</strong></td>' +
+      '<td data-label="Função"><span class="tag tag-blue">' + r.funcao + '</span></td>' +
+      '<td data-label="Período" style="font-size:11px;color:var(--text-muted)">' + periodo + '</td>' +
+      '<td data-label="Total" class="td-center td-mono">' + r.dias_total + '</td>' +
+      '<td data-label="Usados" class="td-center td-mono">' + r.dias_usados + '</td>' +
+      '<td data-label="Disponíveis" class="td-center">' + saldoBadge(r.dias_disponiveis) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  // Indicadores de ordenação
+  const colMap = { nome:0, funcao:1, periodo:2, dias_total:3, dias_usados:4, dias_disponiveis:5 };
+  const ths = document.querySelectorAll('#ferias-thead th');
+  ths.forEach(th => {
+    th.classList.remove('sort-active');
+    const ic = th.querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+  });
+  const idx = colMap[feriasSortCol];
+  if (ths[idx]) {
+    ths[idx].classList.add('sort-active');
+    const ic = ths[idx].querySelector('.sort-icon');
+    if (ic) ic.className = 'fa-solid ' +
+      (feriasSortAsc ? 'fa-sort-up' : 'fa-sort-down') + ' sort-icon';
+  }
+}
+
+function sortFerias(col) {
+  feriasSortAsc = feriasSortCol === col ? !feriasSortAsc
+    : (col === 'nome' || col === 'funcao');
+  feriasSortCol = col;
+  renderFeriasTable();
+}
+
+function feriasSelectWorker(nome) {
+  feriasSelected = feriasSelected === nome ? null : nome;
+  renderFeriasTable();
+
+  const card = document.getElementById('ferias-cal-card');
+  if (!feriasSelected) { card.style.display = 'none'; return; }
+
+  const row = feriasAllRows.find(r => r.nome === nome);
+  if (!row) return;
+
+  // Recolher dias de férias desta pessoa de todas as obras
+  const feriasDays = {}; // "YYYY-MM-DD" → { obra, fase }
+  const obras = DATA.obras || {};
+  Object.keys(obras).forEach(obraNome => {
+    const assid = obras[obraNome].assiduidade || [];
+    const worker = assid.find(a => a.nome === nome);
+    if (!worker) return;
+    Object.entries(worker.dias).forEach(([dateStr, d]) => {
+      if (!d.falta) return;
+      const motivo = (d.motivo || '').toLowerCase();
+      if (motivo !== 'férias' && motivo !== 'ferias') return;
+      // Apenas dias no período activo
+      if (dateStr < row.ano_ref_inicio || dateStr > row.ano_ref_fim) return;
+      feriasDays[dateStr] = {
+        obra:  obraNome,
+        fase:  (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '—'
+      };
+    });
+  });
+
+  document.getElementById('ferias-cal-title').textContent =
+    nome.split(' ').slice(0, 2).join(' ') + ' — Calendário de Férias';
+  document.getElementById('ferias-cal-body').innerHTML =
+    buildFeriasCal(row, feriasDays);
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function buildFeriasCal(row, feriasDays) {
+  if (!Object.keys(feriasDays).length) {
+    return '<div style="text-align:center;padding:32px;color:var(--text-dim)">' +
+      '<i class="fa-solid fa-sun" style="font-size:28px;display:block;' +
+      'margin-bottom:12px;opacity:.4"></i>Sem dias de férias registados no período activo</div>';
+  }
+
+  // Determinar meses a mostrar (apenas meses com férias)
+  const months = [...new Set(Object.keys(feriasDays).map(d => d.slice(0, 7)))].sort();
+  const dayLabels = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  const blocksHtml = months.map(ym => {
+    const [y, m] = ym.split('-').map(Number);
+    const firstDay = new Date(y, m - 1, 1);
+    const totalDays = new Date(y, m, 0).getDate();
+    // Offset: Monday=0
+    let offset = firstDay.getDay() - 1;
+    if (offset < 0) offset = 6;
+
+    let html = '<div class="ferias-month-block">' +
+      '<div class="ferias-month-title">' + monthNames[m - 1] + ' ' + y + '</div>' +
+      '<div class="ferias-month-days">';
+
+    // Day labels
+    dayLabels.forEach(l => {
+      html += '<div class="ferias-day-label">' + l + '</div>';
+    });
+
+    // Empty cells before first day
+    for (let i = 0; i < offset; i++) {
+      html += '<div class="ferias-day empty"></div>';
+    }
+
+    // Day cells
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const isFerias = feriasDays[dateStr];
+      if (isFerias) {
+        const escDate = dateStr.replace(/'/g, "\\'");
+        html += '<div class="ferias-day has-ferias"' +
+          ' onclick="feriasShowDayPopup(event,\'' + escDate + '\')"' +
+          ' title="' + d + '">' + d + '</div>';
+      } else {
+        html += '<div class="ferias-day">' + d + '</div>';
+      }
+    }
+
+    html += '</div></div>';
+    return html;
+  }).join('');
+
+  return '<div class="ferias-cal-grid">' + blocksHtml + '</div>';
+}
+
+function feriasShowDayPopup(event, dateStr) {
+  event.stopPropagation();
+  if (!feriasSelected) return;
+
+  // Recolher dados do dia
+  const obras = DATA.obras || {};
+  let obraNome = '—', fase = '—';
+  Object.keys(obras).forEach(o => {
+    const assid = obras[o].assiduidade || [];
+    const worker = assid.find(a => a.nome === feriasSelected);
+    if (!worker || !worker.dias[dateStr]) return;
+    const d = worker.dias[dateStr];
+    if (d.falta && (d.motivo || '').toLowerCase().includes('rias')) {
+      obraNome = o;
+      fase = (d.fases && d.fases.length > 0) ? d.fases.join(', ') : '—';
+    }
+  });
+
+  const parts = dateStr.split('-');
+  const dateDisplay = parts[2] + '/' + parts[1] + '/' + parts[0];
+
+  const bodyHtml =
+    '<div class="ferias-popup-row">' +
+      '<i class="fa-solid fa-calendar" style="color:var(--info);font-size:11px"></i>' +
+      '<span style="color:var(--text-muted);min-width:50px">Data</span>' +
+      '<strong>' + dateDisplay + '</strong>' +
+    '</div>' +
+    '<div class="ferias-popup-row">' +
+      '<i class="fa-solid fa-building" style="color:var(--info);font-size:11px"></i>' +
+      '<span style="color:var(--text-muted);min-width:50px">Obra</span>' +
+      '<span>' + obraNome + '</span>' +
+    '</div>' +
+    '<div class="ferias-popup-row">' +
+      '<i class="fa-solid fa-layer-group" style="color:var(--info);font-size:11px"></i>' +
+      '<span style="color:var(--text-muted);min-width:50px">Fase</span>' +
+      '<span style="font-size:11px">' + fase + '</span>' +
+    '</div>';
+
+  const container = document.getElementById('ferias-popup-container');
+  container.innerHTML =
+    '<div class="ferias-popup-overlay" onclick="feriasPopupClose()"></div>' +
+    '<div class="ferias-popup" id="ferias-popup-inner" onclick="event.stopPropagation()">' +
+      '<div class="ferias-popup-header">' +
+        '<span><i class="fa-solid fa-umbrella-beach" style="margin-right:8px;' +
+        'color:var(--info)"></i>Férias — ' + dateDisplay + '</span>' +
+        '<button class="ferias-popup-close" onclick="feriasPopupClose()">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+      '</div>' +
+      '<div class="ferias-popup-body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const popup = document.getElementById('ferias-popup-inner');
+    if (!popup) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pw = popup.offsetWidth  || 260;
+    const ph = popup.offsetHeight || 140;
+    let top  = rect.bottom + 8;
+    let left = rect.left;
+    if (left + pw > window.innerWidth  - 12) left = window.innerWidth  - pw - 12;
+    if (top  + ph > window.innerHeight - 12) top  = rect.top - ph - 8;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  });
+}
+
+function feriasPopupClose() {
+  document.getElementById('ferias-popup-container').innerHTML = '';
+}
+
+/* ══════════════════════════════════════════════════════════
+   CONTABILIDADE
+   ══════════════════════════════════════════════════════════ */
+let contabChartCategorias = null;
+let contabChartEvolucao = null;
+
+function buildContabilidade() {
+  if (!DATA) return;
+  // 1. Mão de Obra
+  let totalMaoDeObra = 0;
+  
+  // Current Registos
+  const registosFiltered = [];
+  (DATA.registos || []).forEach(r => {
+    const d = normalizeDateKey_(r.data);
+    if (!d || !dateInRange(d)) return;
+    totalMaoDeObra += Number(r.custo) || 0;
+    r._normDate = d;
+    registosFiltered.push(r);
+  });
+  
+  // Legacy Registos
+  const legacyMaoFiltered = [];
+  (DATA.legacy_mao_obra || []).forEach(r => {
+    const d = normalizeDateKey_(r.data);
+    if (!d || !dateInRange(d)) return;
+    totalMaoDeObra += Number(r.custo) || 0;
+    r._normDate = d;
+    legacyMaoFiltered.push(r);
+  });
+
+  // 2. Deslocações
+  let totalDeslocacoes = 0;
+
+  // 3. Materiais / Serviços e IVA
+  let totalMateriais = 0;
+  let totalIva = 0;
+  
+  // Categorization
+  const categories = {
+    'MATERIAL': 0,
+    'SERVIÇO': 0,
+    'ALUGUER': 0,
+    'TRANSPORTE': 0,
+    'GASÓLEO': 0,
+    'GASOLINA': 0
+  };
+
+  const matFiltered = [];
+  (DATA.materiais_mov || []).forEach(m => {
+    const d = normalizeDateKey_(m.data);
+    if (!d || !dateInRange(d)) return;
+    m._normDate = d;
+    matFiltered.push(m);
+    
+    const custo = Number(m.custo_total) || 0;
+    totalMateriais += custo;
+    
+    const comIva = Number(m.custo_total_com_iva) || 0;
+    const semIva = Number(m.custo_total_sem_iva) || 0;
+    let ivaValue = comIva - semIva;
+    
+    if (ivaValue === 0 && Number(m.iva) > 0 && custo > 0) {
+      const taxa = Number(m.iva);
+      ivaValue = custo * (taxa / (100 + taxa));
+    }
+    totalIva += (ivaValue > 0 ? ivaValue : 0);
+    
+    // Determine category
+    const idItem = String(m.id_item || '').toUpperCase();
+    const desc = String(m.material || m.descricao || m.nome || '').toUpperCase();
+    
+    if (desc.includes('GASOLINA') || idItem.includes('GASOLINA')) {
+      categories['GASOLINA'] += custo;
+    }
+    else if (desc.includes('GASÓLEO') || desc.includes('GASOLEO') || idItem.includes('GASOLEO')) {
+      categories['GASÓLEO'] += custo;
+    }
+    else if (idItem.startsWith('MAT-')) categories['MATERIAL'] += custo;
+    else if (idItem.startsWith('SER-')) categories['SERVIÇO'] += custo;
+    else if (idItem.startsWith('ALQ-')) categories['ALUGUER'] += custo;
+    else if (idItem.startsWith('TRN-') || idItem.startsWith('TRS-')) categories['TRANSPORTE'] += custo;
+    else categories['MATERIAL'] += custo; // fallback para material
+  });
+
+  const legacyMatFiltered = [];
+  (DATA.legacy_materiais || []).forEach(m => {
+    const d = normalizeDateKey_(m.data);
+    if (!d || !dateInRange(d)) return;
+    m._normDate = d;
+    legacyMatFiltered.push(m);
+    
+    const custo = Number(m.custo) || 0;
+    totalMateriais += custo;
+    categories['MATERIAL'] += custo;
+  });
+
+  const deslFiltered = [];
+  (DATA.deslocacoes || []).forEach(dObj => {
+    const d = normalizeDateKey_(dObj.data);
+    if (!d || !dateInRange(d)) return;
+    dObj._normDate = d;
+    deslFiltered.push(dObj);
+    totalDeslocacoes += Number(dObj.custo) || 0;
+  });
+
+  const totalGlobal = totalMaoDeObra + totalDeslocacoes + totalMateriais;
+
+  // Render KPIs
+  document.getElementById('contab-kpi-total').textContent = fmt(totalGlobal);
+  document.getElementById('contab-kpi-mao').textContent = fmt(totalMaoDeObra);
+  document.getElementById('contab-kpi-desl').textContent = fmt(totalDeslocacoes);
+  document.getElementById('contab-kpi-mat').textContent = fmt(totalMateriais);
+  document.getElementById('contab-kpi-iva').textContent = fmt(totalIva);
+
+  // Prepare labels text for charts period
+  const periodLabel = activeQuickFilter ? ' (' + activeQuickFilter + ')' : '';
+  const labelElCat = document.getElementById('contab-cat-period-label');
+  const labelElEvo = document.getElementById('contab-evo-period-label');
+  if (labelElCat) labelElCat.textContent = periodLabel;
+  if (labelElEvo) labelElEvo.textContent = periodLabel;
+
+  // Prepare data for the Evolution Chart (stacked bar)
+  // group all three sources by date
+  const evoMap = {};
+  const ensureDate = (d) => {
+    if (!evoMap[d]) evoMap[d] = { mao: 0, desl: 0, mat: 0 };
+    return evoMap[d];
+  };
+
+  registosFiltered.forEach(r => ensureDate(r._normDate).mao += Number(r.custo) || 0);
+  legacyMaoFiltered.forEach(r => ensureDate(r._normDate).mao += Number(r.custo) || 0);
+  deslFiltered.forEach(d => ensureDate(d._normDate).desl += Number(d.custo) || 0);
+  matFiltered.forEach(m => ensureDate(m._normDate).mat += Number(m.custo_total) || 0);
+  legacyMatFiltered.forEach(m => ensureDate(m._normDate).mat += Number(m.custo) || 0);
+
+  // Build Charts
+  renderContabilidadeCharts(categories, totalMaoDeObra, totalDeslocacoes);
+}
+
+function renderContabilidadeCharts(catMap, tMao, tDesl) {
+  const ctxCat = document.getElementById('contab-chart-categorias');
+  if (!ctxCat) return;
+
+  const oldCat = Chart.getChart('contab-chart-categorias');
+  if (oldCat) oldCat.destroy();
+  if (contabChartCategorias) contabChartCategorias.destroy();
+  
+  const labels = ['Mão de Obra', 'Deslocações', 'Materiais', 'Serviço', 'Aluguer', 'Transporte', 'Gasóleo', 'Gasolina'];
+  const d = [
+    tMao, 
+    tDesl, 
+    catMap['MATERIAL'] || 0,
+    catMap['SERVIÇO'] || 0,
+    catMap['ALUGUER'] || 0,
+    catMap['TRANSPORTE'] || 0,
+    catMap['GASÓLEO'] || 0,
+    catMap['GASOLINA'] || 0
+  ];
+  const bgColors = [
+    '#082f49', // mao de obra
+    '#0284c7', // deslocacoes
+    '#f59e0b', // materiais
+    '#10b981', // servico
+    '#8b5cf6', // aluguer
+    '#ec4899', // transporte
+    '#ef4444', // gasoleo
+    '#f43f5e'  // gasolina
+  ];
+
+  const isDark = document.body.classList.contains('dark-theme');
+  const textColor = isDark ? '#f1f5f9' : '#0f172a';
+  const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+  contabChartCategorias = new Chart(ctxCat, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Custo (€)',
+        data: d,
+        backgroundColor: bgColors,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: textColor, font: { size: 10 }, callback: function(val) { return fmt(val); } }, grid: { color: gridColor, drawBorder: false } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          intersect: false,
+          callbacks: {
+            label: function(ctx) { return ' ' + fmt(ctx.raw || 0); }
+          }
+        }
+      }
+    }
+  });
+
+}
+
+/* ══════════════════════════════════════════════════════════
+   RECURSOS HUMANOS (PESSOAL EFETIVO)
+   ══════════════════════════════════════════════════════════ */
+function buildRecursosHumanos() {
+  if (!DATA || !DATA.pessoal_efetivo) return;
+  
+  const searchInput = document.getElementById('rh-search');
+  const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+  rhAllRows = DATA.pessoal_efetivo.slice();
+
+  let filtered = rhAllRows;
+  if (q) {
+    filtered = filtered.filter(function(r) {
+      return (r.nome && r.nome.toLowerCase().includes(q)) ||
+             (r.cartao_cidadao && r.cartao_cidadao.toLowerCase().includes(q)) ||
+             (r.telefone && r.telefone.includes(q));
+    });
+  }
+
+  filtered.sort(function(a, b) {
+    let cmp = 0;
+    if (a.nome > b.nome) cmp = 1;
+    else if (a.nome < b.nome) cmp = -1;
+    return rhSortAsc ? cmp : -cmp;
+  });
+
+  renderRhList(filtered);
+}
+
+function renderRhList(rows) {
+  const container = document.getElementById('rh-list-container');
+  if (!container) return;
+
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted)"><i class="fa-solid fa-users-slash" style="font-size:24px;margin-bottom:12px;display:block"></i> Nenhuma informação encontrada.</div>`;
+    return;
+  }
+
+  let html = '';
+  rows.forEach(function(r) {
+    const isExpanded = (rhExpandedRow === r.nome);
+    const badgeClass = r.data_termino_contrato ? 'badge badge-warning' : 'badge badge-success';
+    const badgeText = r.data_termino_contrato ? 'Contrato a Termo' : 'Ativo';
+    
+    html += `
+      <div class="worker-list-item" style="border-bottom: 1px solid var(--border); transition: background 0.2s">
+        <div class="worker-row-main" style="display:flex;align-items:center;padding:12px 16px;cursor:pointer" onclick="toggleRhDetails('${r.nome.replace(/'/g, "\\'")}')">
+          <div class="worker-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--bg-tertiary);color:var(--text-main);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;margin-right:12px">${initials(r.nome)}</div>
+          <div class="worker-row-info" style="flex:2">
+            <div class="worker-row-name" style="font-weight:600;color:var(--text-main);font-size:14px">${escapeHtml_(r.nome)}</div>
+            <div class="worker-row-funcao" style="font-size:12px;color:var(--text-dim);margin-top:2px">${escapeHtml_(r.nacionalidade || 'Não definida')} <span style="opacity:0.6;margin:0 4px">•</span> ${escapeHtml_(r.telefone || 'Sem contacto')}</div>
+          </div>
+          <div class="worker-row-stats" style="flex:1;text-align:right;margin-right:16px">
+             <span class="${badgeClass}" style="font-size:10px;padding:4px 8px;border-radius:4px">${badgeText}</span>
+          </div>
+          <div class="worker-row-chevron" style="color:var(--text-muted);font-size:12px;width:16px;text-align:center">
+            <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+          </div>
+        </div>
+    `;
+
+    if (isExpanded) {
+      html += buildRhDetailHTML(r);
+    }
+
+    html += `</div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function toggleRhDetails(nome) {
+  if (rhExpandedRow === nome) rhExpandedRow = null;
+  else rhExpandedRow = nome;
+  buildRecursosHumanos();
+}
+
+function buildRhDetailHTML(r) {
+  return `
+    <div class="worker-detail-panel" style="background:var(--bg-secondary);padding:16px;border-top:1px solid var(--border);animation: fadeIn 0.3s ease">
+      <div class="detail-panel-grid" style="display:grid;grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));gap:16px;">
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Data Nascimento</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.data_nascimento || '—')}</div>
+        </div>
+        <div class="detail-box" style="grid-column: span 2">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Morada</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main);white-space:normal">${escapeHtml_(r.morada || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Email</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.email || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Início Contrato</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.data_inicio_contrato || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Fim Contrato</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.data_termino_contrato || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Cartão Cidadão / BI</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.cartao_cidadao || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Passaporte / Visto</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.passaporte || '—')} ${r.visto ? ' / ' + escapeHtml_(r.visto) : ''}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Cartão Residencia</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.cartao_residencia || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Carta Condução / Nº</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.carta_conducao || '—')} ${r.numero_carta ? '(' + escapeHtml_(r.numero_carta) + ')' : ''}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Categorias Viatura</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.categorias_carta || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">CAM</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.cam || '—')}</div>
+        </div>
+        <div class="detail-box" style="grid-column: 1 / -1;">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Certificações</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main);white-space:normal">${escapeHtml_(r.certificacoes || '—')}</div>
+        </div>
+        <div class="detail-box" style="grid-column: 1 / -1;background:rgba(239,68,68,0.05);padding:8px;border-radius:6px;border-left:3px solid var(--warning)">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--warning);margin-bottom:4px;font-weight:600">Ocorrências</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main);white-space:normal">${escapeHtml_(r.ocorrencias || '—')}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ══════════════════════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════════════════════ */
+initTheme();
+initKeyboardNav();
+initResizeObservers();
+window.onload = loadData;
