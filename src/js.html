@@ -84,6 +84,12 @@ let feriasSortCol   = 'nome';
 let feriasSortAsc   = true;
 let feriasSelected  = null;
 
+/* ── RH GLOBALS ──────────────────────────────────────── */
+let rhAllRows = [];
+let rhExpandedRow = null;
+let rhSortCol = 'nome';
+let rhSortAsc = true;
+
 /* ── MAPA MENSAL GLOBALS ─────────────────────────────── */
 let mapaMensalMonth = '';
 let mapaMensalStatus = 'provisorio';
@@ -141,7 +147,8 @@ const sectionTitles = {
   assiduidade:  'Assiduidade',
   ferias:       'Férias',
   comparativa:  'Análise Comparativa',
-  contabilidade:'Contabilidade'
+  contabilidade:'Contabilidade',
+  rh:           'Recursos Humanos'
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -580,6 +587,7 @@ function buildAll() {
   buildComparativa();
   buildFerias();
   buildContabilidade();
+  buildRecursosHumanos();
 }
 
 function buildObrasSidebar() {
@@ -1602,7 +1610,7 @@ function buildOverview() {
   const pctMat  = g.custo_total > 0 ? (((g.custo_materiais || 0) / g.custo_total) * 100).toFixed(1) : '0';
 
   const cards = [
-    { icon: 'fa-coins',                theme: 'warning', label: 'Custo Total',       value: g.custo_total,            format: 'euro',    sub: g.obras_ativas + ' obras ativas' },
+    { icon: 'fa-coins',                theme: 'warning', label: 'Custo Total',       value: g.custo_total,            format: 'euro',    sub: g.obras_ativas + ' obras ativas', link: 'contabilidade' },
     { icon: 'fa-hammer',               theme: 'info',    label: 'Mão de Obra',       value: g.custo_mao_obra,         format: 'euro',    sub: pctMO + '% do custo total' },
     { icon: 'fa-car',                  theme: 'accent',  label: 'Deslocações',       value: g.custo_deslocacoes,      format: 'euro',    sub: pctDesl + '% do custo total', link: 'deslocacoes' },
     { icon: 'fa-boxes-stacked',        theme: 'info',    label: 'Materiais',         value: g.custo_materiais || 0,   format: 'euro',    sub: pctMat + '% do custo total' },
@@ -4846,8 +4854,8 @@ function buildContabilidade() {
     'SERVIÇO': 0,
     'ALUGUER': 0,
     'TRANSPORTE': 0,
-    'GASÓLEO/GASOLINA': 0,
-    'OUTROS': 0
+    'GASÓLEO': 0,
+    'GASOLINA': 0
   };
 
   const matFiltered = [];
@@ -4872,12 +4880,19 @@ function buildContabilidade() {
     
     // Determine category
     const idItem = String(m.id_item || '').toUpperCase();
-    if (idItem.startsWith('MAT-')) categories['MATERIAL'] += custo;
+    const desc = String(m.material || m.descricao || m.nome || '').toUpperCase();
+    
+    if (desc.includes('GASOLINA') || idItem.includes('GASOLINA')) {
+      categories['GASOLINA'] += custo;
+    }
+    else if (desc.includes('GASÓLEO') || desc.includes('GASOLEO') || idItem.includes('GASOLEO')) {
+      categories['GASÓLEO'] += custo;
+    }
+    else if (idItem.startsWith('MAT-')) categories['MATERIAL'] += custo;
     else if (idItem.startsWith('SER-')) categories['SERVIÇO'] += custo;
     else if (idItem.startsWith('ALQ-')) categories['ALUGUER'] += custo;
     else if (idItem.startsWith('TRN-') || idItem.startsWith('TRS-')) categories['TRANSPORTE'] += custo;
-    else if (idItem.startsWith('GAS-') || idItem.startsWith('COM-')) categories['GASÓLEO/GASOLINA'] += custo;
-    else categories['OUTROS'] += custo;
+    else categories['MATERIAL'] += custo; // fallback para material
   });
 
   const legacyMatFiltered = [];
@@ -4932,11 +4947,10 @@ function buildContabilidade() {
   legacyMatFiltered.forEach(m => ensureDate(m._normDate).mat += Number(m.custo) || 0);
 
   // Build Charts
-  renderContabilidadeCharts(categories, evoMap, totalMaoDeObra, totalDeslocacoes);
+  renderContabilidadeCharts(categories, totalMaoDeObra, totalDeslocacoes);
 }
 
-function renderContabilidadeCharts(catMap, evoMap, tMao, tDesl) {
-  // 1. Doughnut Chart (Categories)
+function renderContabilidadeCharts(catMap, tMao, tDesl) {
   const ctxCat = document.getElementById('contab-chart-categorias');
   if (!ctxCat) return;
 
@@ -4944,124 +4958,201 @@ function renderContabilidadeCharts(catMap, evoMap, tMao, tDesl) {
   if (oldCat) oldCat.destroy();
   if (contabChartCategorias) contabChartCategorias.destroy();
   
-  const pieLabels = ['Mão de Obra', 'Deslocações'];
-  const pieData = [tMao, tDesl];
-  const pieColors = ['#082f49', '#0284c7'];
-  
-  const matColors = {
-    'MATERIAL': '#f59e0b',
-    'SERVIÇO': '#10b981',
-    'ALUGUER': '#8b5cf6',
-    'TRANSPORTE': '#ec4899',
-    'GASÓLEO/GASOLINA': '#ef4444',
-    'OUTROS': '#9ca3af'
-  };
-
-  Object.keys(catMap).forEach(k => {
-    if (catMap[k] > 0) {
-      pieLabels.push(k);
-      pieData.push(catMap[k]);
-      pieColors.push(matColors[k] || '#9ca3af');
-    }
-  });
+  const labels = ['Mão de Obra', 'Deslocações', 'Materiais', 'Serviço', 'Aluguer', 'Transporte', 'Gasóleo', 'Gasolina'];
+  const d = [
+    tMao, 
+    tDesl, 
+    catMap['MATERIAL'] || 0,
+    catMap['SERVIÇO'] || 0,
+    catMap['ALUGUER'] || 0,
+    catMap['TRANSPORTE'] || 0,
+    catMap['GASÓLEO'] || 0,
+    catMap['GASOLINA'] || 0
+  ];
+  const bgColors = [
+    '#082f49', // mao de obra
+    '#0284c7', // deslocacoes
+    '#f59e0b', // materiais
+    '#10b981', // servico
+    '#8b5cf6', // aluguer
+    '#ec4899', // transporte
+    '#ef4444', // gasoleo
+    '#f43f5e'  // gasolina
+  ];
 
   const isDark = document.body.classList.contains('dark-theme');
   const textColor = isDark ? '#f1f5f9' : '#0f172a';
   const gridColor = isDark ? '#334155' : '#e2e8f0';
 
   contabChartCategorias = new Chart(ctxCat, {
-    type: 'doughnut',
+    type: 'bar',
     data: {
-      labels: pieLabels,
+      labels: labels,
       datasets: [{
-        data: pieData,
-        backgroundColor: pieColors,
-        borderWidth: isDark ? 2 : 1,
-        borderColor: isDark ? '#1e293b' : '#fff'
+        label: 'Custo (€)',
+        data: d,
+        backgroundColor: bgColors,
+        borderWidth: 0
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '65%',
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { color: textColor, font: { size: 11, family: 'Inter' } }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              const val = ctx.raw || 0;
-              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
-              const pct = total ? Math.round((val/total)*100) : 0;
-              return ' ' + fmt(val) + ' (' + pct + '%)';
-            }
-          }
-        }
-      }
-    }
-  });
-
-  // 2. Bar Chart (Evolution)
-  const ctxEvo = document.getElementById('contab-chart-evolucao');
-  if (!ctxEvo) return;
-  
-  const oldEvo = Chart.getChart('contab-chart-evolucao');
-  if (oldEvo) oldEvo.destroy();
-  if (contabChartEvolucao) contabChartEvolucao.destroy();
-
-  const sortedDates = Object.keys(evoMap).sort();
-  const evoLabels = sortedDates.map(d => {
-    const parts = d.split('-');
-    return parts.length === 3 ? parts[2]+'/'+parts[1] : d;
-  });
-  const dataMao = sortedDates.map(d => evoMap[d].mao);
-  const dataDesl = sortedDates.map(d => evoMap[d].desl);
-  const dataMat = sortedDates.map(d => evoMap[d].mat);
-
-  contabChartEvolucao = new Chart(ctxEvo, {
-    type: 'bar',
-    data: {
-      labels: evoLabels,
-      datasets: [
-        { label: 'Mão de Obra', data: dataMao, backgroundColor: '#082f49' },
-        { label: 'Deslocações', data: dataDesl, backgroundColor: '#0284c7' },
-        { label: 'Materiais / Serv.', data: dataMat, backgroundColor: '#f59e0b' }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
       scales: {
-        x: {
-          stacked: true,
-          ticks: { color: textColor, maxRotation: 45, minRotation: 45, font: { size: 10 } },
-          grid: { display: false }
-        },
-        y: {
-          stacked: true,
-          ticks: { color: textColor, font: { size: 10 }, callback: function(val) { return fmt(val); } },
-          grid: { color: gridColor, drawBorder: false }
-        }
+        x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: textColor, font: { size: 10 }, callback: function(val) { return fmt(val); } }, grid: { color: gridColor, drawBorder: false } }
       },
       plugins: {
-        legend: {
-          position: 'top',
-          labels: { color: textColor, font: { size: 11, family: 'Inter' } }
-        },
+        legend: { display: false },
         tooltip: {
-          mode: 'index',
           intersect: false,
           callbacks: {
-            label: function(ctx) {
-              return ' ' + ctx.dataset.label + ': ' + fmt(ctx.raw || 0);
-            }
+            label: function(ctx) { return ' ' + fmt(ctx.raw || 0); }
           }
         }
       }
     }
   });
+
+}
+
+/* ══════════════════════════════════════════════════════════
+   RECURSOS HUMANOS (PESSOAL EFETIVO)
+   ══════════════════════════════════════════════════════════ */
+function buildRecursosHumanos() {
+  if (!DATA || !DATA.pessoal_efetivo) return;
+  
+  const searchInput = document.getElementById('rh-search');
+  const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+  rhAllRows = DATA.pessoal_efetivo.slice();
+
+  let filtered = rhAllRows;
+  if (q) {
+    filtered = filtered.filter(function(r) {
+      return (r.nome && r.nome.toLowerCase().includes(q)) ||
+             (r.cartao_cidadao && r.cartao_cidadao.toLowerCase().includes(q)) ||
+             (r.telefone && r.telefone.includes(q));
+    });
+  }
+
+  filtered.sort(function(a, b) {
+    let cmp = 0;
+    if (a.nome > b.nome) cmp = 1;
+    else if (a.nome < b.nome) cmp = -1;
+    return rhSortAsc ? cmp : -cmp;
+  });
+
+  renderRhList(filtered);
+}
+
+function renderRhList(rows) {
+  const container = document.getElementById('rh-list-container');
+  if (!container) return;
+
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted)"><i class="fa-solid fa-users-slash" style="font-size:24px;margin-bottom:12px;display:block"></i> Nenhuma informação encontrada.</div>`;
+    return;
+  }
+
+  let html = '';
+  rows.forEach(function(r) {
+    const isExpanded = (rhExpandedRow === r.nome);
+    const badgeClass = r.data_termino_contrato ? 'badge badge-warning' : 'badge badge-success';
+    const badgeText = r.data_termino_contrato ? 'Contrato a Termo' : 'Ativo';
+    
+    html += `
+      <div class="worker-list-item" style="border-bottom: 1px solid var(--border); transition: background 0.2s">
+        <div class="worker-row-main" style="display:flex;align-items:center;padding:12px 16px;cursor:pointer" onclick="toggleRhDetails('${r.nome.replace(/'/g, "\\'")}')">
+          <div class="worker-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--bg-tertiary);color:var(--text-main);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;margin-right:12px">${initials(r.nome)}</div>
+          <div class="worker-row-info" style="flex:2">
+            <div class="worker-row-name" style="font-weight:600;color:var(--text-main);font-size:14px">${escapeHtml_(r.nome)}</div>
+            <div class="worker-row-funcao" style="font-size:12px;color:var(--text-dim);margin-top:2px">${escapeHtml_(r.nacionalidade || 'Não definida')} <span style="opacity:0.6;margin:0 4px">•</span> ${escapeHtml_(r.telefone || 'Sem contacto')}</div>
+          </div>
+          <div class="worker-row-stats" style="flex:1;text-align:right;margin-right:16px">
+             <span class="${badgeClass}" style="font-size:10px;padding:4px 8px;border-radius:4px">${badgeText}</span>
+          </div>
+          <div class="worker-row-chevron" style="color:var(--text-muted);font-size:12px;width:16px;text-align:center">
+            <i class="fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+          </div>
+        </div>
+    `;
+
+    if (isExpanded) {
+      html += buildRhDetailHTML(r);
+    }
+
+    html += `</div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function toggleRhDetails(nome) {
+  if (rhExpandedRow === nome) rhExpandedRow = null;
+  else rhExpandedRow = nome;
+  buildRecursosHumanos();
+}
+
+function buildRhDetailHTML(r) {
+  return `
+    <div class="worker-detail-panel" style="background:var(--bg-secondary);padding:16px;border-top:1px solid var(--border);animation: fadeIn 0.3s ease">
+      <div class="detail-panel-grid" style="display:grid;grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));gap:16px;">
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Data Nascimento</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.data_nascimento || '—')}</div>
+        </div>
+        <div class="detail-box" style="grid-column: span 2">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Morada</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main);white-space:normal">${escapeHtml_(r.morada || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Email</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.email || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Início Contrato</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.data_inicio_contrato || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Fim Contrato</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.data_termino_contrato || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Cartão Cidadão / BI</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.cartao_cidadao || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Passaporte / Visto</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.passaporte || '—')} ${r.visto ? ' / ' + escapeHtml_(r.visto) : ''}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Cartão Residencia</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.cartao_residencia || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Carta Condução / Nº</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.carta_conducao || '—')} ${r.numero_carta ? '(' + escapeHtml_(r.numero_carta) + ')' : ''}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Categorias Viatura</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.categorias_carta || '—')}</div>
+        </div>
+        <div class="detail-box">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">CAM</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main)">${escapeHtml_(r.cam || '—')}</div>
+        </div>
+        <div class="detail-box" style="grid-column: 1 / -1;">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Certificações</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main);white-space:normal">${escapeHtml_(r.certificacoes || '—')}</div>
+        </div>
+        <div class="detail-box" style="grid-column: 1 / -1;background:rgba(239,68,68,0.05);padding:8px;border-radius:6px;border-left:3px solid var(--warning)">
+          <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--warning);margin-bottom:4px;font-weight:600">Ocorrências</div>
+          <div class="detail-val" style="font-size:13px;color:var(--text-main);white-space:normal">${escapeHtml_(r.ocorrencias || '—')}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 /* ══════════════════════════════════════════════════════════

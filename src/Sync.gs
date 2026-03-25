@@ -10,6 +10,37 @@ var SYNC_RETRY_INTERVAL_MINUTES = 10;
 var SYNC_MAX_AUTO_RETRIES = 6;
 
 var SYNC_SHEET_CONFIG = {
+    "PESSOAL_EFETIVO": {
+        endpoint: "/api/sync/pessoal-efetivo",
+        headerRow: 1,
+        dedupeKey: function(item) {
+            return item.nome;
+        },
+        mapper: function(row) {
+            var nome = syncReadString_(row, ["Nome"]);
+            if (!nome) return null;
+            return {
+                nome: nome,
+                nacionalidade: syncReadString_(row, ["Nacionalidade"]) || null,
+                data_nascimento: syncFormatDate_(syncReadCell_(row, ["Data Nascimento"])) || null,
+                morada: syncReadString_(row, ["Morada"]) || null,
+                telefone: syncReadString_(row, ["Telefone"]) || null,
+                email: syncReadString_(row, ["email", "Email"]) || null,
+                data_inicio_contrato: syncFormatDate_(syncReadCell_(row, ["Dta Inicio Contrato", "Data Inicio Contrato"])) || null,
+                data_termino_contrato: syncFormatDate_(syncReadCell_(row, ["Data Termino Contrato"])) || null,
+                carta_conducao: syncReadString_(row, ["Carta Condução", "Carta Conducao"]) || null,
+                categorias_carta: syncReadString_(row, ["Categorias"]) || null,
+                cam: syncReadString_(row, ["CAM"]) || null,
+                numero_carta: syncReadString_(row, ["Nº Carta", "N Carta", "Numero Carta"]) || null,
+                cartao_cidadao: syncReadString_(row, ["Cartão de Cidadão", "Cartao de Cidadao"]) || null,
+                cartao_residencia: syncReadString_(row, ["Cartão Residencia", "Cartao Residencia"]) || null,
+                passaporte: syncReadString_(row, ["Passaporte"]) || null,
+                visto: syncReadString_(row, ["Visto"]) || null,
+                certificacoes: syncReadString_(row, ["Certificações", "Certificacoes"]) || null,
+                ocorrencias: syncReadString_(row, ["Ocorrências", "Ocorrencias"]) || null
+            };
+        }
+    },
     "COLABORADORES": {
         endpoint: "/api/sync/colaboradores",
         headerRow: 3,

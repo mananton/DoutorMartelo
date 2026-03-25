@@ -86,3 +86,8 @@ def sync_materiais_mov(payload: BulkRowsRequest, container: ServiceContainer = D
 @router.post("/sync/stock-atual", response_model=BulkSyncResponse)
 def sync_stock(payload: BulkRowsRequest, container: ServiceContainer = Depends(get_container)) -> BulkSyncResponse:
     return _ingest("stock_atual", payload, container)
+
+
+@router.post("/sync/pessoal-efetivo", response_model=BulkSyncResponse)
+def sync_pessoal_efetivo(payload: BulkRowsRequest, container: ServiceContainer = Depends(get_container)) -> BulkSyncResponse:
+    return _ingest("pessoal_efetivo", payload, container)

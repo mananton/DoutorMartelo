@@ -724,3 +724,63 @@ function readFerias_(sheet) {
 
   return out;
 }
+
+function readPessoalEfetivo_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  const colMap = getColMap_(sheet, 1);
+  const cNome = pickCol_(colMap, ["Nome"], -1);
+  const cNacionalidade = pickCol_(colMap, ["Nacionalidade"], -1);
+  const cDataNasc = pickCol_(colMap, ["Data Nascimento", "Data_Nascimento"], -1);
+  const cMorada = pickCol_(colMap, ["Morada"], -1);
+  const cTelefone = pickCol_(colMap, ["Telefone"], -1);
+  const cEmail = pickCol_(colMap, ["email", "Email"], -1);
+  const cInicioContrato = pickCol_(colMap, ["Dta Inicio Contrato", "Data Inicio Contrato"], -1);
+  const cTerminoContrato = pickCol_(colMap, ["Data Termino Contrato", "Dta Termino Contrato"], -1);
+  const cConducao = pickCol_(colMap, ["Carta Condução", "Carta Conducao"], -1);
+  const cCatCarta = pickCol_(colMap, ["Categorias", "Categorias Carta"], -1);
+  const cCam = pickCol_(colMap, ["CAM"], -1);
+  const cNumCarta = pickCol_(colMap, ["Nº Carta", "N Carta", "Numero Carta"], -1);
+  const cCC = pickCol_(colMap, ["Cartão de Cidadão", "Cartao de Cidadao"], -1);
+  const cResidencia = pickCol_(colMap, ["Cartão Residencia", "Cartao Residencia"], -1);
+  const cPassaporte = pickCol_(colMap, ["Passaporte"], -1);
+  const cVisto = pickCol_(colMap, ["Visto"], -1);
+  const cCertificacoes = pickCol_(colMap, ["Certificações", "Certificacoes"], -1);
+  const cOcorrencias = pickCol_(colMap, ["Ocorrências", "Ocorrencias"], -1);
+
+  if (cNome < 0) return [];
+  
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const out = [];
+  
+  rows.forEach(function(r) {
+    const nome = String(r[cNome] || "").trim();
+    if (!nome) return;
+    
+    out.push({
+      nome: nome,
+      nacionalidade: cNacionalidade >= 0 ? String(r[cNacionalidade] || "").trim() : "",
+      data_nascimento: formatDateValue_(cDataNasc >= 0 ? r[cDataNasc] : null, false),
+      morada: cMorada >= 0 ? String(r[cMorada] || "").trim() : "",
+      telefone: cTelefone >= 0 ? String(r[cTelefone] || "").trim() : "",
+      email: cEmail >= 0 ? String(r[cEmail] || "").trim() : "",
+      data_inicio_contrato: formatDateValue_(cInicioContrato >= 0 ? r[cInicioContrato] : null, false),
+      data_termino_contrato: formatDateValue_(cTerminoContrato >= 0 ? r[cTerminoContrato] : null, false),
+      carta_conducao: cConducao >= 0 ? String(r[cConducao] || "").trim() : "",
+      categorias_carta: cCatCarta >= 0 ? String(r[cCatCarta] || "").trim() : "",
+      cam: cCam >= 0 ? String(r[cCam] || "").trim() : "",
+      numero_carta: cNumCarta >= 0 ? String(r[cNumCarta] || "").trim() : "",
+      cartao_cidadao: cCC >= 0 ? String(r[cCC] || "").trim() : "",
+      cartao_residencia: cResidencia >= 0 ? String(r[cResidencia] || "").trim() : "",
+      passaporte: cPassaporte >= 0 ? String(r[cPassaporte] || "").trim() : "",
+      visto: cVisto >= 0 ? String(r[cVisto] || "").trim() : "",
+      certificacoes: cCertificacoes >= 0 ? String(r[cCertificacoes] || "").trim() : "",
+      ocorrencias: cOcorrencias >= 0 ? String(r[cOcorrencias] || "").trim() : ""
+    });
+  });
+  
+  return out;
+}

@@ -1766,8 +1766,8 @@ class MaterialsService:
     def _generate_catalog_id(self, natureza: str) -> str:
         prefix = {
             "MATERIAL": "MAT",
-            "GASOLEO": "MAT",
-            "GASOLINA": "MAT",
+            "GASOLEO": "GAS",
+            "GASOLINA": "GAS",
             "SERVICO": "SER",
             "ALUGUER": "ALQ",
             "TRANSPORTE": "TRN",

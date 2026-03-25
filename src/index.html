@@ -46,6 +46,9 @@
     <button class="nav-item" onclick="showSection('equipa')" data-section="equipa">
       <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
     </button>
+    <button class="nav-item" onclick="showSection('rh')" data-section="rh">
+      <i class="fa-solid fa-users-gear"></i><span>Recursos Humanos</span>
+    </button>
     <button class="nav-item" onclick="showSection('mapa-mensal')" data-section="mapa-mensal">
       <i class="fa-solid fa-file-invoice-dollar"></i><span>Mapa Mensal</span>
     </button>
@@ -136,11 +139,11 @@
 
     <!-- Charts -->
     <div class="comp-charts-row" style="margin-top:20px">
-      <!-- Custo por Categoria (Doughnut) -->
+      <!-- Custo por Categoria (Bar) -->
       <div class="comp-chart-card">
         <div class="chart-card-header obra-chart-header">
           <div class="obra-chart-title-wrap">
-            <span><i class="fa-solid fa-chart-pie"></i> Despesas por Categoria</span>
+            <span><i class="fa-solid fa-chart-column"></i> Despesas por Categoria</span>
             <small class="obra-chart-period" id="contab-cat-period-label"></small>
           </div>
         </div>
@@ -150,22 +153,7 @@
           </div>
         </div>
       </div>
-      <!-- Evolução no tempo (Stacked Bar) -->
-      <div class="comp-chart-card">
-        <div class="chart-card-header obra-chart-header">
-          <div class="obra-chart-title-wrap">
-            <span><i class="fa-solid fa-chart-column"></i> Evolução Diária / Mensal</span>
-            <small class="obra-chart-period" id="contab-evo-period-label"></small>
-          </div>
-        </div>
-        <div class="comp-chart-body tall">
-          <div class="comp-custos-canvas-wrap">
-            <canvas id="contab-chart-evolucao"></canvas>
-          </div>
-        </div>
-      </div>
     </div>
-  </div>
 
 
   <div class="section" id="section-dev">
@@ -365,6 +353,26 @@
     </div>
     <!-- Popup container -->
     <div id="equipa-popup-container"></div>
+  </div>
+
+  <!-- Recursos Humanos -->
+  <div class="section" id="section-rh">
+    <div class="card">
+      <div class="card-header workers-card-header">
+        <div class="workers-title-row">
+          <i class="fa-solid fa-users-gear"></i> Pessoal Efetivo
+        </div>
+        <div class="table-toolbar workers-toolbar-stack rh-toolbar-stack" id="rh-toolbar">
+          <input type="text" class="table-search" id="rh-search"
+                 placeholder="Pesquisar colaborador..." oninput="buildRecursosHumanos()">
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="rh-list" id="rh-list-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Mapa Mensal -->

@@ -17,6 +17,7 @@ CORE_SYNC_ENTITIES = [
     "materiais_referencias",
     "afetacoes_obra",
     "materiais_mov",
+    "pessoal_efetivo",
 ]
 
 

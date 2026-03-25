@@ -14,6 +14,7 @@ from backend.app.config import Settings
 
 TABLE_CONFIG: dict[str, dict[str, str]] = {
     "colaboradores": {"table": "colaboradores_sync", "conflict": "nome", "id_field": "nome"},
+    "pessoal_efetivo": {"table": "pessoal_efetivo", "conflict": "nome", "id_field": "nome"},
     "registos": {"table": "registos_sync", "conflict": "id_registo", "id_field": "id_registo"},
     "deslocacoes": {"table": "deslocacoes_sync", "conflict": "id_viagem", "id_field": "id_viagem"},
     "legacy_mao_obra": {"table": "legacy_mao_obra_sync", "conflict": "source_key", "id_field": "source_key"},
