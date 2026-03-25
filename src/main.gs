@@ -116,6 +116,26 @@ function findHeaderIndexByAliases_(headers, aliases) {
   return -1;
 }
 
+function findHeaderRowLocation_(sheet, searchAliases) {
+  if (!sheet || !searchAliases || searchAliases.length === 0) return 1;
+  const lastRow = Math.min(sheet.getLastRow(), 15);
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return 1;
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  for (let r = 0; r < data.length; r++) {
+    for (let c = 0; c < data[r].length; c++) {
+      const val = normalizeHeader_(String(data[r][c]));
+      for (let i = 0; i < searchAliases.length; i++) {
+        if (val === normalizeHeader_(searchAliases[i])) {
+          return r + 1;
+        }
+      }
+    }
+  }
+  return 1;
+}
+
 function rowHasSignalData_(row, indexes) {
   for (let i = 0; i < indexes.length; i++) {
     const idx = indexes[i];

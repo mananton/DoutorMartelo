@@ -12,7 +12,7 @@ var SYNC_MAX_AUTO_RETRIES = 6;
 var SYNC_SHEET_CONFIG = {
     "PESSOAL_EFETIVO": {
         endpoint: "/api/sync/pessoal-efetivo",
-        headerRow: 1,
+        headerRow: function(sheet) { return typeof findHeaderRowLocation_ !== 'undefined' ? findHeaderRowLocation_(sheet, ["Nome", "Nacionalidade"]) : 1; },
         dedupeKey: function(item) {
             return item.nome;
         },
@@ -700,13 +700,14 @@ function getSyncSpreadsheet_() {
     return SpreadsheetApp.openById(spreadsheetId);
 }
 
-function getSyncSheetRows_(sheet, headerRow) {
+function getSyncSheetRows_(sheet, configHeaderRow) {
+    var hRow = typeof configHeaderRow === "function" ? configHeaderRow(sheet) : (configHeaderRow || 1);
     var data = sheet.getDataRange().getValues();
-    if (data.length <= headerRow) return [];
+    if (data.length < hRow) return [];
 
-    var headers = data[headerRow - 1];
+    var headers = data[hRow - 1];
     var rows = [];
-    for (var i = headerRow; i < data.length; i++) {
+    for (var i = hRow; i < data.length; i++) {
         var row = data[i];
         var hasData = false;
         for (var j = 0; j < row.length; j++) {

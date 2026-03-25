@@ -731,7 +731,10 @@ function readPessoalEfetivo_(sheet) {
   const lastCol = sheet.getLastColumn();
   if (lastRow < 2) return [];
 
-  const colMap = getColMap_(sheet, 1);
+  const hRow = typeof findHeaderRowLocation_ !== 'undefined' ? findHeaderRowLocation_(sheet, ["Nome", "Nacionalidade"]) : 1;
+  if (lastRow <= hRow) return [];
+
+  const colMap = getColMap_(sheet, hRow);
   const cNome = pickCol_(colMap, ["Nome"], -1);
   const cNacionalidade = pickCol_(colMap, ["Nacionalidade"], -1);
   const cDataNasc = pickCol_(colMap, ["Data Nascimento", "Data_Nascimento"], -1);
@@ -753,7 +756,7 @@ function readPessoalEfetivo_(sheet) {
 
   if (cNome < 0) return [];
   
-  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const rows = sheet.getRange(hRow + 1, 1, lastRow - hRow, lastCol).getValues();
   const out = [];
   
   rows.forEach(function(r) {
