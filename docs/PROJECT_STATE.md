@@ -13,11 +13,11 @@ Last updated: 2026-03-23
 
 ## 2. Current Architecture
 - Backend split by responsibility:
-  - `src/main.gs`: web app entrypoints and orchestration (`include`, `doGet`, `getDashboardData`), triggers, operational helpers.
+  - `src/main.gs`: web app entrypoints and orchestration, triggers, operational helpers, dynamic table header extraction (`findHeaderRowLocation_`).
   - `src/Readers.gs`: sheet readers, header normalization, dynamic column mapping, legacy-safe parsing.
   - `src/Composer.gs`: raw payload assembly (`buildRawData_`).
   - `src/Aggregators.gs`: legacy server-side aggregation (`buildData_`).
-  - `src/Sync.gs`: Supabase sync boundary.
+  - `src/Sync.gs`: Supabase sync boundary with independent configurable sheet header mapping.
 - Frontend split by concern:
   - `src/index.html`: structure/markup.
   - `src/css.html`: styles.

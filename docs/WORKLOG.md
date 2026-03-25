@@ -421,6 +421,14 @@ Purpose: chronological, commit-based project history for fast handoff.
     - removed the temporary manual `Processar` checkbox/button from the UI
     - process stock outputs on `Guardar`
   - Added `backend/sql/002_align_materials_backoffice_schema.sql` to align Supabase with the backend payload shape.
+### 2026-03-24 / 2026-03-25: Dashboard Enhancements & HR Module
+- **Contabilidade Section**: Unified costs onto a new high-contrast Bar Chart.
+- **Bug Fix**: Fixed MAT vs GAS prefix mapping for materials both on the frontend payload check and on `backend/app/services/materials.py`.
+- **Recursos Humanos Module**: Added full integration of the `PESSOAL_EFETIVO` sheet, complete with a Supabase SQL migration, a new python sync endpoint, `Sync.gs` support, and a dedicated expandable data list view (`#section-rh`) on the Dashboard.
+- **Hotfixes**:
+  - Restored missing `</div>` tag that broke Contabilidade's DOM hierarchy.
+  - Implemented dynamic table header detection `findHeaderRowLocation_` in Apps Script to safely parse heavily-formatted Google Sheets inset tables instead of blindly relying on row 1.
+  - Added HR shortcut to Android/iOS Navigation Navbar.
   - Stabilized Supabase mirror behavior so Google Sheets writes remain primary and retry-safe when the mirror fails.
 - **Impact**:
   - The materials backoffice MVP can now operate against the live Google Sheet + Supabase environment.
