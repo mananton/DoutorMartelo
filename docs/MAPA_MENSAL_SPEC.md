@@ -86,8 +86,10 @@ Se existir Dps e nao houver horas:
 - a celula diaria mostra Dps
 
 ### 5. Atrasos
-- os atrasos nao alteram o calculo de Dias/Horas
-- os atrasos aparecem apenas como informacao visual/resumo
+- os atrasos reduzem as horas liquidas usadas no calculo de Total Horas e Dias
+- para um dia com horas e sem ausencia bloqueante, aplicar `max(0, horas_do_dia - atraso)`
+- a celula diaria continua a mostrar as horas registadas do dia
+- os atrasos continuam a aparecer em coluna propria para conferencia
 
 ## Regras de apuramento mensal
 ### Base de calculo
@@ -95,21 +97,25 @@ Se existir Dps e nao houver horas:
 - o calculo deve ser feito em minutos para evitar erros de arredondamento
 
 ### Formula recomendada
-- minutos totais = soma das horas validas do mes x 60
+- minutos totais = soma dos minutos validos liquidos do mes
 - dias = parte inteira de minutos totais / 480
 - resto = minutos totais % 480
 - horas = parte inteira de resto / 60
 - minutos = resto % 60
 
 ### Display recomendado
-- 17 d
-- 17 d + 4 h
-- 17 d + 4 h 30 m
+- `Total Horas`:
+  - `140`
+  - `140:30`
+- `Dias` em formato compacto:
+  - `17`
+  - `17+4`
+  - `17+4:30`
 
 Exemplos:
-- 20h = 2 d + 4 h
-- 20h30 = 2 d + 4 h 30 m
-- 7h30 = 0 d + 7 h 30 m
+- `140h` = `17+4`
+- `140h30` = `17+4:30`
+- `7h30` = `0+7:30`
 
 ## Vista 1 - Tabela-resumo no dashboard
 Esta vista nao deve copiar a folha antiga. Deve ser simples, compacta e orientada a conferencia.
@@ -117,19 +123,18 @@ Esta vista nao deve copiar a folha antiga. Deve ser simples, compacta e orientad
 ### Colunas
 1. Trabalhador
 2. Dias
-3. Horas
+3. Total Horas
 4. F
 5. FJ
 6. Bxa
 7. Fer
-8. Dps
-9. Atrasos
+8. Atrasos
 
 ### Regras visuais
 - ordenar por defeito por nome do trabalhador, A-Z
-- mostrar primeiro trabalhadores com horas validas
+- mostrar primeiro trabalhadores com horas liquidas
 - dentro desse grupo, trabalhadores com Dsp ficam depois dos restantes, mantendo ordem alfabetica em ambos os subgrupos
-- no fim, mostrar trabalhadores sem horas validas mas com F/FJ/Bxa/Fer, tambem por ordem alfabetica
+- no fim, mostrar trabalhadores sem horas liquidas mas com F/FJ/Bxa/Fer, tambem por ordem alfabetica
 - coluna Trabalhador fixa a esquerda quando possivel
 - colunas numericas centradas
 - cabecalho compacto
@@ -162,7 +167,6 @@ Esta vista deve aproximar-se bastante da folha usada hoje, mas com maior consist
   - FJ
   - Bxa
   - Fer
-  - Dps
   - Atrasos
 
 #### Linha 2
@@ -207,11 +211,10 @@ Esta vista deve aproximar-se bastante da folha usada hoje, mas com maior consist
 4. FJ
 5. Bxa
 6. Fer
-7. Dps
-8. Atrasos
+7. Atrasos
 
 ## Exemplo simplificado de uma linha no PDF
-Joao Silva | 8 |  | 8 | F | 8 | 7:30 | Dps/8 |  | ... | 154:30 | 19 | 1 | 0 | 0 | 2 | 1 | 45m
+Joao Silva | 8 |  | 8 | F | 8 | 7:30 | Dps/8 |  | ... | 154:30 | 19 | 1 | 0 | 0 | 2 | 45m
 
 ## Decisao de produto
 A implementacao deve seguir um modelo hibrido:

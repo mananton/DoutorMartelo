@@ -132,7 +132,7 @@ O builder do mapa mensal deve devolver um objeto unico por mes.
       total_minutes_valid: 9270,
       total_horas_label: '154:30',
       dias_equiv_int: 19,
-      horas_remanescentes_label: '2 h 30 m',
+      dias_compact_label: '19+2:30',
       atrasos_min: 45,
       atrasos_label: '45 m',
       counts: {
@@ -145,7 +145,8 @@ O builder do mapa mensal deve devolver um objeto unico por mes.
       cells: {
         '2026-02-01': {
           raw_minutes: 480,
-          valid_minutes: 480,
+          valid_minutes: 450,
+          atraso_min: 30,
           code: '',
           display: '8',
           suppress_hours: false,
@@ -161,11 +162,11 @@ O builder do mapa mensal deve devolver um objeto unico por mes.
         },
         '2026-02-07': {
           raw_minutes: 480,
-          valid_minutes: 480,
+          valid_minutes: 0,
           code: 'Dps',
-          display: 'Dps/8',
-          suppress_hours: false,
-          is_dps_with_hours: true
+          display: 'Dsp',
+          suppress_hours: true,
+          is_dps_with_hours: false
         }
       }
     }
@@ -207,12 +208,15 @@ Observacao:
 ### Passo 3 - Determinar minutos validos
 - se existir `F`, `FJ`, `Bxa` ou `Fer`: `valid_minutes = 0`
 - se existir `Dps`: `valid_minutes = 0`
-- se nao existir ausencia: `valid_minutes = raw_minutes`
+- se nao existir ausencia: `valid_minutes = max(0, raw_minutes - atraso_min)`
 
 ### Passo 4 - Determinar display da celula
 - `F`, `FJ`, `Bxa`, `Fer` -> mostrar so o codigo
 - `Dsp` -> mostrar `Dsp`
 - horas sem ausencia -> `8`, `7:30`, etc.
+
+Nota:
+- o atraso continua visivel como indicador/coluna propria, mas nao altera o texto mostrado na celula diaria
 
 ## Parsing tecnico das ausencias
 O campo `motivo` deve ser traduzido para o codigo do mapa por funcao dedicada.
@@ -250,17 +254,16 @@ Depois da consolidacao do mes:
 ### Colunas
 - Trabalhador
 - Dias
-- Horas
+- Total Horas
 - F
 - FJ
 - Bxa
 - Fer
-- Dps
 - Atrasos
 
 ### Dados por coluna
-- `Dias` = parte inteira de `total_minutes_valid / 480`
-- `Horas` = resto convertido em `h` e `m`
+- `Total Horas` = `formatMapaTotalHoursLabel_(total_minutes_valid)`
+- `Dias` = `formatMapaCompactDaysLabel_(total_minutes_valid)` com formato compacto, por exemplo `17+4` ou `17+4:30`
 - `Atrasos` = total mensal informativo
 
 ## Print/PDF view
@@ -343,7 +346,7 @@ Estado atual:
 - variacoes reais do campo `motivo` para mapear F/FJ/Bxa/Fer
 - multiplas linhas no mesmo dia para o mesmo trabalhador
 - meses com muitos trabalhadores podem gerar PDF largo e pesado
-- diferencas entre `horas` registadas e `custo` liquido nao devem contaminar o mapa, porque o mapa usa horas validas e atrasos separados
+- o mapa tem de alinhar com o custo liquido sem perder o atraso como dado auditavel separado
 
 ## Validacao recomendada
 Antes de considerar a funcionalidade correta, validar pelo menos:

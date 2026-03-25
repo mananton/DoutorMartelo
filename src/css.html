@@ -2063,6 +2063,15 @@ body.has-subbar .section { animation-delay: 0s; }
 .mapa-mensal-table td {
   white-space: nowrap;
 }
+.mapa-mensal-table tbody td {
+  border-bottom: 2px solid rgba(255,255,255,.48);
+}
+.mapa-mensal-table thead th {
+  border-bottom: 2px solid rgba(255,255,255,.6);
+}
+.mapa-mensal-table tfoot td {
+  border-top: 2px solid rgba(255,255,255,.6);
+}
 .mapa-mensal-table td:first-child,
 .mapa-mensal-table th:first-child {
   position: sticky;
@@ -2274,10 +2283,26 @@ body.has-subbar .section { animation-delay: 0s; }
   .chart-card, .desl-chart-card, .equipa-chart-card,
   .comp-chart-card { border-color: #ddd !important; box-shadow: none !important; }
   .kpi-card::before { background: #999 !important; }
-  .mapa-print-table-wrap { overflow: visible !important; border: none !important; }
-  .mapa-print-table { min-width: 0 !important; font-size: 9px !important; }
+  .mapa-print-table-wrap {
+    overflow: visible !important;
+    border: none !important;
+  }
+  .mapa-print-table {
+    min-width: 0 !important;
+    font-size: 9px !important;
+    border: 1px solid #b7bcc4 !important;
+  }
   .mapa-print-table th,
-  .mapa-print-table td { padding: 4px 2px !important; }
+  .mapa-print-table td {
+    padding: 4px 2px !important;
+    border: 1px solid #b7bcc4 !important;
+  }
+  .mapa-print-table thead th,
+  .mapa-print-total-row td,
+  .mapa-print-name-col,
+  .mapa-print-table thead .mapa-print-name-col {
+    border-color: #b7bcc4 !important;
+  }
   .mapa-print-name-col { min-width: 120px !important; }
   .mapa-print-day-col { min-width: 24px !important; }
   .mapa-print-summary-col { min-width: 45px !important; }
