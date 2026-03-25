@@ -505,6 +505,7 @@ function buildDashboardFromRaw_(raw) {
     viagens: viagens,
     deslocacoes: deslocacoes,
     ferias: raw.ferias || [],
+    pessoal_efetivo: raw.pessoal_efetivo || [],
     materiais_mov: materiaisMov,
     generated_at: raw.generated_at || ''
   };
@@ -544,6 +545,12 @@ function showSection(id) {
   // Update breadcrumb + mobile nav
   updateBreadcrumb();
   updateMobileNav();
+
+  // Hide the global date filter if we are in RH
+  const subbar = document.getElementById('topbar-subbar');
+  if (subbar) {
+    subbar.style.display = (id === 'rh') ? 'none' : '';
+  }
 
   // Auto-sync assiduidade with current obra — disabled (heatmap removed)
   // if (id === 'assiduidade' && currentObraName && DATA && DATA.obras[currentObraName]) {
