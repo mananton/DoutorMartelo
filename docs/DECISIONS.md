@@ -621,3 +621,23 @@ Format: short ADR-style records with rationale and impact.
   - `FATURAS` remains the single document queue for purchases and credits.
   - `NOTAS_CREDITO_ITENS` becomes the controlled source for credit-line behavior.
   - Stock and obra-cost reductions are explicit, generated, and auditable without changing the Sheets-first operating model.
+
+## D-034: Operational housekeeping must stay separate from legacy materials automation
+- **Status**: accepted
+- **Date**: 2026-03-25
+- **Commit**: `pending`
+- **Decision**:
+  - Reintroduce labour-sheet housekeeping through a dedicated installable change trigger: `onOperationalSheetChange`.
+  - Limit that trigger to `INSERT_ROW` / `REMOVE_ROW` events.
+  - Limit its scope to operational housekeeping only:
+    - empty-row cleanup in `REGISTOS_POR_DIA`
+    - labour cost recalculation
+    - `dispensado` processing against `COLABORADORES`
+  - Do not use that trigger to reactivate legacy materials automation.
+  - Keep ID generation behavior unchanged for now; `onEdit` remains the current lightweight/manual path.
+- **Rationale**:
+  - Disabling the legacy materials trigger also disabled unrelated housekeeping that the labour/AppSheet flow still depends on.
+  - The business wants those operational safeguards back without risking hidden rewrites in materials sheets now owned by the backoffice.
+- **Impact**:
+  - Empty AppSheet tombstone rows and unprocessed `dispensado` records can be handled again through event-driven GAS automation.
+  - The materials backoffice remains the sole owner of the legacy materials flow.

@@ -530,9 +530,42 @@
           <div class="obra-fase-filter-wrap comp-custos-filter-wrap" id="comp-custos-filter-wrap">
             <div class="obra-fase-filter-head">
               <span class="obra-fase-filter-title" id="comp-custos-obras-label">Obras visiveis</span>
-              <button type="button" class="obra-fase-reset-btn" onclick="resetCompCustosObrasVisibility()">Mostrar todas</button>
+              <div class="obra-fase-filter-actions">
+                <button type="button" class="obra-fase-reset-btn" onclick="clearCompCustosObrasVisibility()">Limpar</button>
+                <button type="button" class="obra-fase-reset-btn" onclick="resetCompCustosObrasVisibility()">Mostrar todas</button>
+              </div>
             </div>
             <div class="obra-fase-chip-row comp-custos-chip-row" id="comp-custos-obras-row"></div>
+          </div>
+        </div>
+      </div>
+      <div class="comp-chart-card">
+        <div class="chart-card-header obra-chart-header comp-custos-header">
+          <div class="obra-chart-title-wrap">
+            <span><i class="fa-solid fa-sitemap"></i> Custo por Fase: Mão de Obra vs Materiais/Servicos</span>
+            <small class="obra-chart-period" id="comp-fases-total-period-label"></small>
+          </div>
+          <div class="obra-chart-controls comp-custos-top-controls">
+            <div class="obra-chart-group" id="comp-fases-total-metric-btns">
+              <button type="button" class="period-btn active" id="comp-fases-total-metric-mao_obra" onclick="setCompFasesTotalMetric('mao_obra')" aria-label="Mostrar custo de mao de obra por fase">Mao de Obra</button>
+              <button type="button" class="period-btn" id="comp-fases-total-metric-materiais" onclick="setCompFasesTotalMetric('materiais')" aria-label="Mostrar custo de materiais e servicos por fase">Materiais/Servicos</button>
+              <button type="button" class="period-btn" id="comp-fases-total-metric-total" onclick="setCompFasesTotalMetric('total')" aria-label="Mostrar custo total por fase">Total</button>
+            </div>
+          </div>
+        </div>
+        <div class="comp-chart-body tall comp-custos-body" id="comp-chart-fases-total-wrap">
+          <div class="comp-custos-canvas-wrap" id="comp-fases-total-canvas-wrap">
+            <canvas id="comp-chart-fases-total"></canvas>
+          </div>
+          <div class="obra-fase-filter-wrap comp-custos-filter-wrap" id="comp-fases-total-filter-wrap">
+            <div class="obra-fase-filter-head">
+              <span class="obra-fase-filter-title" id="comp-fases-total-label">Fases visiveis</span>
+              <div class="obra-fase-filter-actions">
+                <button type="button" class="obra-fase-reset-btn" onclick="clearCompFasesTotalVisibility()">Limpar</button>
+                <button type="button" class="obra-fase-reset-btn" onclick="resetCompFasesTotalVisibility()">Mostrar todas</button>
+              </div>
+            </div>
+            <div class="obra-fase-chip-row comp-custos-chip-row" id="comp-fases-total-row"></div>
           </div>
         </div>
       </div>

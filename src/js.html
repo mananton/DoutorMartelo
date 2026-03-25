@@ -68,10 +68,12 @@ let compCharts = {};
 let compCurrentTab = 'obras';
 let compEvoMetric = 'custo';
 let compEvoHidden = {};
-let compCustosMetric = 'mao_obra';
+let compCustosMetricState = { mao_obra: true, materiais: false, deslocacoes: false, total: false };
 let compCustosChartType = 'bar';
 let compCustosDoughnutEnabled = true;
 let compCustosHiddenObras = {};
+let compFasesTotalMetricState = { mao_obra: true, materiais: false, total: false };
+let compFasesTotalHiddenKeys = {};
 let compFasesMetric = 'mao_obra';
 let compFasesSelectedObras = {};
 let compFasesSelectedKeys = {};
@@ -2912,6 +2914,10 @@ function destroyCompCharts() {
   if (custosCanvasWrap && !document.getElementById('comp-chart-custos')) {
     custosCanvasWrap.innerHTML = '<canvas id="comp-chart-custos"></canvas>';
   }
+  const fasesTotalCanvasWrap = document.getElementById('comp-fases-total-canvas-wrap');
+  if (fasesTotalCanvasWrap && !document.getElementById('comp-chart-fases-total')) {
+    fasesTotalCanvasWrap.innerHTML = '<canvas id="comp-chart-fases-total"></canvas>';
+  }
   const fasesCanvasWrap = document.getElementById('comp-fases-canvas-wrap');
   if (fasesCanvasWrap && !document.getElementById('comp-chart-fasesobra')) {
     fasesCanvasWrap.innerHTML = '<canvas id="comp-chart-fasesobra"></canvas>';
@@ -2929,6 +2935,7 @@ function buildCompObras() {
   const obraNames = Object.keys(DATA.obras).sort();
   if (!obraNames.length) return;
   buildCompCustosChart(obraNames);
+  buildCompFasesTotalChart(obraNames);
   buildCompFasesObraChart(obraNames);
   buildCompDiasFaseChart(obraNames);
 }
@@ -2944,29 +2951,52 @@ function updateCompCustosPeriodLabel_() {
   el.textContent = getObraFasePeriodLabel_();
 }
 
-function compactCompCustosObrasForMobile_(items) {
+function compactCompCustosObrasForMobile_(items, selectedMetrics) {
   const list = Array.isArray(items) ? items.slice() : [];
   if (!isMobile() || list.length <= MOBILE_COMP_CUSTOS_TOP_OBRAS) return list;
 
-  const sorted = list.sort((a, b) => (b.value || 0) - (a.value || 0));
+  const metrics = Array.isArray(selectedMetrics) ? selectedMetrics.slice() : [];
+  const sorted = list.sort((a, b) => (b.sortValue || 0) - (a.sortValue || 0));
   const top = sorted.slice(0, MOBILE_COMP_CUSTOS_TOP_OBRAS);
   const rest = sorted.slice(MOBILE_COMP_CUSTOS_TOP_OBRAS);
-  const restValue = rest.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-  if (restValue > 0) top.push({ name: 'Outras Obras', value: restValue, _isGroupedOther: true });
+  const restValue = rest.reduce((sum, item) => sum + (Number(item.sortValue) || 0), 0);
+  if (restValue > 0) {
+    const grouped = { name: 'Outras Obras', sortValue: restValue, values: {}, _isGroupedOther: true };
+    metrics.forEach(metric => {
+      grouped.values[metric] = rest.reduce((sum, item) => sum + (Number(item.values && item.values[metric]) || 0), 0);
+    });
+    top.push(grouped);
+  }
   return top;
 }
 
-function setCompCustosTypeAvailability_(items) {
+function getCompCustosSelectedMetrics_() {
+  const selected = ['mao_obra', 'materiais', 'deslocacoes', 'total'].filter(metric => !!compCustosMetricState[metric]);
+  if (!selected.length) {
+    compCustosMetricState.mao_obra = true;
+    return ['mao_obra'];
+  }
+  if (selected.includes('total') && selected.length > 1) {
+    Object.keys(compCustosMetricState).forEach(metric => {
+      compCustosMetricState[metric] = metric === 'total';
+    });
+    return ['total'];
+  }
+  return selected;
+}
+
+function setCompCustosTypeAvailability_(items, selectedMetrics) {
   const doughnutBtn = document.getElementById('comp-custos-type-doughnut');
   const count = Array.isArray(items) ? items.length : 0;
-  compCustosDoughnutEnabled = !isMobile() || count <= MOBILE_COMP_CUSTOS_MAX_DOUGHNUT;
+  const metricCount = Array.isArray(selectedMetrics) ? selectedMetrics.length : 0;
+  compCustosDoughnutEnabled = metricCount === 1 && (!isMobile() || count <= MOBILE_COMP_CUSTOS_MAX_DOUGHNUT);
 
   if (doughnutBtn) {
     doughnutBtn.disabled = !compCustosDoughnutEnabled;
     doughnutBtn.setAttribute('aria-disabled', compCustosDoughnutEnabled ? 'false' : 'true');
     doughnutBtn.title = compCustosDoughnutEnabled
       ? 'Mostrar grafico circular'
-      : 'No mobile, o circular so e ativado com ate ' + MOBILE_COMP_CUSTOS_MAX_DOUGHNUT + ' obras';
+      : 'O circular so fica disponivel com uma unica metrica ativa' + (isMobile() ? ' e ate ' + MOBILE_COMP_CUSTOS_MAX_DOUGHNUT + ' obras no mobile' : '');
   }
 
   if (!compCustosDoughnutEnabled && compCustosChartType === 'doughnut') {
@@ -2981,24 +3011,28 @@ function pruneCompCustosObraState_(obraNames) {
   });
 }
 
+function ensureCompCustosCanvas_() {
+  const wrap = document.getElementById('comp-custos-canvas-wrap');
+  if (!wrap) return null;
+  if (!document.getElementById('comp-chart-custos')) {
+    wrap.innerHTML = '<canvas id="comp-chart-custos"></canvas>';
+  }
+  return document.getElementById('comp-chart-custos');
+}
+
 function getVisibleCompObraNames_(obraNames) {
   const list = Array.isArray(obraNames) ? obraNames : [];
-  const visible = list.filter(name => !compCustosHiddenObras[name]);
-  if (visible.length) return visible;
-  if (list.length) {
-    compCustosHiddenObras[list[0]] = false;
-    return [list[0]];
-  }
-  return [];
+  return list.filter(name => !compCustosHiddenObras[name]);
 }
 
 function syncCompCustosControls_(obraNames) {
   pruneCompCustosObraState_(obraNames);
+  const selectedMetrics = getCompCustosSelectedMetrics_();
 
   ['mao_obra', 'materiais', 'deslocacoes', 'total'].forEach(metric => {
     const btn = document.getElementById('comp-custos-metric-' + metric);
     if (!btn) return;
-    btn.classList.toggle('active', compCustosMetric === metric);
+    btn.classList.toggle('active', selectedMetrics.includes(metric));
   });
 
   [['bar', 'comp-custos-type-bar'], ['doughnut', 'comp-custos-type-doughnut']].forEach(([type, id]) => {
@@ -3035,7 +3069,20 @@ function syncCompCustosControls_(obraNames) {
 function setCompCustosMetric(metric) {
   const allowed = { mao_obra: true, materiais: true, deslocacoes: true, total: true };
   if (!allowed[metric]) return;
-  compCustosMetric = metric;
+  const baseMetrics = ['mao_obra', 'materiais', 'deslocacoes'];
+  if (metric === 'total') {
+    if (compCustosMetricState.total) return;
+    Object.keys(compCustosMetricState).forEach(key => { compCustosMetricState[key] = false; });
+    compCustosMetricState.total = true;
+  } else if (compCustosMetricState.total) {
+    Object.keys(compCustosMetricState).forEach(key => { compCustosMetricState[key] = false; });
+    compCustosMetricState[metric] = true;
+  } else {
+    const activeBaseCount = baseMetrics.reduce((acc, key) => acc + (compCustosMetricState[key] ? 1 : 0), 0);
+    if (compCustosMetricState[metric] && activeBaseCount <= 1) return;
+    compCustosMetricState[metric] = !compCustosMetricState[metric];
+    compCustosMetricState.total = false;
+  }
   buildCompCustosChart(getCompObraNames_());
 }
 
@@ -3069,9 +3116,17 @@ function resetCompCustosObrasVisibility() {
   buildCompCustosChart(getCompObraNames_());
 }
 
+function clearCompCustosObrasVisibility() {
+  getCompObraNames_().forEach(name => {
+    compCustosHiddenObras[name] = true;
+  });
+  buildCompCustosChart(getCompObraNames_());
+}
+
 function buildCompCustosChart(obraNames) {
   if (compCharts.custos) compCharts.custos.destroy();
   const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+  const selectedMetrics = getCompCustosSelectedMetrics_();
 
   pruneCompCustosObraState_(allObraNames);
   const visibleObraNames = getVisibleCompObraNames_(allObraNames);
@@ -3113,14 +3168,20 @@ function buildCompCustosChart(obraNames) {
     const materiais = sumMateriaisByObra(name) || 0;
     const deslocacoes = deslPerObra[name] || 0;
     const total = maoObra + materiais + deslocacoes;
+    const values = { mao_obra: maoObra, materiais, deslocacoes, total };
+    const sortValue = selectedMetrics.includes('total')
+      ? total
+      : selectedMetrics.reduce((sum, metric) => sum + (Number(values[metric]) || 0), 0);
     return {
       name,
-      value: Number(({ mao_obra: maoObra, materiais, deslocacoes, total })[compCustosMetric]) || 0
+      values,
+      sortValue
     };
-  }).filter(item => item.value > 0);
+  }).filter(item => selectedMetrics.some(metric => (Number(item.values[metric]) || 0) > 0));
 
-  const chartItems = compactCompCustosObrasForMobile_(chartBaseItems).sort((a, b) => (b.value || 0) - (a.value || 0));
-  setCompCustosTypeAvailability_(chartItems);
+  const chartItems = compactCompCustosObrasForMobile_(chartBaseItems, selectedMetrics)
+    .sort((a, b) => (b.sortValue || 0) - (a.sortValue || 0));
+  setCompCustosTypeAvailability_(chartItems, selectedMetrics);
   syncCompCustosControls_(allObraNames);
 
   if (isMobile() && compCustosChartType === 'doughnut' && !compCustosDoughnutEnabled) {
@@ -3128,29 +3189,42 @@ function buildCompCustosChart(obraNames) {
     syncCompCustosControls_(allObraNames);
   }
 
-  const ctx = document.getElementById('comp-chart-custos');
+  const ctx = ensureCompCustosCanvas_();
   if (!ctx) return;
+  if (!visibleObraNames.length) {
+    const wrap = document.getElementById('comp-custos-canvas-wrap');
+    if (wrap) wrap.innerHTML = '<div class="no-chart-data">Selecione obras para visualizar</div>';
+    return;
+  }
   if (!chartItems.length) {
     const wrap = document.getElementById('comp-custos-canvas-wrap');
     if (wrap) wrap.innerHTML = '<div class="no-chart-data">Sem obras no periodo</div>';
     return;
   }
 
-  const datasetLabel = metricLabelMap[compCustosMetric] || 'Custo';
   const chartType = compCustosChartType === 'doughnut' ? 'doughnut' : 'bar';
+  const datasets = chartType === 'doughnut'
+    ? [{
+        label: metricLabelMap[selectedMetrics[0]] || 'Custo',
+        data: chartItems.map(item => Number(item.values[selectedMetrics[0]]) || 0),
+        backgroundColor: chartItems.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+        borderRadius: 0,
+        borderWidth: 1
+      }]
+    : selectedMetrics.map(metric => ({
+        label: metricLabelMap[metric] || 'Custo',
+        data: chartItems.map(item => Number(item.values[metric]) || 0),
+        backgroundColor: metricColorMap[metric] || 'rgba(99,179,237,.78)',
+        borderRadius: 4,
+        borderWidth: 0,
+        categoryPercentage: 0.86,
+        barPercentage: 1
+      }));
   compCharts.custos = new Chart(ctx, {
     type: chartType,
     data: {
       labels: chartItems.map(item => item.name),
-      datasets: [{
-        label: datasetLabel,
-        data: chartItems.map(item => item.value),
-        backgroundColor: chartType === 'doughnut'
-          ? chartItems.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length])
-          : metricColorMap[compCustosMetric] || 'rgba(99,179,237,.78)',
-        borderRadius: chartType === 'bar' ? 4 : 0,
-        borderWidth: chartType === 'doughnut' ? 1 : 0
-      }]
+      datasets: datasets
     },
     options: {
       responsive: true,
@@ -3175,14 +3249,14 @@ function buildCompCustosChart(obraNames) {
                 }
               }
             }
-          : { display: false },
+          : (selectedMetrics.length > 1 ? mLegend({ position: isMobile() ? 'bottom' : 'top' }) : { display: false }),
         tooltip: {
           callbacks: {
             title: items => {
               if (!items || !items.length) return '';
               return String(items[0].label || '');
             },
-            label: tipCtx => datasetLabel + ': ' + fmt(tipCtx.raw)
+            label: tipCtx => tipCtx.dataset.label + ': ' + fmt(tipCtx.raw)
           }
         }
       },
@@ -3213,6 +3287,296 @@ function buildCompCustosChart(obraNames) {
 }
 
 /* ── Radar chart — disabled (card removed) ────────────── */
+function updateCompFasesTotalPeriodLabel_() {
+  const el = document.getElementById('comp-fases-total-period-label');
+  if (!el) return;
+  el.textContent = getObraFasePeriodLabel_();
+}
+
+function ensureCompFasesTotalCanvas_() {
+  const wrap = document.getElementById('comp-fases-total-canvas-wrap');
+  if (!wrap) return null;
+  if (!document.getElementById('comp-chart-fases-total')) {
+    wrap.innerHTML = '<canvas id="comp-chart-fases-total"></canvas>';
+  }
+  return document.getElementById('comp-chart-fases-total');
+}
+
+function renderCompFasesTotalPlaceholder_(message) {
+  const wrap = document.getElementById('comp-fases-total-canvas-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="no-chart-data">' + escapeHtml_(message || 'Sem dados para mostrar') + '</div>';
+}
+
+function getCompFasesTotalMetricLabel_(metric) {
+  const metricLabelMap = {
+    mao_obra: 'Mao de Obra',
+    materiais: 'Materiais/Servicos',
+    total: 'Total'
+  };
+  return metricLabelMap[metric] || 'Custo';
+}
+
+function getCompFasesTotalSelectedMetrics_() {
+  const selected = ['mao_obra', 'materiais', 'total'].filter(metric => !!compFasesTotalMetricState[metric]);
+  if (!selected.length) {
+    compFasesTotalMetricState.mao_obra = true;
+    return ['mao_obra'];
+  }
+  if (selected.includes('total') && selected.length > 1) {
+    Object.keys(compFasesTotalMetricState).forEach(metric => {
+      compFasesTotalMetricState[metric] = metric === 'total';
+    });
+    return ['total'];
+  }
+  return selected;
+}
+
+function pruneCompFasesTotalState_(faseItems) {
+  const valid = new Set((Array.isArray(faseItems) ? faseItems : []).map(item => item && item.key).filter(Boolean));
+  Object.keys(compFasesTotalHiddenKeys).forEach(key => {
+    if (!valid.has(key)) delete compFasesTotalHiddenKeys[key];
+  });
+}
+
+function getVisibleCompFasesTotalKeys_(faseItems) {
+  const list = Array.isArray(faseItems) ? faseItems : [];
+  return new Set(list.filter(item => !compFasesTotalHiddenKeys[item.key]).map(item => item.key));
+}
+
+function syncCompFasesTotalControls_(faseItems) {
+  const selectedMetrics = getCompFasesTotalSelectedMetrics_();
+  ['mao_obra', 'materiais', 'total'].forEach(metric => {
+    const btn = document.getElementById('comp-fases-total-metric-' + metric);
+    if (!btn) return;
+    btn.classList.toggle('active', selectedMetrics.includes(metric));
+  });
+
+  pruneCompFasesTotalState_(faseItems);
+
+  const list = Array.isArray(faseItems) ? faseItems : [];
+  const hiddenCount = list.reduce((acc, item) => acc + (compFasesTotalHiddenKeys[item.key] ? 1 : 0), 0);
+  const label = document.getElementById('comp-fases-total-label');
+  if (label) {
+    label.textContent = 'Fases visiveis' + (hiddenCount ? ' (' + hiddenCount + ' oculta(s))' : '');
+  }
+
+  const row = document.getElementById('comp-fases-total-row');
+  if (!row) return;
+  if (!list.length) {
+    row.innerHTML = '<span class="obra-fase-filter-empty">Sem fases disponiveis.</span>';
+    return;
+  }
+
+  row.innerHTML = list.map(item => {
+    const labelTxt = String(item.name || 'Sem Fase');
+    const hidden = !!compFasesTotalHiddenKeys[item.key];
+    const safeLabel = escapeHtml_(labelTxt);
+    const encoded = encodeURIComponent(labelTxt);
+    const title = safeLabel + ' · ' + fmt(Number(item.total) || 0);
+    return '<button type="button" class="obra-fase-chip' + (hidden ? ' hidden' : '') + '"' +
+      ' onclick="toggleCompFasesTotalVisibility(\'' + encoded + '\')"' +
+      ' aria-pressed="' + (hidden ? 'true' : 'false') + '"' +
+      ' title="' + title + '">' + safeLabel + '</button>';
+  }).join('');
+}
+
+function setCompFasesTotalMetric(metric) {
+  const allowed = { mao_obra: true, materiais: true, total: true };
+  if (!allowed[metric]) return;
+  const baseMetrics = ['mao_obra', 'materiais'];
+  if (metric === 'total') {
+    if (compFasesTotalMetricState.total) return;
+    Object.keys(compFasesTotalMetricState).forEach(key => { compFasesTotalMetricState[key] = false; });
+    compFasesTotalMetricState.total = true;
+  } else if (compFasesTotalMetricState.total) {
+    Object.keys(compFasesTotalMetricState).forEach(key => { compFasesTotalMetricState[key] = false; });
+    compFasesTotalMetricState[metric] = true;
+  } else {
+    const activeBaseCount = baseMetrics.reduce((acc, key) => acc + (compFasesTotalMetricState[key] ? 1 : 0), 0);
+    if (compFasesTotalMetricState[metric] && activeBaseCount <= 1) return;
+    compFasesTotalMetricState[metric] = !compFasesTotalMetricState[metric];
+    compFasesTotalMetricState.total = false;
+  }
+  buildCompFasesTotalChart(getCompObraNames_());
+}
+
+function toggleCompFasesTotalVisibility(faseEncoded) {
+  const faseName = decodeURIComponent(String(faseEncoded || ''));
+  if (!faseName) return;
+  const allObraNames = getCompObraNames_();
+  const phaseItems = collectAvailableCompFases_(allObraNames);
+  const key = normalizeFaseKey_(faseName);
+  if (!phaseItems.some(item => item.key === key)) return;
+
+  const hidePhase = !compFasesTotalHiddenKeys[key];
+  if (hidePhase) {
+    const visibleCount = phaseItems.reduce((acc, item) => acc + (compFasesTotalHiddenKeys[item.key] ? 0 : 1), 0);
+    if (visibleCount <= 1) return;
+  }
+  compFasesTotalHiddenKeys[key] = hidePhase;
+  buildCompFasesTotalChart(allObraNames);
+}
+
+function resetCompFasesTotalVisibility() {
+  Object.keys(compFasesTotalHiddenKeys).forEach(key => {
+    compFasesTotalHiddenKeys[key] = false;
+  });
+  buildCompFasesTotalChart(getCompObraNames_());
+}
+
+function clearCompFasesTotalVisibility() {
+  collectAvailableCompFases_(getCompObraNames_()).forEach(item => {
+    compFasesTotalHiddenKeys[item.key] = true;
+  });
+  buildCompFasesTotalChart(getCompObraNames_());
+}
+
+function collectCompFasesTotalMultiData_(selectedObras, selectedMetrics) {
+  const metrics = Array.isArray(selectedMetrics) && selectedMetrics.length ? selectedMetrics.slice() : ['mao_obra'];
+  const phaseMap = {};
+
+  metrics.forEach(metric => {
+    collectCompFasesDataForMetric_(selectedObras, metric).forEach(item => {
+      if (!phaseMap[item.key]) {
+        phaseMap[item.key] = {
+          key: item.key,
+          name: item.name,
+          values: { mao_obra: 0, materiais: 0, total: 0 },
+          sortValue: 0
+        };
+      }
+      phaseMap[item.key].values[metric] = Number(item.total) || 0;
+    });
+  });
+
+  return sortCompFaseItems_(Object.values(phaseMap).map(item => {
+    item.sortValue = metrics.includes('total')
+      ? Number(item.values.total) || 0
+      : metrics.reduce((sum, metric) => sum + (Number(item.values[metric]) || 0), 0);
+    return item;
+  })).filter(item => metrics.some(metric => (Number(item.values[metric]) || 0) > 0));
+}
+
+function compactCompFasesTotalForMobile_(items, selectedMetrics) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!isMobile() || list.length <= MOBILE_OBRA_CHART_TOP_PHASES) return list;
+
+  const metrics = Array.isArray(selectedMetrics) ? selectedMetrics.slice() : [];
+  const sorted = list.sort((a, b) => (b.sortValue || 0) - (a.sortValue || 0));
+  const top = sorted.slice(0, MOBILE_OBRA_CHART_TOP_PHASES);
+  const rest = sorted.slice(MOBILE_OBRA_CHART_TOP_PHASES);
+  if (!rest.length) return top;
+
+  const grouped = {
+    key: 'outras-fases',
+    name: 'Outras Fases',
+    values: { mao_obra: 0, materiais: 0, total: 0 },
+    sortValue: 0,
+    _isGroupedOther: true
+  };
+  metrics.forEach(metric => {
+    grouped.values[metric] = rest.reduce((sum, item) => sum + (Number(item.values && item.values[metric]) || 0), 0);
+  });
+  grouped.sortValue = rest.reduce((sum, item) => sum + (Number(item.sortValue) || 0), 0);
+  top.push(grouped);
+  return top;
+}
+
+function buildCompFasesTotalChart(obraNames) {
+  if (compCharts.fasestotal) compCharts.fasestotal.destroy();
+
+  const allObraNames = Array.isArray(obraNames) ? obraNames : [];
+  const selectedMetrics = getCompFasesTotalSelectedMetrics_();
+  updateCompFasesTotalPeriodLabel_();
+
+  const availablePhases = collectAvailableCompFases_(allObraNames);
+  const allPhaseData = collectCompFasesTotalMultiData_(allObraNames, selectedMetrics);
+  pruneCompFasesTotalState_(availablePhases);
+  const visibleKeys = getVisibleCompFasesTotalKeys_(availablePhases);
+  syncCompFasesTotalControls_(availablePhases);
+
+  const ctx = ensureCompFasesTotalCanvas_();
+  if (!ctx) return;
+  if (!availablePhases.length) {
+    renderCompFasesTotalPlaceholder_('Sem fases no periodo');
+    return;
+  }
+  if (!visibleKeys.size) {
+    renderCompFasesTotalPlaceholder_('Selecione fases para visualizar');
+    return;
+  }
+
+  const chartItems = allPhaseData.filter(item => visibleKeys.has(item.key));
+  if (!chartItems.length) {
+    renderCompFasesTotalPlaceholder_('Sem fases com custo no periodo');
+    return;
+  }
+
+  const metricColorMap = {
+    mao_obra: 'rgba(99,179,237,.78)',
+    materiais: 'rgba(72,187,120,.78)',
+    total: 'rgba(233,69,96,.78)'
+  };
+  const compactedItems = compactCompFasesTotalForMobile_(chartItems, selectedMetrics);
+  const datasets = selectedMetrics.map(metric => ({
+    label: getCompFasesTotalMetricLabel_(metric),
+    data: compactedItems.map(item => Number(item.values[metric]) || 0),
+    backgroundColor: metricColorMap[metric] || 'rgba(99,179,237,.78)',
+    borderRadius: 4,
+    borderWidth: 0,
+    categoryPercentage: 0.86,
+    barPercentage: 1
+  }));
+
+  compCharts.fasestotal = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: compactedItems.map(item => item.name),
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        ? false
+        : { duration: isMobile() ? 180 : 260, easing: 'easeOutCubic' },
+      plugins: {
+        legend: selectedMetrics.length > 1 ? mLegend({ position: isMobile() ? 'bottom' : 'top' }) : { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              if (!items || !items.length) return '';
+              return String(items[0].label || '');
+            },
+            label: tipCtx => tipCtx.dataset.label + ': ' + fmt(tipCtx.raw)
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k €' : v + ' €'
+          }
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: isMobile() ? 9 : 10 },
+            callback: val => {
+              const idx = Number(val);
+              const label = Number.isFinite(idx) && compactedItems[idx] ? compactedItems[idx].name : String(val);
+              return isMobile() ? abbreviateChartLabel_(label, 10) : label;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 function buildCompRadarChart(obraNames) { /* disabled */ }
 
 function updateCompFasesPeriodLabel_() {
@@ -3446,15 +3810,16 @@ function collectAvailableCompFases_(selectedObras) {
   return sortCompFaseItems_(Object.values(phaseMap));
 }
 
-function collectCompFasesData_(selectedObras) {
+function collectCompFasesDataForMetric_(selectedObras, metricKey) {
   const selected = Array.isArray(selectedObras) ? selectedObras : [];
   const selectedSet = new Set(selected);
   const perObra = {};
   const phaseMap = {};
+  const metric = metricKey || 'mao_obra';
 
   selected.forEach(nome => {
     perObra[nome] = {};
-    if (compFasesMetric !== 'materiais') {
+    if (metric !== 'materiais') {
       (DATA.registos || []).forEach(r => {
         if (String(r.obra || '').trim() !== nome) return;
         const dateStr = String(r.data || '').slice(0, 10);
@@ -3476,7 +3841,7 @@ function collectCompFasesData_(selectedObras) {
     }
   });
 
-  if (compFasesMetric !== 'mao_obra') {
+  if (metric !== 'mao_obra') {
     filterAllMateriaisByDate().forEach(m => {
       if (!selectedSet.has(m.obra)) return;
       const fase = String(m.fase || '').trim() || 'Sem Fase';
@@ -3491,7 +3856,7 @@ function collectCompFasesData_(selectedObras) {
     Object.keys(perObra[nome] || {}).forEach(fase => {
       const entry = perObra[nome][fase];
       entry.total = (Number(entry.mao_obra) || 0) + (Number(entry.materiais) || 0);
-      const value = Number(entry[compFasesMetric]) || 0;
+      const value = Number(entry[metric]) || 0;
       if (value <= 0) return;
       const key = normalizeFaseKey_(fase);
       if (!phaseMap[key]) phaseMap[key] = { key, name: fase, total: 0, valuesByObra: {} };
@@ -3501,6 +3866,10 @@ function collectCompFasesData_(selectedObras) {
   });
 
   return sortCompFaseItems_(Object.values(phaseMap));
+}
+
+function collectCompFasesData_(selectedObras) {
+  return collectCompFasesDataForMetric_(selectedObras, compFasesMetric);
 }
 
 function buildCompFasesObraChart(obraNames) {

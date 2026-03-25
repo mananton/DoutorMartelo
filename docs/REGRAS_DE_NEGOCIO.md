@@ -147,7 +147,7 @@ Ou seja:
 - `horas > 0`
 
 **Regra operacional de dispensa:**
-- Quando `dispensado = true` e `dispensa_processada_em` está vazio, o trigger `onSheetChange(e)` no GAS:
+- Quando `dispensado = true` e `dispensa_processada_em` está vazio, o trigger operacional `onOperationalSheetChange(e)` no GAS:
   - remove o colaborador da sheet `COLABORADORES`
   - preenche `dispensa_processada_em`
 - Isto evita reprocessar a mesma dispensa e permite recontratação futura via reinserção manual em `COLABORADORES`
@@ -323,8 +323,8 @@ Tabela de lookup para calcular custo de viagem.
    a ser dominada por `falta` (custo = 0).
 
 6. **Eliminação de registos:** Quando um registo é eliminado via AppSheet,
-   a linha fica completamente vazia na sheet. O sistema tem um trigger automático
-   (`onChange`) que detecta e elimina essas linhas vazias.
+   a linha fica completamente vazia na sheet. O sistema tem um trigger operacional
+   dedicado (`onOperationalSheetChange`) que detecta e elimina essas linhas vazias.
    Na migração, usar `DELETE` SQL standard — o problema não existe em base de dados real.
 
 6. **Semana ISO:** Para agregação semanal, usa-se o formato `YYYY-SWW`
@@ -706,6 +706,7 @@ O dashboard tem 7 secções principais acessíveis por sidebar (desktop) e botto
 ### Secção: Comparativa
 
 - Gráfico de barras agrupadas: Mão de Obra vs Deslocações vs Total por obra
+- Gráfico de barras: custo por fase agregada em todas as obras, com seleção combinável de `Mão de Obra` e `Materiais/Serviços`, ou `Total` exclusivo
 - Gráfico de barras empilhadas: Custo por fase em cada obra
 - Gráfico de dias por fase em cada obra
 
@@ -716,8 +717,8 @@ O dashboard tem 7 secções principais acessíveis por sidebar (desktop) e botto
 ### Comportamento actual (AppSheet)
 
 A AppSheet liga directamente ao Google Sheets e escreve na sheet `REGISTOS_POR_DIA`.
-Quando elimina um registo, deixa a linha completamente vazia — o trigger `onChange`
-no GAS detecta e elimina automaticamente essas linhas.
+Quando elimina um registo, deixa a linha completamente vazia — o trigger operacional
+`onOperationalSheetChange` no GAS detecta e elimina automaticamente essas linhas.
 
 O Google Sheets mantém também uma sheet técnica `NAO_REGISTADOS_HIST`, preenchida
 automaticamente pelo GAS no fecho de cada dia útil, com snapshot dos colaboradores

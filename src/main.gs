@@ -359,6 +359,30 @@ function isLegacyMaterialFlowEnabled_() {
   return !!ENABLE_LEGACY_MATERIAL_FLOW;
 }
 
+function isOperationalHousekeepingBusy_() {
+  const props = PropertiesService.getDocumentProperties();
+  const raw = props.getProperty("OPERATIONAL_HOUSEKEEPING_BUSY_UNTIL");
+  const until = raw ? parseInt(raw, 10) : 0;
+  if (!until) return false;
+  if (until < Date.now()) {
+    props.deleteProperty("OPERATIONAL_HOUSEKEEPING_BUSY_UNTIL");
+    return false;
+  }
+  return true;
+}
+
+function withOperationalHousekeepingGuard_(callback) {
+  if (typeof callback !== "function") return null;
+  const props = PropertiesService.getDocumentProperties();
+  if (isOperationalHousekeepingBusy_()) return null;
+  props.setProperty("OPERATIONAL_HOUSEKEEPING_BUSY_UNTIL", String(Date.now() + 60000));
+  try {
+    return callback();
+  } finally {
+    props.deleteProperty("OPERATIONAL_HOUSEKEEPING_BUSY_UNTIL");
+  }
+}
+
 function normalizeNature_(value) {
   const key = normalizeHeader_(value).replace(/\s+/g, "_").toUpperCase();
   if (key === "MATERIAL") return "MATERIAL";
@@ -2382,6 +2406,32 @@ function onSheetChange(e) {
 }
 
 /**
+ * Handler dedicado ao housekeeping operacional.
+ * Fica separado do fluxo legacy de materiais para evitar reativar
+ * automações antigas do backoffice.
+ */
+function onOperationalSheetChange(e) {
+  if (e &&
+      e.changeType !== "REMOVE_ROW" &&
+      e.changeType !== "INSERT_ROW") {
+    return;
+  }
+  try {
+    runOperationalHousekeeping_();
+  } catch (err) {
+    Logger.log("Erro no housekeeping operacional: " + err);
+  }
+}
+
+function runOperationalHousekeeping_() {
+  return withOperationalHousekeepingGuard_(function() {
+    limparLinhasVazias_();
+    corrigirCustosRegistos_();
+    processarDispensados_();
+  });
+}
+
+/**
  * Remove todas as linhas completamente vazias de REGISTOS_POR_DIA.
  * Percorre de baixo para cima para não deslocar índices ao apagar.
  */
@@ -2441,6 +2491,36 @@ function uninstallOnChangeTrigger() {
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   Logger.log("Trigger removido.");
+}
+
+/**
+ * Instala o trigger operacional de housekeeping por eventos de change.
+ * Este trigger e independente do legacy materials flow.
+ */
+function installOperationalHousekeepingTrigger() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "onOperationalSheetChange")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  ScriptApp.newTrigger("onOperationalSheetChange")
+    .forSpreadsheet(ss)
+    .onChange()
+    .create();
+
+  Logger.log("✅ Trigger de housekeeping operacional instalado com sucesso.");
+}
+
+/**
+ * Remove o trigger operacional de housekeeping.
+ */
+function uninstallOperationalHousekeepingTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "onOperationalSheetChange")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  Logger.log("Trigger de housekeeping operacional removido.");
 }
 
 /**

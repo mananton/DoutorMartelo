@@ -11,6 +11,28 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-25
 
+### `pending`
+- **Type**: fix / gas / ops / docs
+- **Scope**: `src/main.gs`, `docs/DECISIONS.md`, `docs/REGRAS_DE_NEGOCIO.md`
+- **Summary**:
+  - Added a dedicated operational change trigger path (`onOperationalSheetChange`) to restore labour housekeeping on `INSERT_ROW` / `REMOVE_ROW` without re-enabling legacy materials automation.
+  - Scoped that handler to empty-row cleanup, labour cost correction, and `dispensado` processing only, with a lightweight execution guard to avoid overlap on bursty events.
+  - Kept legacy `onSheetChange` materials behavior untouched and documented the new separation explicitly.
+- **Impact**:
+  - `REGISTOS_POR_DIA` housekeeping can be reactivated safely for the labour/AppSheet flow.
+  - The materials backoffice remains isolated from old GAS trigger-driven rewrites.
+
+### `pending`
+- **Type**: feat / dashboard
+- **Scope**: `src/index.html`, `src/js.html`, `docs/REGRAS_DE_NEGOCIO.md`
+- **Summary**:
+  - Added a fourth `Comparativa` chart focused on phase-level cost aggregation across all obras together.
+  - Matched the existing comparative-card pattern with top metric buttons, a central bar chart, and bottom chips for phase visibility.
+  - Supported combinable `Mao de Obra` / `Materiais/Servicos` selections plus exclusive `Total`, using the same date-filtered aggregation model already used by the other comparative charts.
+- **Impact**:
+  - The dashboard can now compare labour and materials/services cost concentration by phase without splitting the view by obra.
+  - Users can quickly isolate or hide phases while keeping the same interaction model already learned in the other comparative charts.
+
 ### `0adc969`
 - **Type**: fix / dashboard / docs
 - **Scope**: `src/index.html`, `src/css.html`, `src/js.html`, `docs/MAPA_MENSAL_SPEC.md`, `docs/MAPA_MENSAL_TECH_PLAN.md`
