@@ -125,6 +125,7 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - Future migration stays safer for operations.
   - Dashboard freshness improves without forcing an early change in the input workflow.
+  - This intent is now superseded operationally by `D-024`, which chooses explicit local manual sync instead of hidden background sync.
 
 ## D-011: Keep old labour history separate from operational worker records
 - **Status**: accepted
@@ -372,6 +373,29 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - Backoffice writes now remain operational even when Supabase is temporarily unavailable or misaligned.
   - Sync diagnostics become a first-class operational concern.
+  - The original automatic mirror path is now superseded operationally by `D-024`.
+
+## D-024: Google Sheets -> Supabase mirror is manual, local, and explicit
+- **Status**: accepted
+- **Date**: 2026-03-26
+- **Commit**: `pending`
+- **Decision**:
+  - Keep Google Sheets as the operational source of truth.
+  - Disable automatic Google Sheets -> Supabase sync through GAS.
+  - Disable automatic Supabase mirror writes from the materials backoffice by default.
+  - Use the local script `backend/scripts/sync_sheets_to_supabase.py` and the wrapper `backend/ops/Sync-SheetsToSupabase.ps1` as the only supported mirror path.
+  - Make the manual mirror responsible for:
+    - dry-run validation
+    - insert/update
+    - deletion of stale remote rows
+- **Rationale**:
+  - The project no longer needs an always-on public bridge just to keep a backup mirror in Supabase.
+  - The operating team is small, and a controlled manual sync from one trusted workstation is simpler and safer than hidden background writes.
+  - Removing silent retries and mixed sync paths reduces confusion about what actually wrote to Supabase.
+- **Impact**:
+  - Normal Sheet edits no longer write to Supabase.
+  - The legacy GAS sync code stays in the repo only as a disabled boundary, not as an active runtime path.
+  - Backoffice writes continue to populate Google Sheets, but Supabase is refreshed only when the local manual sync is run.
 
 ## D-022: Materials backoffice runtime hydrates from Google Sheets at startup
 - **Status**: accepted

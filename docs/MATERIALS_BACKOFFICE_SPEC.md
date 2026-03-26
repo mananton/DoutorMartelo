@@ -474,18 +474,25 @@ Instead, the screen may show a read-only technical impact panel:
 ### Goal
 Give operational visibility without exposing technical clutter in the main forms.
 
+### Current operational note
+As of 2026-03-26, the automatic Google Sheets -> Supabase mirror is disabled in the active runtime.
+The supported mirror path is now the local manual script:
+- `backend/scripts/sync_sheets_to_supabase.py`
+- `backend/ops/Sync-SheetsToSupabase.ps1`
+
 ### Minimum contents
 - last successful write to Sheets
-- last successful write to Supabase
-- pending retries
-- failed sync operations
+- last successful manual mirror to Supabase
+- dry-run / apply result summary
+- failed manual sync operations
 - action log by entity type
 
 ### MVP actions
-- `Reenviar pendentes`
+- `Executar dry-run local`
+- `Executar sync manual local`
 - `Ver detalhe do erro`
 
-This screen is important because Sheets-first + Supabase retry must be observable.
+This screen is important because the team still needs visibility over the explicit manual mirror flow.
 
 ## 12. Backend Minimum Necessary
 
@@ -602,11 +609,11 @@ Required fields for manual stock output:
 2. Compute generated consequences.
 3. Write source record(s) to Google Sheets.
 4. Write generated record(s) to Google Sheets.
-5. Mirror accepted records to Supabase.
-6. If Supabase mirror fails:
+5. Run the local manual mirror to Supabase when the operator decides to refresh the backup/store.
+6. If the manual Supabase mirror fails:
    - keep Sheets writes
-   - log retry state
-   - expose pending sync in `Sincronizacao`
+   - fix the issue and rerun the manual mirror
+   - expose the failure in the sync report or support notes
 
 ### Reason
 This is the safest order for the current business constraint:

@@ -2847,22 +2847,7 @@ function debugCustos() {
  * @returns {Array<Object>}
  */
 /** Corre automaticamente quando o ficheiro Ã© aberto. Apenas para atalhos de UI. */
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu("🏗 Dashboard")
-    .addItem("Abrir Dashboard", "abrirDashboard")
-    .addItem("Limpar linhas vazias", "limparLinhasVaziasManual")
-    .addItem("Gerar IDs em falta", "gerarIdsEmFaltaManual")
-    .addItem("Gerar movimentos materiais", "gerarMovimentosMateriaisManual")
-    .addToUi();
-  SpreadsheetApp.getUi()
-    .createMenu("⟳ Sync")
-    .addItem("Sincronizar tudo", "syncAll")
-    .addItem("Tentar pendentes agora", "syncRetryPendingNow")
-    .addItem("Ver estado da sync", "syncShowStatus")
-    .addItem("Limpar falhas da sync", "syncClearFailures")
-    .addToUi();
-}
+function onOpen() {}
 
 /** Abre o dashboard numa nova aba do browser */
 function abrirDashboard() {

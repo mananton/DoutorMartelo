@@ -8,6 +8,10 @@ var SYNC_SPREADSHEET_ID_KEY = "SYNC_SPREADSHEET_ID";
 var SYNC_RETRY_TRIGGER_HANDLER = "retryPendingSupabaseSync_";
 var SYNC_RETRY_INTERVAL_MINUTES = 10;
 var SYNC_MAX_AUTO_RETRIES = 6;
+var GAS_SUPABASE_SYNC_ENABLED = false;
+var GAS_SUPABASE_SYNC_DISABLED_MESSAGE =
+    "A sincronizacao Sheets -> Supabase via GAS foi desativada. " +
+    "Use o script local backend/ops/Sync-SheetsToSupabase.ps1.";
 
 var SYNC_SHEET_CONFIG = {
     "PESSOAL_EFETIVO": {
@@ -139,27 +143,42 @@ var SYNC_SHEET_CONFIG = {
     },
     "MATERIAIS_MOV": {
         endpoint: "/api/sync/materiais-mov",
+        dedupeKey: function (item) {
+            return item.id_mov;
+        },
         headerRow: 1,
         mapper: function (row) {
+            var idMov = syncReadString_(row, ["ID_Mov", "ID Mov"]);
+            if (!idMov) return null;
+            var observacoes = syncReadString_(row, ["Observacoes", "Observações", "ObservaÃ§Ãµes", "Observacao"]) || null;
+            var sourceAfo = syncExtractSourceMarker_(observacoes, "SRC_AFO");
+            var sourceFit = syncExtractSourceMarker_(observacoes, "SRC_FIT");
             return {
-                id_mov: row["ID_Mov"],
-                data: syncFormatDate_(row["Data"]),
-                tipo: row["Tipo"],
-                obra: row["Obra"] || null,
-                fase: row["Fase"] || null,
-                fornecedor: row["Fornecedor"] || null,
-                nif: row["NIF"] ? String(row["NIF"]).replace(/\.0$/, "") : null,
-                nr_documento: row["Nº Doc/Fatura"] || null,
-                material: row["Material"],
-                unidade: row["Unidade"],
-                quantidade: Number(row["Quantidade"] || 0),
-                custo_unit: Number(row["Custo_Unit"] || 0),
-                desconto_1: Number(row["Desconto 1"] || 0),
-                desconto_2: Number(row["Desconto 2"] || 0),
-                custo_sem_iva: Number(row["Custo_Total Sem IVA"] || 0),
-                iva: Number(row["IVA"] || 0),
-                custo_com_iva: Number(row["Custo_Total Com IVA"] || 0),
-                custo_total: Number(row["Custo_Total Com IVA"] || 0)
+                id_mov: idMov,
+                data: syncFormatDate_(syncReadCell_(row, ["Data"])),
+                tipo: syncReadString_(row, ["Tipo"]) || "CONSUMO",
+                id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
+                item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial", "Material"]) || null,
+                material: syncReadString_(row, ["Material", "Item_Oficial", "Item Oficial"]) || null,
+                unidade: syncReadString_(row, ["Unidade"]) || null,
+                uso_combustivel: syncReadUpperString_(row, ["Uso_Combustivel", "Uso Combustivel"]) || null,
+                matricula: syncReadString_(row, ["Matricula", "Matrícula", "MatrÃ­cula"]) || null,
+                quantidade: syncReadNumber_(row, ["Quantidade"]),
+                custo_unit: syncReadNumber_(row, ["Custo_Unit", "Custo Unit"]),
+                custo_total_sem_iva: syncReadNumber_(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA"]),
+                iva: syncReadNumber_(row, ["IVA"]),
+                custo_total_com_iva: syncReadNumber_(row, ["Custo_Total Com IVA", "Custo Total Com IVA"]),
+                custo_total: syncReadNumber_(row, ["Custo_Total", "Custo Total", "Custo_Total Com IVA", "Custo Total Com IVA"]),
+                obra: syncReadString_(row, ["Obra"]) || null,
+                fase: syncReadString_(row, ["Fase"]) || null,
+                fornecedor: syncReadString_(row, ["Fornecedor"]) || null,
+                nif: syncReadNormalizedNif_(syncReadCell_(row, ["NIF"])),
+                nr_documento: syncReadString_(row, ["NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Nº Doc/Fatura", "Numero Doc/Fatura"]) || null,
+                observacoes: observacoes,
+                source_type: sourceAfo ? "AFO" : "FIT",
+                source_id: sourceAfo || sourceFit || idMov,
+                sequence: Number(row.__sheet_row_num || 0) > 0 ? Number(row.__sheet_row_num) - 1 : null,
+                sheet_row_num: Number(row.__sheet_row_num || 0)
             };
         }
     },
@@ -216,16 +235,40 @@ var SYNC_SHEET_CONFIG = {
     },
     "FATURAS": {
         endpoint: "/api/sync/faturas",
+        dedupeKey: function (item) {
+            return item.id_fatura;
+        },
         headerRow: 1,
         mapper: function (row) {
+            var idFatura = syncReadString_(row, ["ID_Fatura", "ID Fatura"]);
+            if (!idFatura) return null;
+            var tipoDocRaw = syncReadString_(row, ["Tipo_Doc", "Tipo Doc", "Tipo"]) || "";
+            var tipoDoc = (tipoDocRaw || "FATURA").toUpperCase().replace(/\s+/g, "_");
+            var docOrigem = syncReadString_(row, ["Doc_Origem", "Doc Origem", "Documento Origem"]) || null;
+            var nrDocumento = syncReadString_(row, ["NÂº Doc/Fatura", "NÃ‚Âº Doc/Fatura", "Nº Doc/Fatura", "Numero Doc/Fatura"]) || "";
+            var dataFatura = syncFormatDate_(syncReadCell_(row, ["Data Fatura", "Data"]));
+            var valorSemIva = syncReadNumber_(row, ["Valor Total Sem IVA", "Custo_Total Sem IVA"]);
+            var valorComIva = syncReadNumber_(row, ["Valor Total Com IVA", "Custo_Total Com IVA", "Valor"]);
+            var valorFallback = syncReadNumber_(row, ["Valor"]);
+            var hasValorSemIva = syncHasAnyValue_(row, ["Valor Total Sem IVA", "Custo_Total Sem IVA"]);
+            var hasValorComIva = syncHasAnyValue_(row, ["Valor Total Com IVA", "Custo_Total Com IVA", "Valor"]);
             return {
-                fornecedor: row["Fornecedor"],
-                nif: row["NIF"] ? String(row["NIF"]).replace(/\.0$/, "") : null,
-                nr_documento: row["Nº Doc/Fatura"] || null,
-                data_fatura: syncFormatDate_(row["Data Fatura"]),
-                valor: Number(row["Valor"] || 0),
-                paga: syncToBool_(row["Paga?"]),
-                data_pagamento: syncFormatDate_(row["Data Pagamento"])
+                id_fatura: idFatura,
+                tipo_doc: tipoDoc,
+                doc_origem: docOrigem,
+                id_compromisso: syncReadString_(row, ["ID_Compromisso", "ID Compromisso"]) || null,
+                fornecedor: syncReadString_(row, ["Fornecedor"]) || "",
+                nif: syncReadNormalizedNif_(syncReadCell_(row, ["NIF"])),
+                nr_documento: nrDocumento,
+                data_fatura: dataFatura,
+                valor_sem_iva: hasValorSemIva ? valorSemIva : valorFallback,
+                iva: syncReadNumber_(row, ["IVA"]),
+                valor_com_iva: hasValorComIva ? valorComIva : valorFallback,
+                paga: syncToBool_(syncReadCell_(row, ["Paga?", "Paga"])),
+                data_pagamento: syncFormatDate_(syncReadCell_(row, ["Data Pagamento"])) || null,
+                observacoes: syncReadString_(row, ["Observacoes", "Observações", "ObservaÃ§Ãµes", "Observacao"]) || null,
+                estado: syncReadString_(row, ["Estado"]) || "ATIVA",
+                sheet_row_num: Number(row.__sheet_row_num || 0)
             };
         }
     },
@@ -233,17 +276,14 @@ var SYNC_SHEET_CONFIG = {
         endpoint: "/api/sync/faturas-itens",
         headerRow: 1,
         dedupeKey: function (item) {
-            return item.id_item_fatura || item.source_key;
+            return item.id_item_fatura;
         },
         mapper: function (row) {
+            var idItemFatura = syncReadString_(row, ["ID_Item_Fatura", "ID Item Fatura"]);
+            if (!idItemFatura) return null;
             return {
-                source_key: syncBuildCompositeKey_([
-                    "fit",
-                    syncReadString_(row, ["ID_Item_Fatura", "ID Item Fatura"]),
-                    String(row.__sheet_row_num || "")
-                ]),
-                id_item_fatura: syncReadString_(row, ["ID_Item_Fatura", "ID Item Fatura"]) || null,
-                id_fatura: syncReadString_(row, ["ID_Fatura", "ID Fatura"]) || null,
+                id_item_fatura: idItemFatura,
+                id_fatura: syncReadString_(row, ["ID_Fatura", "ID Fatura"]) || "",
                 fornecedor: syncReadString_(row, ["Fornecedor"]) || null,
                 nif: syncReadNormalizedNif_(syncReadCell_(row, ["NIF"])),
                 nr_documento: syncReadString_(row, ["Nº Doc/Fatura", "NÂº Doc/Fatura", "N Doc/Fatura", "Doc Fatura"]) || null,
@@ -252,6 +292,9 @@ var SYNC_SHEET_CONFIG = {
                 id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
                 item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial"]) || null,
                 unidade: syncReadString_(row, ["Unidade"]) || null,
+                natureza: syncReadUpperString_(row, ["Natureza"]) || null,
+                uso_combustivel: syncReadUpperString_(row, ["Uso_Combustivel", "Uso Combustivel"]) || null,
+                matricula: syncReadString_(row, ["Matricula", "Matrícula", "MatrÃ­cula"]) || null,
                 quantidade: syncReadNumber_(row, ["Quantidade"]),
                 custo_unit: syncReadNumber_(row, ["Custo_Unit", "Custo Unit"]),
                 desconto_1: syncReadNumber_(row, ["Desconto 1", "Desconto_1"]),
@@ -273,22 +316,20 @@ var SYNC_SHEET_CONFIG = {
         endpoint: "/api/sync/afetacoes-obra",
         headerRow: 1,
         dedupeKey: function (item) {
-            return item.id_afetacao || item.source_key;
+            return item.id_afetacao;
         },
         mapper: function (row) {
+            var idAfetacao = syncReadString_(row, ["ID_Afetacao", "ID Afetacao"]);
+            if (!idAfetacao) return null;
             return {
-                source_key: syncBuildCompositeKey_([
-                    "afo",
-                    syncReadString_(row, ["ID_Afetacao", "ID Afetacao"]),
-                    String(row.__sheet_row_num || "")
-                ]),
-                id_afetacao: syncReadString_(row, ["ID_Afetacao", "ID Afetacao"]) || null,
+                id_afetacao: idAfetacao,
                 origem: syncReadString_(row, ["Origem"]) || null,
                 source_id: syncReadString_(row, ["Source_ID", "Source ID", "ID_Source", "ID Source"]) || null,
                 data: syncFormatDate_(syncReadCell_(row, ["Data"])),
                 id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
                 item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial"]) || null,
                 natureza: syncReadString_(row, ["Natureza"]) || null,
+                uso_combustivel: syncReadUpperString_(row, ["Uso_Combustivel", "Uso Combustivel"]) || null,
                 quantidade: syncReadNumber_(row, ["Quantidade"]),
                 unidade: syncReadString_(row, ["Unidade"]) || null,
                 custo_unit: syncReadNumber_(row, ["Custo_Unit", "Custo Unit"]),
@@ -312,16 +353,19 @@ var SYNC_SHEET_CONFIG = {
         endpoint: "/api/sync/stock-atual",
         headerRow: 1,
         dedupeKey: function (item) {
-            return item.id_item || syncNormalizeKeyPart_(item.item_oficial || item.material);
+            return item.id_item;
         },
         mapper: function (row) {
+            var idItem = syncReadString_(row, ["ID_Item", "ID Item"]);
+            if (!idItem) return null;
             return {
-                id_item: syncReadString_(row, ["ID_Item", "ID Item"]) || null,
+                id_item: idItem,
                 item_oficial: syncReadString_(row, ["Item_Oficial", "Item Oficial", "Material"]) || null,
-                material: syncReadString_(row, ["Material", "Item_Oficial", "Item Oficial"]) || null,
                 unidade: syncReadString_(row, ["Unidade"]) || null,
                 stock_atual: syncReadNumber_(row, ["Stock Atual", "Stock_Atual"]),
-                custo_medio_atual: syncReadNumber_(row, ["Custo_Medio_Atual", "Custo Medio Atual"])
+                custo_medio_atual: syncReadNumber_(row, ["Custo_Medio_Atual", "Custo Medio Atual"]),
+                valor_stock: syncReadNumber_(row, ["Valor_Stock", "Valor Stock"]),
+                sheet_row_num: Number(row.__sheet_row_num || 0)
             };
         }
     },
@@ -337,6 +381,28 @@ var SYNC_SHEET_CONFIG = {
         }
     }
 };
+
+function isGasSupabaseSyncEnabled_() {
+    return GAS_SUPABASE_SYNC_ENABLED === true;
+}
+
+function disableGasSupabaseSyncArtifacts_() {
+    deleteSyncRetryTrigger_();
+    saveSyncJobs_(SYNC_PENDING_JOBS_KEY, {});
+    saveSyncJobs_(SYNC_FAILED_JOBS_KEY, {});
+}
+
+function gasSyncDisabledResult_(options) {
+    disableGasSupabaseSyncArtifacts_();
+    if (!options || options.notify !== false) {
+        syncNotify_(GAS_SUPABASE_SYNC_DISABLED_MESSAGE);
+    }
+    return {
+        status: "disabled",
+        rows: 0,
+        error: GAS_SUPABASE_SYNC_DISABLED_MESSAGE
+    };
+}
 
 function syncReadCell_(row, aliases) {
     aliases = aliases || [];
@@ -378,6 +444,22 @@ function syncBuildCompositeKey_(parts) {
     }).join("|");
 }
 
+function syncReadUpperString_(row, aliases) {
+    var value = syncReadString_(row, aliases);
+    return value ? value.toUpperCase().replace(/\s+/g, "_") : "";
+}
+
+function syncHasAnyValue_(row, aliases) {
+    var value = syncReadCell_(row, aliases);
+    return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function syncExtractSourceMarker_(observacoes, marker) {
+    if (!observacoes || !marker) return null;
+    var match = String(observacoes).match(new RegExp("\\[" + marker + ":([^\\]]+)\\]"));
+    return match ? String(match[1] || "").trim() || null : null;
+}
+
 function getSyncConfig_() {
     var props = PropertiesService.getScriptProperties();
     return {
@@ -387,6 +469,7 @@ function getSyncConfig_() {
 }
 
 function syncToSupabase(e) {
+    if (!isGasSupabaseSyncEnabled_()) return gasSyncDisabledResult_({ notify: false });
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (!ss) return;
     rememberSyncSpreadsheetId_(ss);
@@ -403,6 +486,10 @@ function syncToSupabase(e) {
 }
 
 function syncAll() {
+    if (!isGasSupabaseSyncEnabled_()) {
+        gasSyncDisabledResult_({ notify: true });
+        return;
+    }
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     rememberSyncSpreadsheetId_(ss);
     var results = [];
@@ -430,6 +517,10 @@ function syncAll() {
 }
 
 function retryPendingSupabaseSync_() {
+    if (!isGasSupabaseSyncEnabled_()) {
+        gasSyncDisabledResult_({ notify: false });
+        return;
+    }
     var pending = getSyncJobs_(SYNC_PENDING_JOBS_KEY);
     var failed = getSyncJobs_(SYNC_FAILED_JOBS_KEY);
     var ss = getSyncSpreadsheet_();
@@ -482,11 +573,19 @@ function retryPendingSupabaseSync_() {
 }
 
 function syncRetryPendingNow() {
+    if (!isGasSupabaseSyncEnabled_()) {
+        gasSyncDisabledResult_({ notify: true });
+        return;
+    }
     retryPendingSupabaseSync_();
     syncShowStatus();
 }
 
 function syncShowStatus() {
+    if (!isGasSupabaseSyncEnabled_()) {
+        gasSyncDisabledResult_({ notify: true });
+        return;
+    }
     var pending = getSyncJobs_(SYNC_PENDING_JOBS_KEY);
     var failed = getSyncJobs_(SYNC_FAILED_JOBS_KEY);
     var parts = [];
@@ -512,6 +611,10 @@ function syncShowStatus() {
 }
 
 function syncClearFailures() {
+    if (!isGasSupabaseSyncEnabled_()) {
+        gasSyncDisabledResult_({ notify: true });
+        return;
+    }
     saveSyncJobs_(SYNC_FAILED_JOBS_KEY, {});
     syncNotify_("Sync failures cleared.");
 }
@@ -664,6 +767,10 @@ function saveSyncJobs_(key, jobs) {
 }
 
 function ensureSyncRetryTrigger_() {
+    if (!isGasSupabaseSyncEnabled_()) {
+        deleteSyncRetryTrigger_();
+        return;
+    }
     var triggers = ScriptApp.getProjectTriggers();
     for (var i = 0; i < triggers.length; i++) {
         if (triggers[i].getHandlerFunction() === SYNC_RETRY_TRIGGER_HANDLER) return;

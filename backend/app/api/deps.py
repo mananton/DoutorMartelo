@@ -145,7 +145,12 @@ class ServiceContainer:
         self._vehicle_options_cache: list[dict[str, Any]] | None = None
         self._hydrate_runtime_state()
         self._prime_option_caches()
-        self.materials = MaterialsService(self.state, self.google_sheets, self.supabase)
+        self.materials = MaterialsService(
+            self.state,
+            self.google_sheets,
+            self.supabase,
+            enable_supabase_mirror=self.settings.automatic_supabase_mirror_enabled,
+        )
         self.sync = SyncService(self.state, self.supabase)
 
     def _build_google_adapter(self):

@@ -9,6 +9,25 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ---
 
+## 2026-03-26
+
+### `pending`
+- **Type**: feat / ops / sync / docs
+- **Scope**: `backend/scripts/sync_sheets_to_supabase.py`, `backend/ops/Sync-SheetsToSupabase.ps1`, `backend/sql/008_create_operational_sync_tables.sql`, `backend/sql/009_align_manual_sync_schema.sql`, `src/Sync.gs`, `src/main.gs`, `backend/app/*`, docs
+- **Summary**:
+  - Added a local manual Google Sheets -> Supabase mirror path that runs directly from this workstation, without Railway.
+  - Added the SQL support required for the operational mirror tables and for aligning the remote schema with the current workbook payloads.
+  - Extended the manual sync to behave like a true mirror:
+    - dedupe repeated IDs from the workbook snapshot
+    - skip orphan catalog references without blocking the whole run
+    - delete stale rows that no longer exist in the Google Sheet
+  - Disabled the old GAS-driven Supabase sync path and removed the custom Sheet menus used for those shortcuts.
+  - Disabled automatic Supabase mirror writes from the materials backoffice by default so Supabase refresh is now explicit and manual.
+- **Impact**:
+  - The supported Supabase sync flow is now the local script only.
+  - Normal Sheet edits and normal backoffice saves no longer push to Supabase in the background.
+  - Operators can dry-run and apply the mirror on demand from a single trusted workstation.
+
 ## 2026-03-25
 
 ### `pending`

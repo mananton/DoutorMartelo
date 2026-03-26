@@ -154,9 +154,9 @@ Hard constraints:
 - Preserve the current operating model:
   - Google Sheets stays always populated
   - backend writes to Google Sheets first
-  - backend mirrors to Supabase second
-  - mirror failure must not block the main Sheets write
-- Keep retry visibility and runtime diagnostics explicit.
+  - backend automatic Supabase mirror is disabled by default
+  - Supabase refresh happens only through the local manual sync script
+- Keep manual sync visibility and runtime diagnostics explicit.
 - Do not reapply old GAS-only frontend constraints to React/Vite work.
 
 Working style:
@@ -308,10 +308,10 @@ Expected output format:
   - from `AFETACOES_OBRA` for obra/fase consumption rows
 - `STOCK_ATUAL` should read identity from `MATERIAIS_CAD` and stock/cost behavior from `MATERIAIS_MOV`.
 - The new backoffice backend hydrates runtime state from Google Sheets on startup.
-- The current sync model is Sheets-first:
+- The current sync model is Sheets-first and manual for Supabase:
   - write to Google Sheets first
-  - mirror to Supabase second
-  - keep pending retry visible if the mirror fails
+  - run the local manual mirror script when Supabase needs refresh
+  - do not assume hidden background retries or GAS-driven sync
 
 ## Current Material Automation Hotspots
 - Read `src/main.gs` carefully before changing materials logic that still lives in the legacy automation layer.

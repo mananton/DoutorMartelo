@@ -34,6 +34,7 @@ class Settings:
     supabase_url: str | None
     supabase_service_role_key: str | None
     supabase_schema: str
+    automatic_supabase_mirror_enabled: bool
     disable_live_adapters: bool
     cors_allowed_origins: list[str]
     frontend_dist_dir: str | None
@@ -48,6 +49,7 @@ class Settings:
             supabase_url=os.getenv("SUPABASE_URL"),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
             supabase_schema=os.getenv("SUPABASE_SCHEMA", "public"),
+            automatic_supabase_mirror_enabled=_read_bool_env("BACKEND_ENABLE_AUTOMATIC_SUPABASE_MIRROR"),
             disable_live_adapters=_read_bool_env("BACKEND_DISABLE_LIVE_ADAPTERS"),
             cors_allowed_origins=_read_csv_env(
                 "BACKOFFICE_CORS_ALLOWED_ORIGINS",

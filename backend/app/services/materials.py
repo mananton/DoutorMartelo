@@ -42,10 +42,18 @@ logger = logging.getLogger("uvicorn.error")
 
 
 class MaterialsService:
-    def __init__(self, state: RuntimeState, google_sheets: GoogleSheetsAdapter, supabase: SupabaseAdapter) -> None:
+    def __init__(
+        self,
+        state: RuntimeState,
+        google_sheets: GoogleSheetsAdapter,
+        supabase: SupabaseAdapter,
+        *,
+        enable_supabase_mirror: bool = False,
+    ) -> None:
         self.state = state
         self.google_sheets = google_sheets
         self.supabase = supabase
+        self.enable_supabase_mirror = enable_supabase_mirror
 
     def list_compromissos(self) -> list[CompromissoRecord]:
         ordered = sorted(
@@ -1374,6 +1382,17 @@ class MaterialsService:
             summary,
             google_duration_ms,
         )
+        if not self.enable_supabase_mirror:
+            logger.info(
+                "timing.persist.supabase_skipped batches=%s reason=automatic_mirror_disabled",
+                summary,
+            )
+            logger.info(
+                "timing.persist.total batches=%s duration_ms=%.2f",
+                summary,
+                (perf_counter() - total_started_at) * 1000,
+            )
+            return
         try:
             supabase_started_at = perf_counter()
             self.supabase.write_batches(batches)
@@ -1410,6 +1429,12 @@ class MaterialsService:
             return
         for entity, ids in delete_groups.items():
             self.google_sheets.delete_records(entity, ids)
+        if not self.enable_supabase_mirror:
+            logger.info(
+                "timing.delete.supabase_skipped groups=%s reason=automatic_mirror_disabled",
+                ",".join(f"{entity}:{len(ids)}" for entity, ids in delete_groups.items()),
+            )
+            return
         try:
             for entity, ids in delete_groups.items():
                 self.supabase.delete_records(entity, ids)

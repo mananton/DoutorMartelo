@@ -14,6 +14,7 @@ or
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_SCHEMA` optional, default `public`
+- `BACKEND_ENABLE_AUTOMATIC_SUPABASE_MIRROR` optional, default `false`
 
 ## How to activate the real connection
 
@@ -30,7 +31,43 @@ or
 - Set `SUPABASE_URL` to your project URL, for example `https://abc123.supabase.co`.
 - Set `SUPABASE_SERVICE_ROLE_KEY` with the service role key from `Project Settings -> API`.
 - Optional: set `SUPABASE_SCHEMA` if you are not using `public`.
+- Keep `BACKEND_ENABLE_AUTOMATIC_SUPABASE_MIRROR=false` unless you intentionally want the backoffice runtime to push to Supabase again.
 - Run the bootstrap SQL in `backend/sql/001_materials_backoffice.sql` in the Supabase SQL editor before the first real sync.
+
+## Current Supabase mirror model
+
+The active operational model is now:
+- Google Sheets stays the source of truth.
+- Supabase is refreshed manually from this computer.
+- Railway is not required for the supported mirror flow.
+- Normal Sheet edits do not sync to Supabase automatically.
+- Normal materials-backoffice saves do not mirror to Supabase automatically by default.
+
+### Manual mirror prerequisites
+
+Run these SQL files in the Supabase SQL editor for the current local mirror flow:
+- `backend/sql/008_create_operational_sync_tables.sql`
+- `backend/sql/009_align_manual_sync_schema.sql`
+
+### Manual mirror commands
+
+Dry-run:
+
+```powershell
+.\backend\ops\Sync-SheetsToSupabase.ps1
+```
+
+Apply:
+
+```powershell
+.\backend\ops\Sync-SheetsToSupabase.ps1 -Apply
+```
+
+The script:
+- reads the live Google Sheet through the configured service account
+- upserts supported entities into Supabase
+- removes stale remote rows that no longer exist in the sheet
+- reports orphan or inconsistent rows without hiding them
 
 ### 3. Validate before running the app
 
@@ -167,7 +204,6 @@ Logs are written to:
 
 Performance timing diagnostics for the materials write path are also written to `service.stderr.log`, for example:
 - Google Sheets upsert timings
-- Supabase mirror timings
 - total invoice-line save timings
 
 Important:

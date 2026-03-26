@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-03-23
+Last updated: 2026-03-26
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
@@ -17,7 +17,9 @@ Last updated: 2026-03-23
   - `src/Readers.gs`: sheet readers, header normalization, dynamic column mapping, legacy-safe parsing.
   - `src/Composer.gs`: raw payload assembly (`buildRawData_`).
   - `src/Aggregators.gs`: legacy server-side aggregation (`buildData_`).
-  - `src/Sync.gs`: Supabase sync boundary with independent configurable sheet header mapping.
+  - `src/Sync.gs`: legacy GAS sync boundary now kept disabled so Sheets edits no longer push to Supabase.
+  - `backend/scripts/sync_sheets_to_supabase.py`: local manual Google Sheets -> Supabase mirror runner.
+  - `backend/ops/Sync-SheetsToSupabase.ps1`: Windows wrapper for the manual local mirror flow.
 - Frontend split by concern:
   - `src/index.html`: structure/markup.
   - `src/css.html`: styles.
@@ -90,8 +92,11 @@ Last updated: 2026-03-23
   - `FATURAS_ITENS` stays as invoice-line detail,
   - `MATERIAIS_MOV` stays as movement ledger,
   - `LEGACY_MATERIAIS` is reserved for old material cost history only.
-- Supabase sync now keeps immediate send as the first attempt and stores failed sheets for automatic retry every 10 minutes (up to 6 retries).
-- `LEGACY_MAO_OBRA` is now also included in the active Supabase sync flow via `src/Sync.gs`.
+- The current Google Sheets -> Supabase mirror is manual and local-only:
+  - dry-run or apply through `backend/ops/Sync-SheetsToSupabase.ps1`
+  - no Railway dependency
+  - no automatic GAS retry loop
+  - no automatic write to Supabase from normal Sheets edits
 - The materials backoffice now supports direct invoice-line destination `ESCRITORIO`:
   - valid as direct non-stock consumption
   - generates `MATERIAIS_MOV`
@@ -110,7 +115,7 @@ Last updated: 2026-03-23
   - editable `Custo Total com IVA` that updates `Custo Unit sem IVA` without stripping decimal input mid-typing
 - Save-path timing instrumentation now exists in the materials backend:
   - Google Sheets write timings
-  - Supabase mirror timings
+  - manual-sync-compatible persistence timings
   - total request timings for invoice-line create/update flows
 - Google Sheets live writes were optimized for known rows:
   - reuse cached sheet headers
@@ -215,10 +220,15 @@ Last updated: 2026-03-23
   - detailed plan is tracked in `docs/MATERIALS_BACKOFFICE_PLAN.md`
   - first operational MVP spec is now tracked in `docs/MATERIALS_BACKOFFICE_SPEC.md`
 - Fase 0 implementation progress:
-  - `src/Sync.gs` now includes sync entries for `FATURAS_ITENS` and `AFETACOES_OBRA`
+  - `src/Sync.gs` remains in the repository only as a disabled legacy path and is no longer part of the active sync model
   - `MATERIAIS_CAD` and `STOCK_ATUAL` sync mappers were aligned to the current spreadsheet model
   - FastAPI sync endpoints now exist under `backend/app/api/routers/sync.py`
   - real Google Sheets and Supabase adapters are now wired and validated against the live environment
+  - the live operational mirror now runs through:
+    - `backend/scripts/sync_sheets_to_supabase.py`
+    - `backend/ops/Sync-SheetsToSupabase.ps1`
+    - `backend/sql/008_create_operational_sync_tables.sql`
+    - `backend/sql/009_align_manual_sync_schema.sql`
   - `backend/scripts/check_integrations.py` validates:
     - Google Sheets auth + target workbook access
     - required core sheets
@@ -239,7 +249,7 @@ Last updated: 2026-03-23
 - The materials backoffice now also supports header-only `COMPROMISSOS_OBRA` management:
   - dedicated backend CRUD
   - startup hydration and sync diagnostics
-  - Sheets-first + Supabase-mirror handling like the other core material entities
+  - Sheets-first persistence with compatibility for later manual Supabase mirror
   - `FATURAS.ID_Compromisso` is now exposed in the app and validated against existing compromisso rows
 - `Faturas` now works as a mixed document queue in the new app:
   - `Fatura` keeps the current invoice-detail workflow
