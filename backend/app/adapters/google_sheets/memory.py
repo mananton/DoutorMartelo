@@ -14,7 +14,7 @@ class MemoryGoogleSheetsAdapter(GoogleSheetsAdapter):
     def delete_records(self, entity: str, ids: list[str]) -> None:
         return
 
-    def load_snapshot(self) -> dict[str, list[dict[str, object]]]:
+    def load_snapshot(self, *, value_render_option: str | None = None) -> dict[str, list[dict[str, object]]]:
         return {}
 
     def load_work_options(self) -> list[dict[str, object]]:

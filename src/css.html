@@ -188,6 +188,21 @@ body.sidebar-collapsed #topbar { left: var(--sidebar-wc); }
   border-radius: 20px; border: 1px solid var(--border);
   white-space: nowrap;
 }
+.cache-status-pill.cache-status-live {
+  color: var(--success);
+  background: rgba(72,187,120,.12);
+  border-color: rgba(72,187,120,.28);
+}
+.cache-status-pill.cache-status-cached {
+  color: var(--warning);
+  background: rgba(246,173,85,.14);
+  border-color: rgba(246,173,85,.3);
+}
+.cache-status-pill.cache-status-stale {
+  color: var(--accent);
+  background: rgba(233,69,96,.12);
+  border-color: rgba(233,69,96,.26);
+}
 .refresh-btn {
   display: flex; align-items: center; gap: 6px;
   padding: 7px 14px; border-radius: var(--radius-sm);

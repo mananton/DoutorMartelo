@@ -310,6 +310,8 @@ function buildData_(ss) {
   const lastUpdate = Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm");
 
   return {
+    payload_source: "sheets",
+    generated_at: lastUpdate,
     global: {
       custo_total: custoTotal,
       custo_mao_obra: custoMaoObra + custoMaoObraLegacy,

@@ -2,6 +2,57 @@
 // COMPOSER (PAYLOAD RAW V2)
 // ============================================================
 
+const RAW_V2_COLLECTION_KEYS_ = [
+  "registos",
+  "obras_info",
+  "colaboradores",
+  "viagens",
+  "deslocacoes",
+  "ferias",
+  "pessoal_efetivo",
+  "materiais_mov",
+  "legacy_mao_obra",
+  "legacy_materiais"
+];
+
+function createRawV2Payload_(partial) {
+  const base = partial || {};
+  const payload = {
+    payload_mode: "raw_v2",
+    payload_source: String(base.payload_source || "sheets").toLowerCase(),
+    generated_at: base.generated_at || Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm"),
+    diagnostics: base.diagnostics || createDataQualityDiagnostics_()
+  };
+
+  RAW_V2_COLLECTION_KEYS_.forEach(function(key) {
+    payload[key] = Array.isArray(base[key]) ? base[key] : [];
+  });
+
+  return payload;
+}
+
+function assertRawV2PayloadContract_(payload) {
+  if (!payload || payload.payload_mode !== "raw_v2") {
+    throw new Error("Payload raw_v2 invalido.");
+  }
+
+  if (!payload.payload_source) {
+    throw new Error("Payload raw_v2 invalido: origem em falta.");
+  }
+
+  RAW_V2_COLLECTION_KEYS_.forEach(function(key) {
+    if (!Array.isArray(payload[key])) {
+      throw new Error("Payload raw_v2 invalido: lista em falta -> " + key);
+    }
+  });
+
+  if (!payload.diagnostics || typeof payload.diagnostics !== "object") {
+    throw new Error("Payload raw_v2 invalido: diagnostics em falta.");
+  }
+
+  return payload;
+}
+
 function buildRawData_(ss) {
   const regSheet = ss.getSheetByName(SHEET_REGISTOS);
   const obraSheet = ss.getSheetByName(SHEET_OBRAS);
@@ -28,8 +79,8 @@ function buildRawData_(ss) {
     }));
   }
 
-  return {
-    payload_mode: "raw_v2",
+  return createRawV2Payload_({
+    payload_source: "sheets",
     generated_at: Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm"),
     diagnostics: diagnostics,
     registos: registos,
@@ -42,5 +93,5 @@ function buildRawData_(ss) {
     materiais_mov: readMateriaisMovDashboard_(matSheet),
     legacy_mao_obra: readLegacyMaoObra_(legacyMaoObraSheet),
     legacy_materiais: readLegacyMateriais_(legacyMateriaisSheet)
-  };
+  });
 }

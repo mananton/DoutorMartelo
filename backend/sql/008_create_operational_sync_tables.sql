@@ -1,6 +1,7 @@
 create table if not exists public.colaboradores_sync (
   nome text primary key,
   funcao text,
+  eur_h numeric default 0,
   ativo boolean not null default true,
   sheet_row_num integer,
   created_at timestamptz default now(),

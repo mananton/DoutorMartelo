@@ -96,11 +96,19 @@ let rhSortAsc = true;
 let mapaMensalMonth = '';
 let mapaMensalStatus = 'provisorio';
 let mapaMensalCache = {};
+let dashboardUiStateRestored = false;
 
 /* ── MATERIAIS GLOBALS ─────────────────────────────────── */
 let matMovAll = [];
 let legacyMatAll = [];
 let legacyFallbackAttempted = false;
+let dashboardSectionBuildState = {};
+let dashboardRangeCache = {};
+let dashboardRangeCacheOrder = [];
+
+const DASHBOARD_CACHE_KEY = 'dm-dashboard-payload-v2';
+const DASHBOARD_UI_STATE_KEY = 'dm-dashboard-ui-state-v1';
+const DASHBOARD_RANGE_CACHE_LIMIT = 8;
 
 /* ── FORMATTERS ─────────────────────────────────────────── */
 const fmt  = v => (v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -134,6 +142,187 @@ const KPI_TOOLTIPS = {
   'Total Atrasos':     'Soma acumulada de todos os minutos de atraso dos colaboradores.',
 };
 
+const DASHBOARD_LAZY_SECTION_IDS = [
+  'overview',
+  'deslocacoes',
+  'equipa',
+  'mapa-mensal',
+  'assiduidade',
+  'comparativa',
+  'ferias',
+  'contabilidade',
+  'rh',
+  'dev'
+];
+
+function markDashboardSectionsDirty_() {
+  dashboardSectionBuildState = {};
+  DASHBOARD_LAZY_SECTION_IDS.forEach(id => {
+    dashboardSectionBuildState[id] = false;
+  });
+}
+
+function renderDashboardBaseChrome_() {
+  buildObrasSidebar();
+  buildObraButtons();
+}
+
+function buildDashboardSectionNow_(id) {
+  switch (id) {
+    case 'overview':
+      buildOverview();
+      return true;
+    case 'deslocacoes':
+      buildDeslocacoes();
+      return true;
+    case 'equipa':
+      buildEquipa();
+      return true;
+    case 'mapa-mensal':
+      buildMapaMensal();
+      return true;
+    case 'assiduidade':
+      buildAssidTable();
+      return true;
+    case 'comparativa':
+      buildComparativa();
+      return true;
+    case 'ferias':
+      buildFerias();
+      return true;
+    case 'contabilidade':
+      buildContabilidade();
+      return true;
+    case 'rh':
+      buildRecursosHumanos();
+      return true;
+    case 'dev':
+      buildDevSection();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function ensureDashboardSectionBuilt_(id) {
+  if (!id || id === 'obra-detail') return;
+  if (dashboardSectionBuildState[id]) return;
+  if (buildDashboardSectionNow_(id)) {
+    dashboardSectionBuildState[id] = true;
+  }
+}
+
+function resetDashboardRangeCache_() {
+  dashboardRangeCache = {};
+  dashboardRangeCacheOrder = [];
+}
+
+function getCurrentRangeCacheKey_() {
+  return (normalizeDateKey_(globalDateFrom) || '') + '|' + (normalizeDateKey_(globalDateTo) || '');
+}
+
+function rememberDashboardRangeCacheKey_(key) {
+  const idx = dashboardRangeCacheOrder.indexOf(key);
+  if (idx !== -1) dashboardRangeCacheOrder.splice(idx, 1);
+  dashboardRangeCacheOrder.push(key);
+  while (dashboardRangeCacheOrder.length > DASHBOARD_RANGE_CACHE_LIMIT) {
+    const staleKey = dashboardRangeCacheOrder.shift();
+    delete dashboardRangeCache[staleKey];
+  }
+}
+
+function filterRowsByCurrentRange_(rows, dateSelector) {
+  const list = Array.isArray(rows) ? rows : [];
+  const pickDate = typeof dateSelector === 'function'
+    ? dateSelector
+    : row => row && row[dateSelector || 'data'];
+  const filtered = [];
+
+  list.forEach(row => {
+    const normDate = normalizeDateKey_(pickDate(row));
+    if (normDate && !dateInRange(normDate)) return;
+    if (row && row._normDate !== normDate) row._normDate = normDate;
+    filtered.push(row);
+  });
+
+  return filtered;
+}
+
+function pushGroupedRow_(map, key, row) {
+  if (!key) return;
+  if (!map[key]) map[key] = [];
+  map[key].push(row);
+}
+
+function buildCurrentRangeSnapshot_() {
+  const registos = filterRowsByCurrentRange_(DATA && DATA.registos, 'data');
+  const legacyMaoObra = filterRowsByCurrentRange_(DATA && DATA.legacy_mao_obra, 'data');
+  const deslocacoes = filterRowsByCurrentRange_(DATA && DATA.deslocacoes, 'data');
+  const materiaisMov = filterRowsByCurrentRange_(matMovAll, 'data');
+  const materiaisConsumo = materiaisMov.filter(isDashboardMaterialMov_);
+  const legacyMateriais = filterRowsByCurrentRange_(legacyMatAll, 'data');
+  const materiaisAll = materiaisConsumo.concat(legacyMateriais);
+
+  const registosByObra = {};
+  const legacyMaoByObra = {};
+  const deslocacoesByObra = {};
+  const materiaisByObra = {};
+
+  registos.forEach(row => {
+    pushGroupedRow_(registosByObra, String(row && row.obra || '').trim(), row);
+  });
+
+  legacyMaoObra.forEach(row => {
+    pushGroupedRow_(legacyMaoByObra, String(row && row.obra || '').trim(), row);
+  });
+
+  let deslocacoesTotal = 0;
+  deslocacoes.forEach(row => {
+    const obra = String(row && row.obra || '').trim();
+    const custo = Number(row && row.custo) || 0;
+    deslocacoesTotal += custo;
+    if (!obra) return;
+    deslocacoesByObra[obra] = (deslocacoesByObra[obra] || 0) + custo;
+  });
+
+  let materiaisTotal = 0;
+  materiaisAll.forEach(row => {
+    const obra = String(row && row.obra || '').trim();
+    const custo = matCost(row);
+    materiaisTotal += custo;
+    if (!obra) return;
+    materiaisByObra[obra] = (materiaisByObra[obra] || 0) + custo;
+  });
+
+  return {
+    key: getCurrentRangeCacheKey_(),
+    registos: registos,
+    registosByObra: registosByObra,
+    legacy_mao_obra: legacyMaoObra,
+    legacyMaoByObra: legacyMaoByObra,
+    deslocacoes: deslocacoes,
+    deslocacoesByObra: deslocacoesByObra,
+    deslocacoesTotal: deslocacoesTotal,
+    materiais_mov: materiaisMov,
+    materiais_consumo: materiaisConsumo,
+    legacy_materiais: legacyMateriais,
+    materiais_all: materiaisAll,
+    materiaisByObra: materiaisByObra,
+    materiaisTotal: materiaisTotal,
+    global: null
+  };
+}
+
+function getCurrentRangeSnapshot_() {
+  if (!DATA) return buildCurrentRangeSnapshot_();
+  const key = getCurrentRangeCacheKey_();
+  if (dashboardRangeCache[key]) return dashboardRangeCache[key];
+  const snapshot = buildCurrentRangeSnapshot_();
+  dashboardRangeCache[key] = snapshot;
+  rememberDashboardRangeCacheKey_(key);
+  return snapshot;
+}
+
 /* ── CHART.JS DEFAULTS ─────────────────────────────────── */
 Chart.defaults.color = '#a0aec0';
 Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
@@ -156,11 +345,267 @@ const sectionTitles = {
 /* ══════════════════════════════════════════════════════════
    DATA LOADING
    ══════════════════════════════════════════════════════════ */
+function safeStorageGet_(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function safeStorageSet_(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function safeStorageRemove_(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {}
+}
+
+function setCacheStatus_(text, tone) {
+  const el = document.getElementById('cache-status-pill');
+  if (!el) return;
+  if (!text) {
+    el.textContent = '';
+    el.style.display = 'none';
+    el.className = 'topbar-badge cache-status-pill';
+    return;
+  }
+  el.textContent = text;
+  el.style.display = 'inline-flex';
+  el.className = 'topbar-badge cache-status-pill cache-status-' + (tone || 'live');
+}
+
+function formatCacheClock_(value) {
+  if (!value) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function labelDashboardSource_(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (key === 'supabase') return 'Supabase';
+  if (key === 'sheets') return 'Sheets';
+  return 'Origem desconhecida';
+}
+
+function saveDashboardCache_(jsonStr) {
+  if (!jsonStr) return false;
+  return safeStorageSet_(DASHBOARD_CACHE_KEY, JSON.stringify({
+    saved_at: new Date().toISOString(),
+    payload: jsonStr
+  }));
+}
+
+function loadDashboardCache_() {
+  const raw = safeStorageGet_(DASHBOARD_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.payload !== 'string' || !parsed.payload.trim()) {
+      safeStorageRemove_(DASHBOARD_CACHE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    safeStorageRemove_(DASHBOARD_CACHE_KEY);
+    return null;
+  }
+}
+
+function persistDashboardUiState_() {
+  safeStorageSet_(DASHBOARD_UI_STATE_KEY, JSON.stringify({
+    currentSection: currentSection || 'overview',
+    currentObraName: currentObraName || '',
+    globalDateFrom: globalDateFrom || '',
+    globalDateTo: globalDateTo || '',
+    activeQuickFilter: activeQuickFilter || '',
+    sidebarCollapsed: !!sidebarCollapsed,
+    obrasMenuOpen: !!obrasMenuOpen
+  }));
+}
+
+function restoreDashboardUiState_() {
+  const raw = safeStorageGet_(DASHBOARD_UI_STATE_KEY);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) || {};
+    const validSections = {
+      overview: true,
+      contabilidade: true,
+      'obra-detail': true,
+      deslocacoes: true,
+      equipa: true,
+      rh: true,
+      'mapa-mensal': true,
+      assiduidade: true,
+      ferias: true,
+      comparativa: true,
+      dev: true
+    };
+    currentSection = validSections[parsed.currentSection] ? parsed.currentSection : 'overview';
+    currentObraName = String(parsed.currentObraName || '').trim() || null;
+    globalDateFrom = String(parsed.globalDateFrom || '').trim();
+    globalDateTo = String(parsed.globalDateTo || '').trim();
+    activeQuickFilter = String(parsed.activeQuickFilter || '').trim();
+    sidebarCollapsed = !!parsed.sidebarCollapsed;
+    obrasMenuOpen = parsed.obrasMenuOpen !== false;
+    return true;
+  } catch (e) {
+    safeStorageRemove_(DASHBOARD_UI_STATE_KEY);
+    return false;
+  }
+}
+
+function setQuickFilterState_(preset) {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = yyyy + '-' + mm + '-' + dd;
+
+  activeQuickFilter = preset;
+
+  switch (preset) {
+    case 'hoje':
+      globalDateFrom = todayStr;
+      globalDateTo = todayStr;
+      break;
+    case 'semana': {
+      const dow = today.getDay() || 7;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (dow - 1));
+      globalDateFrom = monday.getFullYear() + '-' +
+        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
+        String(monday.getDate()).padStart(2, '0');
+      globalDateTo = todayStr;
+      break;
+    }
+    case 'mes':
+      globalDateFrom = yyyy + '-' + mm + '-01';
+      globalDateTo = todayStr;
+      break;
+    case 'tudo':
+    default:
+      globalDateFrom = '';
+      globalDateTo = '';
+      break;
+  }
+}
+
+function ensureDashboardUiState_() {
+  if (dashboardUiStateRestored) return;
+  if (!restoreDashboardUiState_()) {
+    currentSection = 'overview';
+    currentObraName = null;
+    setQuickFilterState_('hoje');
+    obrasMenuOpen = true;
+  }
+  dashboardUiStateRestored = true;
+}
+
+function applySidebarUiState_() {
+  const sidebar = document.getElementById('sidebar');
+  const icon = document.getElementById('sidebar-toggle-icon');
+  if (sidebar) sidebar.classList.toggle('collapsed', !!sidebarCollapsed);
+  document.body.classList.toggle('sidebar-collapsed', !!sidebarCollapsed);
+  if (icon) {
+    icon.className = sidebarCollapsed
+      ? 'fa-solid fa-angles-right'
+      : 'fa-solid fa-angles-left';
+  }
+  const submenu = document.getElementById('obras-submenu');
+  if (submenu) submenu.classList.toggle('open', !!obrasMenuOpen);
+}
+
+function renderDashboardFromState_() {
+  if (!DATA || DATA.error) return;
+  syncFilterInputsUI_();
+  syncQuickFilterButtonsUI_();
+  renderDashboardBaseChrome_();
+  ensureDashboardSectionBuilt_('overview');
+  applySidebarUiState_();
+
+  if (currentSection === 'obra-detail') {
+    if (currentObraName && DATA.obras && DATA.obras[currentObraName]) {
+      openObra(currentObraName);
+    } else {
+      const visibleNames = getVisibleObraNames_();
+      if (visibleNames.length) openObra(visibleNames[0]);
+      else {
+        currentSection = 'overview';
+        currentObraName = null;
+        showSection('overview');
+      }
+    }
+  } else {
+    showSection(currentSection || 'overview');
+  }
+
+  persistDashboardUiState_();
+}
+
+function hydrateDashboardPayload_(payload, options) {
+  const opts = options || {};
+  DATA = normalizeDashboardPayload_(payload);
+  mapaMensalCache = {};
+  resetDashboardRangeCache_();
+  markDashboardSectionsDirty_();
+  if (DATA.error) {
+    throw new Error(DATA.error);
+  }
+  matMovAll = DATA.materiais_mov || [];
+  legacyMatAll = DATA.legacy_materiais || [];
+  ensureDashboardUiState_();
+  renderDashboardFromState_();
+  hideOverlay();
+  stopRefreshSpinner();
+
+  if (opts.fromCache) {
+    const label = formatCacheClock_(opts.cacheSavedAt);
+    const sourceLabel = labelDashboardSource_(DATA.payload_source);
+    setCacheStatus_(label ? ('Cache ' + sourceLabel + ' ' + label) : ('Cache ' + sourceLabel), 'cached');
+  } else {
+    const sourceLabel = labelDashboardSource_(DATA.payload_source);
+    setCacheStatus_(DATA.generated_at ? (sourceLabel + ' ' + DATA.generated_at) : sourceLabel, 'live');
+    if (opts.rawJson) saveDashboardCache_(opts.rawJson);
+    checkAlerts();
+  }
+}
+
+function bootstrapDashboardFromCache_() {
+  if (DATA && !DATA.error) return true;
+  const cached = loadDashboardCache_();
+  if (!cached) return false;
+  try {
+    hydrateDashboardPayload_(JSON.parse(cached.payload), {
+      fromCache: true,
+      cacheSavedAt: cached.saved_at
+    });
+    return true;
+  } catch (e) {
+    safeStorageRemove_(DASHBOARD_CACHE_KEY);
+    return false;
+  }
+}
+
 function loadData() {
   const overlay = document.getElementById('loading-overlay');
-  overlay.classList.remove('hidden');
   startRefreshSpinner();
-  showSkeletons();
+  const hasLiveData = !!(DATA && !DATA.error);
+  const bootedFromCache = !hasLiveData && bootstrapDashboardFromCache_();
+
+  if (!hasLiveData && !bootedFromCache) {
+    overlay.classList.remove('hidden');
+    showSkeletons();
+  }
 
   google.script.run
     .withSuccessHandler(onDataLoaded)
@@ -171,16 +616,8 @@ function loadData() {
 function onDataLoaded(jsonStr) {
   try {
     const payload = JSON.parse(jsonStr);
-    DATA = normalizeDashboardPayload_(payload);
-    mapaMensalCache = {};
-    if (DATA.error) { onDataError(DATA.error); return; }
-    matMovAll = DATA.materiais_mov || [];
-    legacyMatAll = DATA.legacy_materiais || [];
-    buildAll();
-    setQuickFilter('hoje');
-    hideOverlay();
-    stopRefreshSpinner();
-    checkAlerts();
+    hydrateDashboardPayload_(payload, { rawJson: jsonStr });
+    legacyFallbackAttempted = false;
   } catch (e) {
     if (!legacyFallbackAttempted) {
       legacyFallbackAttempted = true;
@@ -198,6 +635,9 @@ function normalizeDashboardPayload_(payload) {
   if (!payload || payload.error) return payload;
   if (payload.payload_mode === 'raw_v2' && Array.isArray(payload.registos)) {
     return buildDashboardFromRaw_(payload);
+  }
+  if (payload.global && payload.obras && !payload.payload_source) {
+    payload.payload_source = 'sheets';
   }
   return payload;
 }
@@ -509,16 +949,24 @@ function buildDashboardFromRaw_(raw) {
     ferias: raw.ferias || [],
     pessoal_efetivo: raw.pessoal_efetivo || [],
     materiais_mov: materiaisMov,
-    generated_at: raw.generated_at || ''
+    generated_at: raw.generated_at || '',
+    payload_source: raw.payload_source || 'sheets'
   };
 }
 
 function onDataError(err) {
+  const errorText = String((err && err.message) || err || 'Erro desconhecido');
   hideOverlay();
   stopRefreshSpinner();
+  if (DATA && !DATA.error) {
+    setCacheStatus_('A mostrar ultimo estado guardado', 'stale');
+    showToast('Falha ao atualizar. A manter o ultimo estado guardado.', 'warning', 7000);
+    return;
+  }
+  setCacheStatus_('', '');
   document.getElementById('section-overview').innerHTML =
     `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i>
-     Erro ao carregar dados: ${err}</div>`;
+     Erro ao carregar dados: ${errorText}</div>`;
 }
 
 function hideOverlay() {
@@ -531,6 +979,7 @@ function hideOverlay() {
    ══════════════════════════════════════════════════════════ */
 function showSection(id) {
   currentSection = id;
+  ensureDashboardSectionBuilt_(id);
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const target = document.getElementById('section-' + id);
   if (target) target.classList.add('active');
@@ -564,11 +1013,13 @@ function showSection(id) {
   // }
 
   window.scrollTo(0, 0);
+  persistDashboardUiState_();
 }
 
 function toggleObrasMenu() {
   obrasMenuOpen = !obrasMenuOpen;
   document.getElementById('obras-submenu').classList.toggle('open', obrasMenuOpen);
+  persistDashboardUiState_();
 }
 
 function toggleSidebar() {
@@ -579,24 +1030,15 @@ function toggleSidebar() {
   icon.className = sidebarCollapsed
     ? 'fa-solid fa-angles-right'
     : 'fa-solid fa-angles-left';
+  persistDashboardUiState_();
 }
 
 /* ══════════════════════════════════════════════════════════
    BUILD ALL (stubs)
    ══════════════════════════════════════════════════════════ */
 function buildAll() {
-  buildObrasSidebar();
-  buildObraButtons();
-  buildOverview();
-  buildDevSection();
-  buildDeslocacoes();
-  buildEquipa();
-  buildMapaMensal();
-  buildAssidTable();
-  buildComparativa();
-  buildFerias();
-  buildContabilidade();
-  buildRecursosHumanos();
+  renderDashboardBaseChrome_();
+  DASHBOARD_LAZY_SECTION_IDS.forEach(id => ensureDashboardSectionBuilt_(id));
 }
 
 function buildObrasSidebar() {
@@ -691,6 +1133,7 @@ function isObraAtiva_(nome) {
 function obraHasDataInCurrentFilter_(nome) {
   if (!DATA || !DATA.obras || !DATA.obras[nome]) return false;
   const obra = DATA.obras[nome];
+  const snapshot = getCurrentRangeSnapshot_();
 
   const hasDaily = (obra.daily || []).some(d => {
     const dateKey = d.DATA_str || d.Data || d.data || '';
@@ -703,12 +1146,10 @@ function obraHasDataInCurrentFilter_(nome) {
   );
   if (hasAssid) return true;
 
-  const hasDeslocacoes = (DATA.deslocacoes || []).some(d =>
-    d.obra === nome && dateInRange(d.data)
-  );
+  const hasDeslocacoes = !!snapshot.deslocacoesByObra[nome];
   if (hasDeslocacoes) return true;
 
-  const hasMateriais = filterAllMateriaisByDate().some(m => m.obra === nome);
+  const hasMateriais = !!snapshot.materiaisByObra[nome];
   return hasMateriais;
 }
 
@@ -774,6 +1215,7 @@ function renderObraNoDataState_() {
 function buildObraKpis(nome) {
   const o = DATA.obras[nome];
   const container = document.getElementById('obra-kpis');
+  const snapshot = getCurrentRangeSnapshot_();
 
   // Se não há filtro activo, usar totais brutos directamente
   const semFiltro = !globalDateFrom && !globalDateTo;
@@ -811,12 +1253,10 @@ function buildObraKpis(nome) {
     });
 
     // Deslocações filtradas
-    (DATA.deslocacoes || []).forEach(d => {
-      if (d.obra === nome && dateInRange(d.data)) custoDesl += d.custo || 0;
-    });
+    custoDesl = snapshot.deslocacoesByObra[nome] || 0;
 
     // Materiais CONSUMO filtrados por obra
-    custoMat = sumMateriaisByObra(nome);
+    custoMat = snapshot.materiaisByObra[nome] || 0;
   }
 
   const custoTotal = custoMO + custoDesl + custoMat;
@@ -1053,22 +1493,17 @@ function addFaseCost_(agg, faseLabel, custo, horas) {
 function buildObraCharts(nome) {
   const obra = DATA.obras[nome];
   if (!obra) return;
+  const snapshot = getCurrentRangeSnapshot_();
   destroyObraCharts();
   updateObraFasePeriodLabel_();
 
   // Aggregate mao de obra por fase from raw rows + legacy rows (date-filtered)
   const faseAgg = {};
-  (DATA.registos || []).forEach(r => {
-    if (String(r.obra || '').trim() !== nome) return;
-    const dateStr = String(r.data || '').slice(0, 10);
-    if (!dateInRange(dateStr)) return;
+  (snapshot.registosByObra[nome] || []).forEach(r => {
     if (r.falta) return;
     addFaseCost_(faseAgg, r.fase || 'Sem Fase', r.custo, r.horas);
   });
-  (DATA.legacy_mao_obra || []).forEach(r => {
-    if (String(r.obra || '').trim() !== nome) return;
-    const dateStr = String(r.data || '').slice(0, 10);
-    if (!dateInRange(dateStr)) return;
+  (snapshot.legacyMaoByObra[nome] || []).forEach(r => {
     addFaseCost_(faseAgg, r.fase || 'Sem Fase', r.custo, r.horas);
   });
 
@@ -1805,7 +2240,7 @@ function animateCounters() {
 
 function buildDeslocacoes() {
   if (!DATA || !DATA.deslocacoes) return;
-  const desl = DATA.deslocacoes.filter(d => dateInRange(d.data));
+  const desl = getCurrentRangeSnapshot_().deslocacoes.slice();
 
   if (!desl.length) {
     const empty = '<div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-route" style="font-size:28px;display:block;margin-bottom:12px;opacity:.4"></i>Sem deslocacoes no periodo selecionado</div>';
@@ -2160,12 +2595,11 @@ function buildEquipa() {
         }
         if (dayData.atraso_min) workerAgg[nome].atrasos += dayData.atraso_min;
         workerAgg[nome].obrasSet.add(obraNome);
+        (Array.isArray(dayData.fases) ? dayData.fases : []).forEach(fase => {
+          const faseLabel = String(fase || '').trim();
+          if (faseLabel) workerAgg[nome].fasesSet.add(faseLabel);
+        });
       });
-
-      // Recolher fase deste worker nesta obra
-      const wInfo = (obras[obraNome].workers || [])
-        .find(ww => ww['Nome (auto)'] === nome);
-      if (wInfo && wInfo.Fase) workerAgg[nome].fasesSet.add(wInfo.Fase);
     });
   });
 
@@ -3127,6 +3561,7 @@ function buildCompCustosChart(obraNames) {
   if (compCharts.custos) compCharts.custos.destroy();
   const allObraNames = Array.isArray(obraNames) ? obraNames : [];
   const selectedMetrics = getCompCustosSelectedMetrics_();
+  const snapshot = getCurrentRangeSnapshot_();
 
   pruneCompCustosObraState_(allObraNames);
   const visibleObraNames = getVisibleCompObraNames_(allObraNames);
@@ -3134,19 +3569,17 @@ function buildCompCustosChart(obraNames) {
   syncCompCustosControls_(allObraNames);
 
   // Aggregate deslocações (date-filtered)
-  const deslPerObra = {};
-  (DATA.deslocacoes || []).forEach(d => {
-    if (!dateInRange(d.data)) return;
-    deslPerObra[d.obra] = (deslPerObra[d.obra] || 0) + d.custo;
-  });
+  const deslPerObra = snapshot.deslocacoesByObra;
 
   // Aggregate labour from obra daily totals (date-filtered)
   const labourPerObra = {};
   allObraNames.forEach(n => {
     labourPerObra[n] = 0;
-    (DATA.obras[n].daily || []).forEach(d => {
-      if (!dateInRange(d.DATA_str)) return;
-      labourPerObra[n] += Number(d.Custo) || 0;
+    (snapshot.registosByObra[n] || []).forEach(r => {
+      labourPerObra[n] += Number(r.custo) || 0;
+    });
+    (snapshot.legacyMaoByObra[n] || []).forEach(r => {
+      labourPerObra[n] += Number(r.custo) || 0;
     });
   });
 
@@ -3816,23 +4249,19 @@ function collectCompFasesDataForMetric_(selectedObras, metricKey) {
   const perObra = {};
   const phaseMap = {};
   const metric = metricKey || 'mao_obra';
+  const snapshot = getCurrentRangeSnapshot_();
 
   selected.forEach(nome => {
     perObra[nome] = {};
     if (metric !== 'materiais') {
-      (DATA.registos || []).forEach(r => {
-        if (String(r.obra || '').trim() !== nome) return;
-        const dateStr = String(r.data || '').slice(0, 10);
-        if (!dateInRange(dateStr) || r.falta) return;
+      (snapshot.registosByObra[nome] || []).forEach(r => {
+        if (r.falta) return;
         const fase = String(r.fase || '').trim() || 'Sem Fase';
         if (!shouldIncludeCompFase_(fase)) return;
         if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
         perObra[nome][fase].mao_obra += Number(r.custo) || 0;
       });
-      (DATA.legacy_mao_obra || []).forEach(r => {
-        if (String(r.obra || '').trim() !== nome) return;
-        const dateStr = String(r.data || '').slice(0, 10);
-        if (!dateInRange(dateStr)) return;
+      (snapshot.legacyMaoByObra[nome] || []).forEach(r => {
         const fase = String(r.fase || '').trim() || 'Sem Fase';
         if (!shouldIncludeCompFase_(fase)) return;
         if (!perObra[nome][fase]) perObra[nome][fase] = { mao_obra: 0, materiais: 0, total: 0 };
@@ -3842,7 +4271,7 @@ function collectCompFasesDataForMetric_(selectedObras, metricKey) {
   });
 
   if (metric !== 'mao_obra') {
-    filterAllMateriaisByDate().forEach(m => {
+    snapshot.materiais_all.forEach(m => {
       if (!selectedSet.has(m.obra)) return;
       const fase = String(m.fase || '').trim() || 'Sem Fase';
       if (!shouldIncludeCompFase_(fase)) return;
@@ -4083,23 +4512,22 @@ function resetCompDiasSelection() {
 function collectCompDiasData_(selectedObras) {
   const selected = Array.isArray(selectedObras) ? selectedObras : [];
   const phaseMap = {};
+  const snapshot = getCurrentRangeSnapshot_();
 
   selected.forEach(nome => {
     const phaseDaysByName = {};
-    (DATA.registos || []).forEach(r => {
-      if (String(r.obra || '').trim() !== nome) return;
-      const dateStr = String(r.data || '').slice(0, 10);
-      if (!dateInRange(dateStr) || r.falta) return;
+    (snapshot.registosByObra[nome] || []).forEach(r => {
+      const dateStr = r._normDate || normalizeDateKey_(r.data);
+      if (!dateStr || r.falta) return;
       if ((Number(r.horas) || 0) <= 0 && (Number(r.custo) || 0) <= 0) return;
       const fase = String(r.fase || '').trim() || 'Sem Fase';
       if (!shouldIncludeCompFase_(fase)) return;
       if (!phaseDaysByName[fase]) phaseDaysByName[fase] = new Set();
       phaseDaysByName[fase].add(dateStr);
     });
-    (DATA.legacy_mao_obra || []).forEach(r => {
-      if (String(r.obra || '').trim() !== nome) return;
-      const dateStr = String(r.data || '').slice(0, 10);
-      if (!dateInRange(dateStr)) return;
+    (snapshot.legacyMaoByObra[nome] || []).forEach(r => {
+      const dateStr = r._normDate || normalizeDateKey_(r.data);
+      if (!dateStr) return;
       if ((Number(r.horas) || 0) <= 0 && (Number(r.custo) || 0) <= 0) return;
       const fase = String(r.fase || '').trim() || 'Sem Fase';
       if (!shouldIncludeCompFase_(fase)) return;
@@ -4584,59 +5012,23 @@ function applyGlobalFilter() {
   syncQuickFilterButtonsUI_();
 
   if (DATA) {
-    buildAll();
-    if (currentSection === 'obra-detail') {
-      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
-      else renderObraNoDataState_();
-    }
+    markDashboardSectionsDirty_();
+    renderDashboardFromState_();
   }
+  persistDashboardUiState_();
 }
 
 function setQuickFilter(preset) {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  const todayStr = yyyy + '-' + mm + '-' + dd;
-
-  activeQuickFilter = preset;
-
-  switch (preset) {
-    case 'hoje':
-      globalDateFrom = todayStr;
-      globalDateTo = todayStr;
-      break;
-    case 'semana': {
-      const dow = today.getDay() || 7; // monday=1
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - (dow - 1));
-      globalDateFrom = monday.getFullYear() + '-' +
-        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
-        String(monday.getDate()).padStart(2, '0');
-      globalDateTo = todayStr;
-      break;
-    }
-    case 'mes':
-      globalDateFrom = yyyy + '-' + mm + '-01';
-      globalDateTo = todayStr;
-      break;
-    case 'tudo':
-    default:
-      globalDateFrom = '';
-      globalDateTo = '';
-      break;
-  }
+  setQuickFilterState_(preset);
 
   syncFilterInputsUI_();
   syncQuickFilterButtonsUI_();
 
   if (DATA) {
-    buildAll();
-    if (currentSection === 'obra-detail') {
-      if (currentObraName && DATA.obras[currentObraName]) openObra(currentObraName);
-      else renderObraNoDataState_();
-    }
+    markDashboardSectionsDirty_();
+    renderDashboardFromState_();
   }
+  persistDashboardUiState_();
 }
 
 function clearGlobalFilter() {
@@ -4645,15 +5037,13 @@ function clearGlobalFilter() {
 
 /* ── MATERIAIS HELPERS ──────────────────────────────────── */
 function filterMateriaisByDate() {
-  return matMovAll.filter(m =>
-    isDashboardMaterialMov_(m) && dateInRange(m.data)
-  );
+  return getCurrentRangeSnapshot_().materiais_consumo;
 }
 function filterLegacyMateriaisByDate() {
-  return legacyMatAll.filter(m => dateInRange(m.data));
+  return getCurrentRangeSnapshot_().legacy_materiais;
 }
 function filterAllMateriaisByDate() {
-  return filterMateriaisByDate().concat(filterLegacyMateriaisByDate());
+  return getCurrentRangeSnapshot_().materiais_all;
 }
 function matCost(m) {
   const raw = (m && m.custo_total_com_iva != null && m.custo_total_com_iva !== '')
@@ -4663,23 +5053,22 @@ function matCost(m) {
   return isNaN(n) ? 0 : n;
 }
 function sumMateriaisGlobal() {
-  return filterAllMateriaisByDate().reduce((s, m) => s + matCost(m), 0);
+  return getCurrentRangeSnapshot_().materiaisTotal;
 }
 function sumMateriaisByObra(nome) {
-  return filterAllMateriaisByDate()
-    .filter(m => m.obra === nome)
-    .reduce((s, m) => s + matCost(m), 0);
+  return getCurrentRangeSnapshot_().materiaisByObra[nome] || 0;
 }
 
 function computeFilteredGlobal() {
   if (!DATA || !DATA.obras) return DATA ? DATA.global : {};
   if (!globalDateFrom && !globalDateTo) return DATA.global;
+  const snapshot = getCurrentRangeSnapshot_();
+  if (snapshot.global) return snapshot.global;
 
   // Re-aggregate from daily data
   let custoMO = 0, horasTotal = 0, faltas = 0, totalAtrasos = 0;
   const workerSet = new Set();
   const obraSet = new Set();
-  let custoDesl = 0;
 
   Object.keys(DATA.obras).forEach(nome => {
     const obra = DATA.obras[nome];
@@ -4700,17 +5089,12 @@ function computeFilteredGlobal() {
     });
   });
 
-  // Deslocações cost
-  (DATA.deslocacoes || []).forEach(d => {
-    if (dateInRange(d.data)) custoDesl += d.custo || 0;
-  });
-
-  // Materiais CONSUMO filtrados
-  const custoMat = sumMateriaisGlobal();
+  const custoDesl = snapshot.deslocacoesTotal;
+  const custoMat = snapshot.materiaisTotal;
 
   const custoTotal = custoMO + custoDesl + custoMat;
 
-  return {
+  snapshot.global = {
     custo_total: custoTotal,
     custo_mao_obra: custoMO,
     custo_deslocacoes: custoDesl,
@@ -4722,6 +5106,8 @@ function computeFilteredGlobal() {
     total_atrasos: totalAtrasos,
     last_update: DATA.global.last_update,
   };
+
+  return snapshot.global;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -5183,27 +5569,24 @@ let contabChartEvolucao = null;
 
 function buildContabilidade() {
   if (!DATA) return;
+  const snapshot = getCurrentRangeSnapshot_();
   // 1. Mão de Obra
   let totalMaoDeObra = 0;
   
   // Current Registos
-  const registosFiltered = [];
-  (DATA.registos || []).forEach(r => {
-    const d = normalizeDateKey_(r.data);
-    if (!d || !dateInRange(d)) return;
+  const registosFiltered = snapshot.registos.slice();
+  registosFiltered.forEach(r => {
+    const d = r._normDate || normalizeDateKey_(r.data);
     totalMaoDeObra += Number(r.custo) || 0;
     r._normDate = d;
-    registosFiltered.push(r);
   });
   
   // Legacy Registos
-  const legacyMaoFiltered = [];
-  (DATA.legacy_mao_obra || []).forEach(r => {
-    const d = normalizeDateKey_(r.data);
-    if (!d || !dateInRange(d)) return;
+  const legacyMaoFiltered = snapshot.legacy_mao_obra.slice();
+  legacyMaoFiltered.forEach(r => {
+    const d = r._normDate || normalizeDateKey_(r.data);
     totalMaoDeObra += Number(r.custo) || 0;
     r._normDate = d;
-    legacyMaoFiltered.push(r);
   });
 
   // 2. Deslocações
@@ -5223,12 +5606,10 @@ function buildContabilidade() {
     'GASOLINA': 0
   };
 
-  const matFiltered = [];
-  (DATA.materiais_mov || []).forEach(m => {
-    const d = normalizeDateKey_(m.data);
-    if (!d || !dateInRange(d)) return;
+  const matFiltered = snapshot.materiais_mov.slice();
+  matFiltered.forEach(m => {
+    const d = m._normDate || normalizeDateKey_(m.data);
     m._normDate = d;
-    matFiltered.push(m);
     
     const custo = Number(m.custo_total) || 0;
     totalMateriais += custo;
@@ -5260,24 +5641,20 @@ function buildContabilidade() {
     else categories['MATERIAL'] += custo; // fallback para material
   });
 
-  const legacyMatFiltered = [];
-  (DATA.legacy_materiais || []).forEach(m => {
-    const d = normalizeDateKey_(m.data);
-    if (!d || !dateInRange(d)) return;
+  const legacyMatFiltered = snapshot.legacy_materiais.slice();
+  legacyMatFiltered.forEach(m => {
+    const d = m._normDate || normalizeDateKey_(m.data);
     m._normDate = d;
-    legacyMatFiltered.push(m);
     
     const custo = Number(m.custo) || 0;
     totalMateriais += custo;
     categories['MATERIAL'] += custo;
   });
 
-  const deslFiltered = [];
-  (DATA.deslocacoes || []).forEach(dObj => {
-    const d = normalizeDateKey_(dObj.data);
-    if (!d || !dateInRange(d)) return;
+  const deslFiltered = snapshot.deslocacoes.slice();
+  deslFiltered.forEach(dObj => {
+    const d = dObj._normDate || normalizeDateKey_(dObj.data);
     dObj._normDate = d;
-    deslFiltered.push(dObj);
     totalDeslocacoes += Number(dObj.custo) || 0;
   });
 

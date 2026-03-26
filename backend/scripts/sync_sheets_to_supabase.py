@@ -32,7 +32,7 @@ RowMapper = Callable[[dict[str, Any], int], dict[str, Any] | None]
 HeaderResolver = Callable[[LiveGoogleSheetsAdapter], int]
 
 BATCH_SIZE = 200
-MISSING_TABLE_HINT = "Run backend/sql/008_create_operational_sync_tables.sql in the Supabase SQL Editor first."
+MISSING_TABLE_HINT = "Run the required operational sync SQL in the Supabase SQL Editor first (including backend/sql/010_create_dashboard_runtime_sync_tables.sql for the new dashboard mirror tables)."
 SNAPSHOT_ENTITIES = [
     "compromissos_obra",
     "faturas",
@@ -46,10 +46,14 @@ SNAPSHOT_ENTITIES = [
 ]
 SYNC_ORDER = [
     "pessoal_efetivo",
+    "obras",
     "colaboradores",
+    "ferias",
+    "viagens",
     "registos",
     "deslocacoes",
     "legacy_mao_obra",
+    "legacy_materiais",
     *SNAPSHOT_ENTITIES,
 ]
 
@@ -61,10 +65,11 @@ ENTITY_DROP_FIELDS: dict[str, set[str]] = {
 @dataclass(slots=True)
 class ManualSheetConfig:
     entity: str
-    sheet_name: str
+    sheet_name: str | tuple[str, ...]
     header_row: int | HeaderResolver
     mapper: RowMapper
     dedupe_key: Callable[[dict[str, Any]], str] | None = None
+    optional: bool = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -153,7 +158,20 @@ def _map_colaborador(row: dict[str, Any], row_num: int) -> dict[str, Any] | None
     return {
         "nome": nome,
         "funcao": _read_text(row, ["Função", "Funcao", "FunÃ§Ã£o"]),
+        "eur_h": _read_float(row, ["€/h", "â‚¬/h", "Eur_h", "Eur h"]) or 0.0,
         "ativo": True,
+        "sheet_row_num": row_num,
+    }
+
+
+def _map_obra(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    obra_id = _read_text(row, ["Obra_ID", "Obra"])
+    if not obra_id or obra_id == "Obra_ID":
+        return None
+    return {
+        "obra_id": obra_id,
+        "local_id": _read_text(row, ["Local_ID", "Local"]),
+        "ativa": _read_text(row, ["Ativa", "Activo", "Ativo"]),
         "sheet_row_num": row_num,
     }
 
@@ -181,6 +199,77 @@ def _map_registo(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     }
 
 
+def _build_ferias_key(row: dict[str, Any], row_num: int) -> str:
+    data_admissao = _read_date(row, ["Data_Admissao", "Data Admissao", "Data AdmissÃ£o"])
+    ref_inicio = _read_date(row, ["Ano_Ref_Inicio", "Ano Ref Inicio", "Ano Ref InÃ­cio"])
+    ref_fim = _read_date(row, ["Ano_Ref_Fim", "Ano Ref Fim"])
+    return "|".join(
+        [
+            "ferias-row",
+            _normalize_key_part(_read_text(row, ["Nome"])),
+            data_admissao.isoformat() if data_admissao else "",
+            ref_inicio.isoformat() if ref_inicio else "",
+            ref_fim.isoformat() if ref_fim else "",
+            str(row_num),
+        ]
+    )
+
+
+def _map_ferias(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    nome = _read_text(row, ["Nome"])
+    if not nome:
+        return None
+    data_admissao = _read_date(row, ["Data_Admissao", "Data Admissao", "Data AdmissÃ£o"])
+    ref_inicio = _read_date(row, ["Ano_Ref_Inicio", "Ano Ref Inicio", "Ano Ref InÃ­cio"])
+    ref_fim = _read_date(row, ["Ano_Ref_Fim", "Ano Ref Fim"])
+    return {
+        "source_key": _build_ferias_key(row, row_num),
+        "nome": nome,
+        "data_admissao": data_admissao.isoformat() if data_admissao else None,
+        "dias_total": int(_read_float(row, ["Dias_Total", "Dias Total"]) or 0),
+        "ano_ref_inicio": ref_inicio.isoformat() if ref_inicio else None,
+        "ano_ref_fim": ref_fim.isoformat() if ref_fim else None,
+        "dias_usados": int(_read_float(row, ["Dias_Usados", "Dias Usados"]) or 0),
+        "dias_disponiveis": int(_read_float(row, ["Dias_Disponiveis", "Dias Disponiveis", "Dias DisponÃ­veis"]) or 0),
+        "sheet_row_num": row_num,
+    }
+
+
+def _build_viagem_key(row: dict[str, Any], row_num: int) -> str:
+    data = _read_date(row, ["Data"])
+    return "|".join(
+        [
+            "viagem-row",
+            data.isoformat() if data else "",
+            _normalize_key_part(_read_text(row, ["Viatura"])),
+            _normalize_key_part(_read_text(row, ["Obra"])),
+            str(_read_float(row, ["V_Efetivas", "V Efetivas"]) or 0.0),
+            str(row_num),
+        ]
+    )
+
+
+def _map_viagem(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    data = _read_date(row, ["Data"])
+    if not data:
+        return None
+    raw_real = _read_text(row, ["V_Real", "V Real"])
+    v_real = _read_float(row, ["V_Real", "V Real"]) if raw_real != "" else None
+    return {
+        "source_key": _build_viagem_key(row, row_num),
+        "data": data.isoformat() if data else None,
+        "dia_sem": int(_read_float(row, ["DiaSem", "Dia da Semana"]) or 0),
+        "v_padrao": _read_float(row, ["V_Padrao", "V PadrÃ£o"]) or 0.0,
+        "v_real": v_real,
+        "v_efetivas": _read_float(row, ["V_Efetivas", "V Efetivas"]) or 0.0,
+        "viatura": _read_text(row, ["Viatura"]),
+        "obra": _read_text(row, ["Obra"]) or None,
+        "custo_via": _read_float(row, ["Custo_Via", "Custo Via"]) or 0.0,
+        "custo_dia": _read_float(row, ["Custo_Dia", "Custo Dia"]) or 0.0,
+        "sheet_row_num": row_num,
+    }
+
+
 def _map_deslocacao(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     viagem_id = _read_text(row, ["ID_Viagem", "ID Viagem"])
     if not viagem_id:
@@ -194,7 +283,7 @@ def _map_deslocacao(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
         "veiculo": _read_text(row, ["Veiculo", "Veículo"]),
         "motorista": _read_text(row, ["Motorista"]),
         "origem": _read_text(row, ["Origem"]),
-        "quantidade_viagens": int(_read_float(row, ["Quantidade_Viagens", "Quantidade Viagens"]) or 1),
+        "quantidade_viagens": int(_read_float(row, ["Quantidade_Viagens", "Quantidade Viagens"]) or 0),
         "custo_total": _read_float(row, ["Custo_Total", "Custo Total"]) or 0.0,
         "sheet_row_num": row_num,
     }
@@ -222,6 +311,22 @@ def _build_legacy_key(row: dict[str, Any], row_num: int) -> str:
     )
 
 
+def _build_legacy_materiais_key(row: dict[str, Any], row_num: int) -> str:
+    data = _read_date(row, ["Data"])
+    return "|".join(
+        [
+            "legacy-mat-row",
+            data.isoformat() if data else "",
+            _normalize_key_part(_read_text(row, ["Obra"])),
+            _normalize_key_part(_read_text(row, ["Fase de Obra", "Fase"])),
+            _normalize_key_part(_read_text(row, ["Material"])),
+            str(_read_float(row, ["Quantidade"]) or 0.0),
+            str(_read_float(row, ["Custo_Total Com IVA", "Custo Total Com IVA", "Custo_Total_Com_IVA"]) or 0.0),
+            str(row_num),
+        ]
+    )
+
+
 def _map_legacy_mao_obra(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
     data = _read_date(row, ["Data"])
     obra = _read_text(row, ["Obra"])
@@ -240,6 +345,33 @@ def _map_legacy_mao_obra(row: dict[str, Any], row_num: int) -> dict[str, Any] | 
     }
 
 
+def _map_legacy_materiais(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    obra = _read_text(row, ["Obra"])
+    material = _read_text(row, ["Material"])
+    if not obra or not material:
+        return None
+    data = _read_date(row, ["Data"])
+    custo_com_iva = _read_float(row, ["Custo_Total Com IVA", "Custo Total Com IVA", "Custo_Total_Com_IVA"]) or 0.0
+    custo_sem_iva = _read_float(row, ["Custo_Total Sem IVA", "Custo Total Sem IVA", "Custo_Total_Sem_IVA"]) or 0.0
+    custo_total = custo_com_iva or custo_sem_iva or 0.0
+    quantidade = _read_float(row, ["Quantidade"]) or 0.0
+    return {
+        "source_key": _build_legacy_materiais_key(row, row_num),
+        "data": data.isoformat() if data else None,
+        "obra": obra,
+        "fase": _read_text(row, ["Fase de Obra", "Fase"]) or "Sem Fase",
+        "material": material,
+        "unidade": _read_text(row, ["Unidade"]),
+        "quantidade": quantidade,
+        "custo_unit": _read_float(row, ["Custo_Unit", "Custo Unit", "Custo Unitario", "Custo UnitÃ¡rio"]) or 0.0,
+        "custo_total_sem_iva": custo_sem_iva,
+        "iva": _read_float(row, ["IVA"]) or 0.0,
+        "custo_total_com_iva": custo_com_iva or custo_total,
+        "custo_total": custo_total,
+        "sheet_row_num": row_num,
+    }
+
+
 MANUAL_SHEETS: dict[str, ManualSheetConfig] = {
     "pessoal_efetivo": ManualSheetConfig(
         entity="pessoal_efetivo",
@@ -254,6 +386,28 @@ MANUAL_SHEETS: dict[str, ManualSheetConfig] = {
         header_row=3,
         mapper=_map_colaborador,
         dedupe_key=lambda item: str(item.get("nome") or "").strip().lower(),
+    ),
+    "obras": ManualSheetConfig(
+        entity="obras",
+        sheet_name="OBRAS",
+        header_row=3,
+        mapper=_map_obra,
+        dedupe_key=lambda item: str(item.get("obra_id") or "").strip().lower(),
+    ),
+    "ferias": ManualSheetConfig(
+        entity="ferias",
+        sheet_name="FERIAS",
+        header_row=1,
+        mapper=_map_ferias,
+        dedupe_key=lambda item: str(item.get("source_key") or "").strip(),
+    ),
+    "viagens": ManualSheetConfig(
+        entity="viagens",
+        sheet_name="VIAGENS_DIARIAS",
+        header_row=2,
+        mapper=_map_viagem,
+        dedupe_key=lambda item: str(item.get("source_key") or "").strip(),
+        optional=True,
     ),
     "registos": ManualSheetConfig(
         entity="registos",
@@ -274,6 +428,13 @@ MANUAL_SHEETS: dict[str, ManualSheetConfig] = {
         sheet_name="LEGACY_MAO_OBRA",
         header_row=1,
         mapper=_map_legacy_mao_obra,
+        dedupe_key=lambda item: str(item.get("source_key") or "").strip(),
+    ),
+    "legacy_materiais": ManualSheetConfig(
+        entity="legacy_materiais",
+        sheet_name=("LEGACY_MATERIAIS", "MATERIAIS_LEGACY"),
+        header_row=1,
+        mapper=_map_legacy_materiais,
         dedupe_key=lambda item: str(item.get("source_key") or "").strip(),
     ),
 }
@@ -301,10 +462,36 @@ def resolve_header_row(adapter: LiveGoogleSheetsAdapter, config: ManualSheetConf
     return int(config.header_row)
 
 
+def resolve_sheet_name(adapter: LiveGoogleSheetsAdapter, config: ManualSheetConfig) -> str:
+    names = (config.sheet_name,) if isinstance(config.sheet_name, str) else tuple(config.sheet_name)
+    last_error: Exception | None = None
+    for name in names:
+        try:
+            adapter._read_header_at_row(name, 1)  # type: ignore[attr-defined]
+            return name
+        except Exception as exc:
+            last_error = exc
+            continue
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"No sheet name configured for {config.entity}")
+
+
 def load_manual_entity(adapter: LiveGoogleSheetsAdapter, config: ManualSheetConfig) -> list[dict[str, Any]]:
+    try:
+        sheet_name = resolve_sheet_name(adapter, config)
+    except Exception:
+        if config.optional:
+            return []
+        raise
     header_row = resolve_header_row(adapter, config)
-    headers = adapter._read_header_at_row(config.sheet_name, header_row)  # type: ignore[attr-defined]
-    rows = adapter._read_rows(config.sheet_name, headers, start_row=header_row + 1)  # type: ignore[attr-defined]
+    headers = adapter._read_header_at_row(sheet_name, header_row)  # type: ignore[attr-defined]
+    rows = adapter._read_rows(  # type: ignore[attr-defined]
+        sheet_name,
+        headers,
+        start_row=header_row + 1,
+        value_render_option="UNFORMATTED_VALUE",
+    )
     out: list[dict[str, Any]] = []
     index_by_key: dict[str, int] = {}
     for row_num, row in rows:
@@ -557,7 +744,7 @@ def main() -> int:
     sheets = LiveGoogleSheetsAdapter(settings)
     supabase = LiveSupabaseAdapter(settings)
 
-    snapshot = sheets.load_snapshot()
+    snapshot = sheets.load_snapshot(value_render_option="UNFORMATTED_VALUE")
     manual_data = {
         entity: load_manual_entity(sheets, config)
         for entity, config in MANUAL_SHEETS.items()

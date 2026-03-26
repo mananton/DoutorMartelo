@@ -2,7 +2,11 @@
 param(
     [switch]$Apply,
     [switch]$Json,
-    [switch]$Strict
+    [switch]$Strict,
+    [string[]]$Entity,
+    [switch]$ListEntities,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$ForwardArgs
 )
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -17,6 +21,16 @@ if ($Json) {
 }
 if ($Strict) {
     $arguments += "--strict"
+}
+if ($ListEntities) {
+    $arguments += "--list-entities"
+}
+foreach ($item in ($Entity | Where-Object { $_ })) {
+    $arguments += "--entity"
+    $arguments += $item
+}
+foreach ($item in ($ForwardArgs | Where-Object { $_ })) {
+    $arguments += $item
 }
 
 & python @arguments

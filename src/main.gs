@@ -59,7 +59,7 @@ function getDashboardData(options) {
     if (String(opts.mode || "").toLowerCase() === "legacy") {
       return JSON.stringify(buildData_(ss));
     }
-    return JSON.stringify(buildRawData_(ss));
+    return JSON.stringify(buildRawDataForDashboard_(ss, opts));
   } catch (err) {
     return JSON.stringify({ error: err.message });
   }

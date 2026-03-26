@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from http.client import IncompleteRead
 import logging
 from time import perf_counter
@@ -56,12 +56,16 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
                 )
             )
 
-    def load_snapshot(self) -> dict[str, list[dict[str, Any]]]:
+    def load_snapshot(self, *, value_render_option: str | None = None) -> dict[str, list[dict[str, Any]]]:
         snapshot: dict[str, list[dict[str, Any]]] = {}
         for entity, config in SHEET_READ_CONFIG.items():
             try:
                 headers = self._read_header(config["sheet_name"])
-                rows = self._read_rows(config["sheet_name"], headers)
+                rows = self._read_rows(
+                    config["sheet_name"],
+                    headers,
+                    value_render_option=value_render_option,
+                )
                 parser: RowParser = config["parser"]
                 parsed = []
                 for row_num, row in rows:
@@ -328,12 +332,22 @@ class LiveGoogleSheetsAdapter(GoogleSheetsAdapter):
         self._header_cache[cache_key] = list(header)
         return header
 
-    def _read_rows(self, sheet_name: str, headers: list[str], *, start_row: int = 2) -> list[tuple[int, dict[str, Any]]]:
+    def _read_rows(
+        self,
+        sheet_name: str,
+        headers: list[str],
+        *,
+        start_row: int = 2,
+        value_render_option: str | None = None,
+    ) -> list[tuple[int, dict[str, Any]]]:
+        request_kwargs: dict[str, Any] = {
+            "spreadsheetId": self.settings.google_spreadsheet_id,
+            "range": f"{sheet_name}!A{start_row}:ZZ",
+        }
+        if value_render_option:
+            request_kwargs["valueRenderOption"] = value_render_option
         result = self._execute_request(
-            self.service.spreadsheets().values().get(
-                spreadsheetId=self.settings.google_spreadsheet_id,
-                range=f"{sheet_name}!A{start_row}:ZZ",
-            )
+            self.service.spreadsheets().values().get(**request_kwargs)
         )
         rows = result.get("values", [])
         parsed: list[tuple[int, dict[str, Any]]] = []
@@ -466,13 +480,31 @@ def _read_date(row: dict[str, Any], aliases: list[str]) -> date | None:
         return None
     if isinstance(value, date) and not isinstance(value, datetime):
         return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        serial_date = _google_serial_date_to_date(value)
+        if serial_date is not None:
+            return serial_date
     text = str(value).strip()
     for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
         try:
             return datetime.strptime(text, fmt).date()
         except ValueError:
             continue
+    serial_date = _google_serial_date_to_date(text)
+    if serial_date is not None:
+        return serial_date
     return None
+
+
+def _google_serial_date_to_date(value: Any) -> date | None:
+    try:
+        serial = float(value)
+    except (TypeError, ValueError):
+        return None
+    if serial <= 0:
+        return None
+    base = date(1899, 12, 30)
+    return base + timedelta(days=int(serial))
 
 
 def _read_timestamp(row_num: int) -> datetime:
