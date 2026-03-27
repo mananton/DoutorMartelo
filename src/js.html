@@ -968,6 +968,7 @@ function buildDashboardFromRaw_(raw) {
     stock_atual: raw.stock_atual || [],
     afetacoes_obra: raw.afetacoes_obra || [],
     materiais_cad: raw.materiais_cad || [],
+    veiculos: raw.veiculos || [],
     generated_at: raw.generated_at || '',
     payload_source: raw.payload_source || 'sheets'
   };
@@ -2920,12 +2921,6 @@ function buildCompras() {
   comprasExpandedFatura = null;
   comprasFaturaFilter = 'todas';
 
-  // Update tab counts
-  var cntF = document.getElementById('compras-count-faturas');
-  var cntS = document.getElementById('compras-count-stock');
-  if (cntF) cntF.textContent = comprasFaturasData.length;
-  if (cntS) cntS.textContent = (DATA.stock_atual || []).filter(function(s) { return s.stock_atual > 0; }).length;
-
   // Reset chips
   var chips = document.querySelectorAll('#compras-faturas-chips .compras-chip');
   chips.forEach(function(c) { c.classList.toggle('active', c.textContent.trim() === 'Todas'); });
@@ -3065,8 +3060,11 @@ function renderComprasFaturas() {
     else if (f.paga) badge = '<span class="compras-badge compras-badge-paga">Paga</span>';
     else badge = '<span class="compras-badge compras-badge-por-pagar">Por pagar</span>';
 
-    // Photo link placeholder
-    var fotoLink = '<span class="compras-fatura-foto-link" title="Foto da fatura (em breve)"><i class="fa-solid fa-camera"></i></span>';
+    // Photo link
+    var fotoLink = '';
+    if (f.foto_url) {
+      fotoLink = '<a class="compras-fatura-foto-link" href="' + f.foto_url + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ver documento"><i class="fa-solid fa-file-pdf"></i> Doc</a>';
+    }
 
     var expanded = comprasExpandedFatura === f.id_fatura;
     var escId = f.id_fatura.replace(/'/g, "\\'");
@@ -3084,33 +3082,57 @@ function renderComprasFaturas() {
 
     // Expanded detail
     if (expanded && fitens.length) {
-      html += '<div class="compras-fatura-detail"><div class="compras-timeline">';
+      html += '<div class="compras-fatura-detail">';
+      // PDF thumbnail
+      if (f.foto_url) {
+        var fileIdMatch = f.foto_url.match(/\/d\/([^/]+)/);
+        if (fileIdMatch) {
+          var thumbUrl = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w240';
+          html += '<a href="' + f.foto_url + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="compras-fatura-thumb-link">';
+          html += '<img src="' + thumbUrl + '" class="compras-fatura-thumb" alt="Documento" loading="lazy">';
+          html += '<span class="compras-fatura-thumb-label"><i class="fa-solid fa-file-pdf"></i> Abrir documento</span>';
+          html += '</a>';
+        }
+      }
+      html += '<div class="compras-timeline">';
       fitens.forEach(function(it) {
         var destLabel = (it.destino || 'OBRA').toUpperCase();
-        var tlClass = destLabel === 'STOCK' ? 'tl-stock' : (destLabel.indexOf('VIATURA') >= 0 ? 'tl-stock' : 'tl-obra');
+        var isViatura = destLabel === 'VIATURA' || destLabel === 'MAQUINA' || destLabel === 'GERADOR';
         var itemLabel = it.item_oficial || it.descricao_original || '\u2014';
         html += '<div class="compras-timeline-item tl-compra">';
         html += '<div class="compras-tl-head">' + itemLabel + '</div>';
         html += '<div class="compras-tl-sub">' + (it.quantidade || 0) + ' ' + (it.unidade || 'un') + ' \u00D7 ' + comprasFmtVal(it.custo_unit) + ' = ' + comprasFmtVal(it.custo_total_com_iva) + '</div>';
         html += '<div class="compras-tl-sub">';
-        if (destLabel === 'STOCK') html += '<span style="color:#3498db">\u2192 Stock</span>';
-        else if (it.obra) html += '<span style="color:#e67e22">\u2192 ' + it.obra + (it.fase ? ' / ' + it.fase : '') + '</span>';
-        else html += '<span style="color:#95a5a6">\u2192 ' + destLabel + '</span>';
+        if (destLabel === 'STOCK') {
+          html += '<span style="color:#3498db">\u2192 Stock</span>';
+        } else if (isViatura) {
+          var mat = (it.matricula || '').trim();
+          var veiculoNome = '';
+          if (mat) {
+            var matLow = mat.toLowerCase();
+            var vEntry = (DATA.veiculos || []).find(function(v) {
+              return (v.matricula || '').toLowerCase() === matLow;
+            });
+            if (vEntry && vEntry.veiculo) veiculoNome = vEntry.veiculo;
+          }
+          var viaturaLabel;
+          if (veiculoNome && mat) {
+            viaturaLabel = veiculoNome + ' <span style="color:#95a5a6;font-size:11px">(' + mat + ')</span>';
+          } else if (mat) {
+            viaturaLabel = mat;
+          } else if (veiculoNome) {
+            viaturaLabel = veiculoNome;
+          } else {
+            viaturaLabel = destLabel;
+          }
+          html += '<span style="color:#9b59b6">\u2192 ' + viaturaLabel + '</span>';
+        } else if (it.obra) {
+          html += '<span style="color:#e67e22">\u2192 ' + it.obra + (it.fase ? ' / ' + it.fase : '') + '</span>';
+        } else {
+          html += '<span style="color:#95a5a6">\u2192 ' + destLabel + '</span>';
+        }
         html += '</div>';
         html += '</div>';
-
-        // Show related movements
-        var relatedMovs = (DATA.materiais_mov || []).filter(function(m) {
-          return m.doc_fatura === f.nr_documento && m.id_item === it.id_item;
-        });
-        relatedMovs.forEach(function(m) {
-          var movClass = m.tipo === 'ENTRADA' ? 'tl-stock' : (m.tipo === 'CONSUMO' ? 'tl-obra' : 'tl-compra');
-          html += '<div class="compras-timeline-item ' + movClass + '">';
-          html += '<div class="compras-tl-head" style="font-size:11px">' + m.tipo + ' ' + m.id_mov + '</div>';
-          html += '<div class="compras-tl-sub">' + (m.tipo === 'ENTRADA' ? '+' : '-') + m.quantidade + ' ' + (m.unidade || 'un');
-          if (m.obra) html += ' \u2022 ' + m.obra;
-          html += '</div></div>';
-        });
       });
       html += '</div></div>';
     }
