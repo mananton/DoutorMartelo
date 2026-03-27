@@ -71,6 +71,8 @@ Runtime: Google Apps Script + HtmlService. No npm, no modules, no fetch for GAS 
 
 Data flow: `doGet()` serves page -> frontend calls `getDashboardData({ mode: 'raw_v2' })` -> resolves from Supabase or Sheets based on `DASHBOARD_DATA_SOURCE` config -> frontend normalizes and renders.
 
+The `raw_v2` payload includes: registos, obras_info, colaboradores, viagens, deslocacoes, ferias, pessoal_efetivo, materiais_mov, legacy_mao_obra, legacy_materiais, faturas, faturas_itens, notas_credito_itens, stock_atual, afetacoes_obra, materiais_cad.
+
 ### Track B - Materials Backoffice
 
 **Backend** (`backend/app/`): FastAPI with layered architecture:

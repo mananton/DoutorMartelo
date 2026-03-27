@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Bash(git:*)",
+      "Bash(wc:*)",
+      "Bash(npx clasp:*)",
+      "Bash(powershell.exe -File \"C:/Users/Temporario/Desktop/Dashboard/backend/ops/Sync-SheetsToSupabase.ps1\" -Apply)",
+      "WebSearch",
+      "Bash(grep:*)"
+    ]
+  }
+}

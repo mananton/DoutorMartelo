@@ -50,6 +50,10 @@ Last updated: 2026-03-27
 5. Frontend normalizes via `buildDashboardFromRaw_`, hydrates local cache, and lazy-builds sections as they are opened.
 6. If the raw path fails, frontend still preserves the legacy fallback behavior.
 - Detailed current workbook-origin mapping is documented in `docs/DASHBOARD_SHEET_FLOW.md`.
+- The `raw_v2` payload now also carries materials/purchasing datasets:
+  - `faturas`, `faturas_itens`, `notas_credito_itens`, `stock_atual`, `afetacoes_obra`, `materiais_cad`
+  - These feed the new **Compras** dashboard tab (Faturas / Stock / Resumo sub-tabs).
+  - Same dual-source behaviour: Supabase preferred, Sheets fallback.
 
 ## 4. Legacy Data Rules (Implemented)
 - Keep costs even when old rows are incomplete.

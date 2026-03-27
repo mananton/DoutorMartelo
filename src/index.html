@@ -46,6 +46,9 @@
     <button class="nav-item" onclick="showSection('equipa')" data-section="equipa">
       <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
     </button>
+    <button class="nav-item" onclick="showSection('compras')" data-section="compras">
+      <i class="fa-solid fa-file-invoice"></i><span>Compras</span>
+    </button>
     <button class="nav-item" onclick="showSection('rh')" data-section="rh">
       <i class="fa-solid fa-users-gear"></i><span>Recursos Humanos</span>
     </button>
@@ -365,6 +368,74 @@
     <div id="equipa-popup-container"></div>
   </div>
 
+  <!-- Compras -->
+  <div class="section" id="section-compras">
+    <!-- Sub-tabs -->
+    <div class="compras-sub-tabs">
+      <button class="compras-sub-tab active" id="compras-tab-faturas" onclick="setComprasTab('faturas')">
+        <i class="fa-solid fa-file-invoice"></i> Faturas <span class="compras-tab-count" id="compras-count-faturas"></span>
+      </button>
+      <button class="compras-sub-tab" id="compras-tab-stock" onclick="setComprasTab('stock')">
+        <i class="fa-solid fa-warehouse"></i> Stock <span class="compras-tab-count" id="compras-count-stock"></span>
+      </button>
+      <button class="compras-sub-tab" id="compras-tab-resumo" onclick="setComprasTab('resumo')">
+        <i class="fa-solid fa-chart-pie"></i> Resumo
+      </button>
+    </div>
+
+    <!-- ── FATURAS panel ── -->
+    <div id="compras-panel-faturas">
+      <!-- KPI pills -->
+      <div class="compras-kpi-row" id="compras-faturas-kpis"></div>
+      <!-- Filter chips -->
+      <div class="compras-filter-chips" id="compras-faturas-chips">
+        <button class="compras-chip active" onclick="setComprasFaturaFilter('todas')">Todas</button>
+        <button class="compras-chip" onclick="setComprasFaturaFilter('por_pagar')">Por pagar</button>
+        <button class="compras-chip" onclick="setComprasFaturaFilter('pagas')">Pagas</button>
+        <button class="compras-chip" onclick="setComprasFaturaFilter('nc')">Notas Crédito</button>
+      </div>
+      <!-- Search -->
+      <input type="text" class="table-search compras-search" id="compras-faturas-search"
+             placeholder="Pesquisar fornecedor ou documento..." oninput="renderComprasFaturas()">
+      <!-- Cards list -->
+      <div class="compras-card-list" id="compras-faturas-list"></div>
+    </div>
+
+    <!-- ── STOCK panel ── -->
+    <div id="compras-panel-stock" style="display:none">
+      <!-- Alert banner -->
+      <div class="compras-stock-alert" id="compras-stock-alert"></div>
+      <!-- Search -->
+      <input type="text" class="table-search compras-search" id="compras-stock-search"
+             placeholder="Pesquisar material..." oninput="renderComprasStock()">
+      <!-- Cards list -->
+      <div class="compras-card-list" id="compras-stock-list"></div>
+    </div>
+
+    <!-- ── RESUMO panel ── -->
+    <div id="compras-panel-resumo" style="display:none">
+      <!-- KPIs -->
+      <div class="compras-kpi-row" id="compras-resumo-kpis"></div>
+      <!-- Por Fornecedor -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-header"><i class="fa-solid fa-truck-field"></i> Por Fornecedor</div>
+        <div class="card-body" style="padding:0">
+          <div class="compras-card-list" id="compras-resumo-fornecedores"></div>
+        </div>
+      </div>
+      <!-- Por Obra -->
+      <div class="card">
+        <div class="card-header"><i class="fa-solid fa-building"></i> Por Obra</div>
+        <div class="card-body" style="padding:0">
+          <div class="compras-card-list" id="compras-resumo-obras"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popup/detail container -->
+    <div id="compras-popup-container"></div>
+  </div>
+
   <!-- Recursos Humanos -->
   <div class="section" id="section-rh">
     <div class="card">
@@ -670,6 +741,9 @@
   </button>
   <button class="mobile-nav-btn" onclick="showSection('equipa')" data-mobilesec="equipa">
     <i class="fa-solid fa-hard-hat"></i><span>Equipa</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="showSection('compras')" data-mobilesec="compras">
+    <i class="fa-solid fa-file-invoice"></i><span>Compras</span>
   </button>
   <button class="mobile-nav-btn" onclick="showSection('rh')" data-mobilesec="rh">
     <i class="fa-solid fa-users-gear"></i><span>RH</span>

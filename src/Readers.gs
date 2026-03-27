@@ -786,6 +786,370 @@ function readPessoalEfetivo_(sheet) {
       ocorrencias: cOcorrencias >= 0 ? String(r[cOcorrencias] || "").trim() : ""
     });
   });
-  
+
+  return out;
+}
+
+// ── FATURAS ──────────────────────────────────────────────
+function readFaturas_(sheet) {
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  var colMap = getColMap_(sheet, 1);
+  var cId = pickCol_(colMap, ["ID_Fatura", "Id_Fatura"], -1);
+  var cFornecedor = pickCol_(colMap, ["Fornecedor"], -1);
+  var cNif = pickCol_(colMap, ["NIF"], -1);
+  var cNrDoc = pickCol_(colMap, ["Nº Doc/Fatura", "Nr_Documento", "Nr Documento", "N Doc/Fatura", "Doc_Fatura"], -1);
+  var cData = pickCol_(colMap, ["Data Fatura", "Data_Fatura"], -1);
+  var cValSemIva = pickCol_(colMap, ["Valor Sem IVA", "Valor_Sem_IVA"], -1);
+  var cIva = pickCol_(colMap, ["IVA"], -1);
+  var cValComIva = pickCol_(colMap, ["Valor Com IVA", "Valor_Com_IVA"], -1);
+  var cObs = pickCol_(colMap, ["Observações", "Observacoes", "Obs"], -1);
+  var cEstado = pickCol_(colMap, ["Estado"], -1);
+  var cTipoDoc = pickCol_(colMap, ["Tipo_Doc", "Tipo Doc"], -1);
+  var cDocOrigem = pickCol_(colMap, ["Doc_Origem", "Doc Origem"], -1);
+  var cPaga = pickCol_(colMap, ["Paga", "Paga?"], -1);
+  var cDataPag = pickCol_(colMap, ["Data_Pagamento", "Data Pagamento"], -1);
+
+  if (cId < 0) return [];
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    var s = String(v || "").replace(/\s/g, "").replace(/€/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var out = [];
+
+  rows.forEach(function(r) {
+    var id = String(r[cId] || "").trim();
+    if (!id) return;
+    out.push({
+      id_fatura: id,
+      fornecedor: cFornecedor >= 0 ? String(r[cFornecedor] || "").trim() : "",
+      nif: cNif >= 0 ? String(r[cNif] || "").trim() : "",
+      nr_documento: cNrDoc >= 0 ? String(r[cNrDoc] || "").trim() : "",
+      data_fatura: formatDateValue_(cData >= 0 ? r[cData] : null, false),
+      valor_sem_iva: cValSemIva >= 0 ? num_(r[cValSemIva]) : 0,
+      iva: cIva >= 0 ? num_(r[cIva]) : 0,
+      valor_com_iva: cValComIva >= 0 ? num_(r[cValComIva]) : 0,
+      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : "",
+      estado: cEstado >= 0 ? String(r[cEstado] || "").trim() : "",
+      tipo_doc: cTipoDoc >= 0 ? String(r[cTipoDoc] || "").trim() : "FATURA",
+      doc_origem: cDocOrigem >= 0 ? String(r[cDocOrigem] || "").trim() : "",
+      paga: cPaga >= 0 ? toBool_(r[cPaga]) : false,
+      data_pagamento: formatDateValue_(cDataPag >= 0 ? r[cDataPag] : null, false)
+    });
+  });
+
+  return out;
+}
+
+// ── FATURAS_ITENS ────────────────────────────────────────
+function readFaturasItens_(sheet) {
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  var colMap = getColMap_(sheet, 1);
+  var cId = pickCol_(colMap, ["ID_Item_Fatura", "Id_Item_Fatura"], -1);
+  var cIdFatura = pickCol_(colMap, ["ID_Fatura", "Id_Fatura"], -1);
+  var cFornecedor = pickCol_(colMap, ["Fornecedor"], -1);
+  var cNif = pickCol_(colMap, ["NIF"], -1);
+  var cNrDoc = pickCol_(colMap, ["Nº Doc/Fatura", "Nr_Documento", "Nr Documento"], -1);
+  var cData = pickCol_(colMap, ["Data Fatura", "Data_Fatura"], -1);
+  var cDescricao = pickCol_(colMap, ["Descricao_Original", "Descricao Original", "Descrição Original"], -1);
+  var cIdItem = pickCol_(colMap, ["ID_Item", "Id_Item"], -1);
+  var cItemOficial = pickCol_(colMap, ["Item_Oficial", "Item Oficial"], -1);
+  var cUnidade = pickCol_(colMap, ["Unidade"], -1);
+  var cNatureza = pickCol_(colMap, ["Natureza"], -1);
+  var cQtd = pickCol_(colMap, ["Quantidade"], -1);
+  var cCustoUnit = pickCol_(colMap, ["Custo_Unit", "Custo Unit", "Custo Unitário", "Custo Unitario"], -1);
+  var cDesc1 = pickCol_(colMap, ["Desconto 1", "Desconto_1"], -1);
+  var cDesc2 = pickCol_(colMap, ["Desconto 2", "Desconto_2"], -1);
+  var cCustoSemIva = pickCol_(colMap, ["Custo_Total Sem IVA", "Custo Total Sem IVA", "Custo_Total_Sem_IVA"], -1);
+  var cIva = pickCol_(colMap, ["IVA"], -1);
+  var cCustoComIva = pickCol_(colMap, ["Custo_Total Com IVA", "Custo Total Com IVA", "Custo_Total_Com_IVA"], -1);
+  var cDestino = pickCol_(colMap, ["Destino"], -1);
+  var cObra = pickCol_(colMap, ["Obra"], -1);
+  var cFase = pickCol_(colMap, ["Fase"], -1);
+  var cObs = pickCol_(colMap, ["Observações", "Observacoes", "Obs"], -1);
+
+  if (cId < 0) return [];
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    var s = String(v || "").replace(/\s/g, "").replace(/€/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var out = [];
+
+  rows.forEach(function(r) {
+    var id = String(r[cId] || "").trim();
+    if (!id) return;
+    out.push({
+      id_item_fatura: id,
+      id_fatura: cIdFatura >= 0 ? String(r[cIdFatura] || "").trim() : "",
+      fornecedor: cFornecedor >= 0 ? String(r[cFornecedor] || "").trim() : "",
+      nif: cNif >= 0 ? String(r[cNif] || "").trim() : "",
+      nr_documento: cNrDoc >= 0 ? String(r[cNrDoc] || "").trim() : "",
+      data_fatura: formatDateValue_(cData >= 0 ? r[cData] : null, false),
+      descricao_original: cDescricao >= 0 ? String(r[cDescricao] || "").trim() : "",
+      id_item: cIdItem >= 0 ? String(r[cIdItem] || "").trim() : "",
+      item_oficial: cItemOficial >= 0 ? String(r[cItemOficial] || "").trim() : "",
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      natureza: cNatureza >= 0 ? String(r[cNatureza] || "").trim() : "",
+      quantidade: cQtd >= 0 ? num_(r[cQtd]) : 0,
+      custo_unit: cCustoUnit >= 0 ? num_(r[cCustoUnit]) : 0,
+      desconto_1: cDesc1 >= 0 ? num_(r[cDesc1]) : 0,
+      desconto_2: cDesc2 >= 0 ? num_(r[cDesc2]) : 0,
+      custo_total_sem_iva: cCustoSemIva >= 0 ? num_(r[cCustoSemIva]) : 0,
+      iva: cIva >= 0 ? num_(r[cIva]) : 0,
+      custo_total_com_iva: cCustoComIva >= 0 ? num_(r[cCustoComIva]) : 0,
+      destino: cDestino >= 0 ? String(r[cDestino] || "").trim() : "",
+      obra: cObra >= 0 ? String(r[cObra] || "").trim() : "",
+      fase: cFase >= 0 ? String(r[cFase] || "").trim() : "",
+      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : ""
+    });
+  });
+
+  return out;
+}
+
+// ── NOTAS_CREDITO_ITENS ──────────────────────────────────
+function readNotasCreditoItens_(sheet) {
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  var colMap = getColMap_(sheet, 1);
+  var cId = pickCol_(colMap, ["ID_Item_Nota_Credito", "Id_Item_Nota_Credito"], -1);
+  var cIdFatura = pickCol_(colMap, ["ID_Fatura", "Id_Fatura"], -1);
+  var cFornecedor = pickCol_(colMap, ["Fornecedor"], -1);
+  var cNif = pickCol_(colMap, ["NIF"], -1);
+  var cNrDoc = pickCol_(colMap, ["Nº Doc/Fatura", "Nr_Documento", "Nr Documento"], -1);
+  var cDocOrigem = pickCol_(colMap, ["Doc_Origem", "Doc Origem"], -1);
+  var cData = pickCol_(colMap, ["Data Fatura", "Data_Fatura"], -1);
+  var cDescricao = pickCol_(colMap, ["Descricao_Original", "Descricao Original"], -1);
+  var cIdItem = pickCol_(colMap, ["ID_Item", "Id_Item"], -1);
+  var cItemOficial = pickCol_(colMap, ["Item_Oficial", "Item Oficial"], -1);
+  var cUnidade = pickCol_(colMap, ["Unidade"], -1);
+  var cNatureza = pickCol_(colMap, ["Natureza"], -1);
+  var cQtd = pickCol_(colMap, ["Quantidade"], -1);
+  var cCustoUnit = pickCol_(colMap, ["Custo_Unit", "Custo Unit"], -1);
+  var cCustoSemIva = pickCol_(colMap, ["Custo_Total Sem IVA", "Custo Total Sem IVA"], -1);
+  var cIva = pickCol_(colMap, ["IVA"], -1);
+  var cCustoComIva = pickCol_(colMap, ["Custo_Total Com IVA", "Custo Total Com IVA"], -1);
+  var cCategoria = pickCol_(colMap, ["Categoria_Nota_Credito", "Categoria Nota Credito"], -1);
+  var cObra = pickCol_(colMap, ["Obra"], -1);
+  var cFase = pickCol_(colMap, ["Fase"], -1);
+  var cEstado = pickCol_(colMap, ["Estado"], -1);
+  var cObs = pickCol_(colMap, ["Observações", "Observacoes", "Obs"], -1);
+
+  if (cId < 0) return [];
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    var s = String(v || "").replace(/\s/g, "").replace(/€/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var out = [];
+
+  rows.forEach(function(r) {
+    var id = String(r[cId] || "").trim();
+    if (!id) return;
+    out.push({
+      id_item_nota_credito: id,
+      id_fatura: cIdFatura >= 0 ? String(r[cIdFatura] || "").trim() : "",
+      fornecedor: cFornecedor >= 0 ? String(r[cFornecedor] || "").trim() : "",
+      nif: cNif >= 0 ? String(r[cNif] || "").trim() : "",
+      nr_documento: cNrDoc >= 0 ? String(r[cNrDoc] || "").trim() : "",
+      doc_origem: cDocOrigem >= 0 ? String(r[cDocOrigem] || "").trim() : "",
+      data_fatura: formatDateValue_(cData >= 0 ? r[cData] : null, false),
+      descricao_original: cDescricao >= 0 ? String(r[cDescricao] || "").trim() : "",
+      id_item: cIdItem >= 0 ? String(r[cIdItem] || "").trim() : "",
+      item_oficial: cItemOficial >= 0 ? String(r[cItemOficial] || "").trim() : "",
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      natureza: cNatureza >= 0 ? String(r[cNatureza] || "").trim() : "",
+      quantidade: cQtd >= 0 ? num_(r[cQtd]) : 0,
+      custo_unit: cCustoUnit >= 0 ? num_(r[cCustoUnit]) : 0,
+      custo_total_sem_iva: cCustoSemIva >= 0 ? num_(r[cCustoSemIva]) : 0,
+      iva: cIva >= 0 ? num_(r[cIva]) : 0,
+      custo_total_com_iva: cCustoComIva >= 0 ? num_(r[cCustoComIva]) : 0,
+      categoria_nota_credito: cCategoria >= 0 ? String(r[cCategoria] || "").trim() : "",
+      obra: cObra >= 0 ? String(r[cObra] || "").trim() : "",
+      fase: cFase >= 0 ? String(r[cFase] || "").trim() : "",
+      estado: cEstado >= 0 ? String(r[cEstado] || "").trim() : "",
+      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : ""
+    });
+  });
+
+  return out;
+}
+
+// ── STOCK_ATUAL ──────────────────────────────────────────
+function readStockAtual_(sheet) {
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  var colMap = getColMap_(sheet, 1);
+  var cIdItem = pickCol_(colMap, ["ID_Item", "Id_Item"], -1);
+  var cItemOficial = pickCol_(colMap, ["Item_Oficial", "Item Oficial"], -1);
+  var cMaterial = pickCol_(colMap, ["Material"], -1);
+  var cUnidade = pickCol_(colMap, ["Unidade"], -1);
+  var cStock = pickCol_(colMap, ["Stock_Atual", "Stock Atual"], -1);
+  var cCustoMedio = pickCol_(colMap, ["Custo_Medio_Atual", "Custo Medio Atual", "Custo Médio Atual"], -1);
+
+  if (cIdItem < 0) return [];
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    var s = String(v || "").replace(/\s/g, "").replace(/€/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var out = [];
+
+  rows.forEach(function(r) {
+    var id = String(r[cIdItem] || "").trim();
+    if (!id) return;
+    var stockQtd = cStock >= 0 ? num_(r[cStock]) : 0;
+    var custoMedio = cCustoMedio >= 0 ? num_(r[cCustoMedio]) : 0;
+    out.push({
+      id_item: id,
+      item_oficial: cItemOficial >= 0 ? String(r[cItemOficial] || "").trim() : "",
+      material: cMaterial >= 0 ? String(r[cMaterial] || "").trim() : "",
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      stock_atual: stockQtd,
+      custo_medio_atual: custoMedio,
+      valor_stock: stockQtd * custoMedio
+    });
+  });
+
+  return out;
+}
+
+// ── AFETACOES_OBRA ───────────────────────────────────────
+function readAfetacoesObra_(sheet) {
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  var colMap = getColMap_(sheet, 1);
+  var cId = pickCol_(colMap, ["ID_Afetacao", "Id_Afetacao"], -1);
+  var cOrigem = pickCol_(colMap, ["Origem"], -1);
+  var cSourceId = pickCol_(colMap, ["Source_ID", "Source ID"], -1);
+  var cData = pickCol_(colMap, ["Data"], -1);
+  var cIdItem = pickCol_(colMap, ["ID_Item", "Id_Item"], -1);
+  var cItemOficial = pickCol_(colMap, ["Item_Oficial", "Item Oficial"], -1);
+  var cNatureza = pickCol_(colMap, ["Natureza"], -1);
+  var cQtd = pickCol_(colMap, ["Quantidade"], -1);
+  var cUnidade = pickCol_(colMap, ["Unidade"], -1);
+  var cCustoUnit = pickCol_(colMap, ["Custo_Unit", "Custo Unit"], -1);
+  var cCustoTotal = pickCol_(colMap, ["Custo_Total", "Custo Total"], -1);
+  var cCustoSemIva = pickCol_(colMap, ["Custo_Total Sem IVA", "Custo Total Sem IVA"], -1);
+  var cIva = pickCol_(colMap, ["IVA"], -1);
+  var cCustoComIva = pickCol_(colMap, ["Custo_Total Com IVA", "Custo Total Com IVA"], -1);
+  var cObra = pickCol_(colMap, ["Obra"], -1);
+  var cFase = pickCol_(colMap, ["Fase"], -1);
+  var cFornecedor = pickCol_(colMap, ["Fornecedor"], -1);
+  var cNif = pickCol_(colMap, ["NIF"], -1);
+  var cNrDoc = pickCol_(colMap, ["Nr_Documento", "Nr Documento", "Nº Doc/Fatura"], -1);
+  var cObs = pickCol_(colMap, ["Observações", "Observacoes", "Obs"], -1);
+
+  if (cId < 0) return [];
+
+  function num_(v) {
+    if (typeof v === "number") return v;
+    var s = String(v || "").replace(/\s/g, "").replace(/€/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var out = [];
+
+  rows.forEach(function(r) {
+    var id = String(r[cId] || "").trim();
+    if (!id) return;
+    out.push({
+      id_afetacao: id,
+      origem: cOrigem >= 0 ? String(r[cOrigem] || "").trim() : "",
+      source_id: cSourceId >= 0 ? String(r[cSourceId] || "").trim() : "",
+      data: formatDateValue_(cData >= 0 ? r[cData] : null, false),
+      id_item: cIdItem >= 0 ? String(r[cIdItem] || "").trim() : "",
+      item_oficial: cItemOficial >= 0 ? String(r[cItemOficial] || "").trim() : "",
+      natureza: cNatureza >= 0 ? String(r[cNatureza] || "").trim() : "",
+      quantidade: cQtd >= 0 ? num_(r[cQtd]) : 0,
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      custo_unit: cCustoUnit >= 0 ? num_(r[cCustoUnit]) : 0,
+      custo_total: cCustoTotal >= 0 ? num_(r[cCustoTotal]) : 0,
+      custo_total_sem_iva: cCustoSemIva >= 0 ? num_(r[cCustoSemIva]) : 0,
+      iva: cIva >= 0 ? num_(r[cIva]) : 0,
+      custo_total_com_iva: cCustoComIva >= 0 ? num_(r[cCustoComIva]) : 0,
+      obra: cObra >= 0 ? String(r[cObra] || "").trim() : "",
+      fase: cFase >= 0 ? String(r[cFase] || "").trim() : "",
+      fornecedor: cFornecedor >= 0 ? String(r[cFornecedor] || "").trim() : "",
+      nif: cNif >= 0 ? String(r[cNif] || "").trim() : "",
+      nr_documento: cNrDoc >= 0 ? String(r[cNrDoc] || "").trim() : "",
+      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : ""
+    });
+  });
+
+  return out;
+}
+
+// ── MATERIAIS_CAD ────────────────────────────────────────
+function readMateriaisCad_(sheet) {
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  var colMap = getColMap_(sheet, 1);
+  var cIdItem = pickCol_(colMap, ["ID_Item", "Id_Item"], -1);
+  var cItemOficial = pickCol_(colMap, ["Item_Oficial", "Item Oficial"], -1);
+  var cNatureza = pickCol_(colMap, ["Natureza"], -1);
+  var cUnidade = pickCol_(colMap, ["Unidade"], -1);
+  var cObs = pickCol_(colMap, ["Observações", "Observacoes", "Obs"], -1);
+  var cEstado = pickCol_(colMap, ["Estado_Cadastro", "Estado Cadastro"], -1);
+
+  if (cIdItem < 0) return [];
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var out = [];
+  var seen = {};
+
+  rows.forEach(function(r) {
+    var id = String(r[cIdItem] || "").trim();
+    if (!id || seen[id]) return;
+    seen[id] = true;
+    out.push({
+      id_item: id,
+      item_oficial: cItemOficial >= 0 ? String(r[cItemOficial] || "").trim() : "",
+      natureza: cNatureza >= 0 ? String(r[cNatureza] || "").trim() : "",
+      unidade: cUnidade >= 0 ? String(r[cUnidade] || "").trim() : "",
+      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : "",
+      estado_cadastro: cEstado >= 0 ? String(r[cEstado] || "").trim() : ""
+    });
+  });
+
   return out;
 }

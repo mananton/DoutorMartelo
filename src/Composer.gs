@@ -12,7 +12,13 @@ const RAW_V2_COLLECTION_KEYS_ = [
   "pessoal_efetivo",
   "materiais_mov",
   "legacy_mao_obra",
-  "legacy_materiais"
+  "legacy_materiais",
+  "faturas",
+  "faturas_itens",
+  "notas_credito_itens",
+  "stock_atual",
+  "afetacoes_obra",
+  "materiais_cad"
 ];
 
 function createRawV2Payload_(partial) {
@@ -64,6 +70,12 @@ function buildRawData_(ss) {
   const pessoalSheet = ss.getSheetByName(SHEET_PESSOAL);
   const legacyMaoObraSheet = ss.getSheetByName(SHEET_LEGACY_MAO_OBRA);
   const legacyMateriaisSheet = getLegacyMateriaisSheet_(ss);
+  const faturasSheet = ss.getSheetByName(SHEET_FATURAS);
+  const faturasItensSheet = ss.getSheetByName(SHEET_FATURAS_ITENS);
+  const notasCreditoItensSheet = ss.getSheetByName(SHEET_NOTAS_CREDITO_ITENS);
+  const stockAtualSheet = ss.getSheetByName(SHEET_STOCK_ATUAL);
+  const afetacoesObraSheet = ss.getSheetByName(SHEET_AFETACOES_OBRA);
+  const materiaisCadSheet = ss.getSheetByName(SHEET_MATERIAIS_CAD);
 
   if (!regSheet) throw new Error("Folha nao encontrada: " + SHEET_REGISTOS);
 
@@ -92,6 +104,12 @@ function buildRawData_(ss) {
     pessoal_efetivo: readPessoalEfetivo_(pessoalSheet),
     materiais_mov: readMateriaisMovDashboard_(matSheet),
     legacy_mao_obra: readLegacyMaoObra_(legacyMaoObraSheet),
-    legacy_materiais: readLegacyMateriais_(legacyMateriaisSheet)
+    legacy_materiais: readLegacyMateriais_(legacyMateriaisSheet),
+    faturas: readFaturas_(faturasSheet),
+    faturas_itens: readFaturasItens_(faturasItensSheet),
+    notas_credito_itens: readNotasCreditoItens_(notasCreditoItensSheet),
+    stock_atual: readStockAtual_(stockAtualSheet),
+    afetacoes_obra: readAfetacoesObra_(afetacoesObraSheet),
+    materiais_cad: readMateriaisCad_(materiaisCadSheet)
   });
 }

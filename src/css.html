@@ -1556,6 +1556,170 @@ th.sort-active .sort-icon { opacity: 1; color: var(--accent); }
 }
 .equipa-popup-item:last-child { border-bottom: none; }
 
+/* ═══ COMPRAS SECTION ═══════════════════════════════════ */
+.compras-sub-tabs {
+  display: flex; gap: 6px; margin-bottom: 12px;
+}
+.compras-sub-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 5px; border: 1px solid var(--border); background: var(--card-bg);
+  color: var(--text-dim); border-radius: 10px; padding: 9px 8px;
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s;
+}
+.compras-sub-tab:hover { border-color: var(--accent); color: var(--text); }
+.compras-sub-tab.active { background: rgba(233,69,96,.1); border-color: var(--accent); color: var(--accent); }
+.compras-tab-count {
+  font-size: 10px; font-weight: 800; background: rgba(255,255,255,.06);
+  border-radius: 6px; padding: 2px 6px; min-width: 18px; text-align: center;
+}
+.compras-sub-tab.active .compras-tab-count { background: rgba(233,69,96,.18); }
+.compras-kpi-row {
+  display: flex; gap: 8px; margin-bottom: 10px; overflow-x: auto;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.compras-kpi-row::-webkit-scrollbar { display: none; }
+.compras-kpi-pill {
+  flex: 0 0 auto; background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; font-size: 11px;
+  white-space: nowrap; text-align: center;
+}
+.compras-kpi-pill strong {
+  display: block; font-size: 16px; color: var(--text); margin-top: 2px;
+}
+.compras-filter-chips {
+  display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.compras-filter-chips::-webkit-scrollbar { display: none; }
+.compras-chip {
+  flex: 0 0 auto; border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); border-radius: 16px; padding: 5px 12px;
+  font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: all .15s;
+}
+.compras-chip:hover { border-color: var(--text-muted); color: var(--text); }
+.compras-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.compras-search { width: 100%; margin-bottom: 10px; }
+.compras-card-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Fatura card ── */
+.compras-fatura-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; cursor: pointer;
+  transition: border-color .15s;
+}
+.compras-fatura-card:hover { border-color: var(--accent); }
+.compras-fatura-row1 {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px;
+}
+.compras-fatura-fornecedor { font-weight: 700; font-size: 13px; color: var(--text); }
+.compras-fatura-data { font-size: 11px; color: var(--text-dim); }
+.compras-fatura-row2 {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.compras-fatura-doc { font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
+.compras-fatura-row3 {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.compras-fatura-valor { font-size: 15px; font-weight: 800; color: var(--text); font-family: var(--mono); }
+.compras-fatura-valor.nc { color: var(--info); }
+.compras-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: .3px;
+}
+.compras-badge-paga { background: rgba(46,204,113,.15); color: #27ae60; }
+.compras-badge-por-pagar { background: rgba(241,196,15,.15); color: #d4a017; border: 1px solid rgba(241,196,15,.3); }
+.compras-badge-nc { background: rgba(52,152,219,.15); color: #2980b9; }
+.compras-fatura-linhas {
+  font-size: 10px; color: var(--text-dim); background: rgba(255,255,255,.04);
+  border-radius: 6px; padding: 2px 6px;
+}
+.compras-fatura-destino-bar {
+  flex: 1; min-width: 60px; max-width: 120px; height: 6px;
+  border-radius: 3px; overflow: hidden; display: flex; background: var(--border);
+}
+.compras-fatura-destino-bar span { display: block; height: 100%; }
+.compras-dest-stock { background: #3498db; }
+.compras-dest-obra { background: #e67e22; }
+.compras-dest-escritorio { background: #95a5a6; }
+.compras-dest-viatura { background: #9b59b6; }
+.compras-fatura-foto-link {
+  font-size: 11px; color: var(--info); cursor: pointer; margin-left: auto;
+}
+
+/* ── Fatura detail (expanded inline) ── */
+.compras-fatura-detail {
+  border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px;
+}
+.compras-timeline { position: relative; padding-left: 18px; }
+.compras-timeline::before {
+  content: ''; position: absolute; left: 5px; top: 0; bottom: 0;
+  width: 2px; background: var(--border);
+}
+.compras-timeline-item {
+  position: relative; margin-bottom: 10px; font-size: 12px;
+}
+.compras-timeline-item::before {
+  content: ''; position: absolute; left: -18px; top: 4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--card-bg);
+}
+.compras-timeline-item.tl-compra::before { border-color: #3498db; background: #3498db; }
+.compras-timeline-item.tl-stock::before { border-color: #2ecc71; background: #2ecc71; }
+.compras-timeline-item.tl-obra::before { border-color: #e67e22; background: #e67e22; }
+.compras-timeline-item.tl-nc::before { border-color: #e74c3c; background: #e74c3c; }
+.compras-tl-head { font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.compras-tl-sub { color: var(--text-dim); font-size: 11px; }
+
+/* ── Stock card ── */
+.compras-stock-alert {
+  background: rgba(231,76,60,.08); border: 1px solid rgba(231,76,60,.2);
+  border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600;
+  color: var(--accent); margin-bottom: 10px;
+}
+.compras-stock-alert:empty { display: none; }
+.compras-stock-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.compras-stock-row1 {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.compras-stock-nome { font-weight: 700; font-size: 13px; color: var(--text); }
+.compras-stock-id { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+.compras-stock-metrics {
+  display: flex; gap: 16px; margin-bottom: 8px; font-size: 12px;
+}
+.compras-stock-metric { color: var(--text-dim); }
+.compras-stock-metric strong { color: var(--text); }
+.compras-stock-movs { font-size: 11px; color: var(--text-dim); }
+.compras-stock-mov-line {
+  padding: 3px 0; display: flex; align-items: center; gap: 6px;
+}
+.compras-mov-in { color: #27ae60; font-weight: 700; }
+.compras-mov-out { color: #e74c3c; font-weight: 700; }
+
+/* ── Resumo cards ── */
+.compras-resumo-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.compras-resumo-row1 {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px;
+}
+.compras-resumo-nome { font-weight: 700; font-size: 13px; color: var(--text); }
+.compras-resumo-total { font-weight: 800; font-size: 14px; color: var(--text); font-family: var(--mono); }
+.compras-resumo-meta { font-size: 11px; color: var(--text-dim); }
+.compras-resumo-bar {
+  height: 6px; border-radius: 3px; overflow: hidden; display: flex;
+  background: var(--border); margin-top: 6px;
+}
+.compras-resumo-bar span { display: block; height: 100%; }
+
 .worker-avatar {
   position: relative;
   width: 36px;

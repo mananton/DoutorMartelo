@@ -156,6 +156,57 @@ const DASHBOARD_SUPABASE_TABLES_ = {
       "custo_total_com_iva",
       "custo_total"
     ]
+  },
+  faturas: {
+    table: "faturas",
+    orderBy: "id_fatura",
+    select: [
+      "id_fatura", "fornecedor", "nif", "nr_documento", "data_fatura",
+      "valor_sem_iva", "iva", "valor_com_iva", "observacoes", "estado",
+      "tipo_doc", "doc_origem", "paga", "data_pagamento"
+    ]
+  },
+  faturas_itens: {
+    table: "faturas_itens",
+    orderBy: "id_item_fatura",
+    select: [
+      "id_item_fatura", "id_fatura", "fornecedor", "nif", "nr_documento",
+      "data_fatura", "descricao_original", "id_item", "item_oficial",
+      "unidade", "natureza", "quantidade", "custo_unit", "desconto_1",
+      "desconto_2", "custo_total_sem_iva", "iva", "custo_total_com_iva",
+      "destino", "obra", "fase", "observacoes"
+    ]
+  },
+  notas_credito_itens: {
+    table: "notas_credito_itens",
+    orderBy: "id_item_nota_credito",
+    select: [
+      "id_item_nota_credito", "id_fatura", "fornecedor", "nif",
+      "nr_documento", "doc_origem", "data_fatura", "descricao_original",
+      "id_item", "item_oficial", "unidade", "natureza", "quantidade",
+      "custo_unit", "custo_total_sem_iva", "iva", "custo_total_com_iva",
+      "categoria_nota_credito", "obra", "fase", "estado", "observacoes"
+    ]
+  },
+  stock_atual: {
+    table: "stock_atual",
+    orderBy: "id_item",
+    select: ["id_item", "item_oficial", "material", "unidade", "stock_atual", "custo_medio_atual"]
+  },
+  afetacoes_obra: {
+    table: "afetacoes_obra",
+    orderBy: "id_afetacao",
+    select: [
+      "id_afetacao", "origem", "source_id", "data", "id_item",
+      "item_oficial", "natureza", "quantidade", "unidade", "custo_unit",
+      "custo_total", "custo_total_sem_iva", "iva", "custo_total_com_iva",
+      "obra", "fase", "fornecedor", "nif", "nr_documento", "observacoes"
+    ]
+  },
+  materiais_cad: {
+    table: "materiais_cad",
+    orderBy: "id_item",
+    select: ["id_item", "item_oficial", "natureza", "unidade", "observacoes", "estado_cadastro"]
   }
 };
 
@@ -226,7 +277,13 @@ function buildRawDataFromSupabase_() {
     pessoal_efetivo: mapSupabasePessoalEfetivo_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.pessoal_efetivo)),
     materiais_mov: mapSupabaseMateriaisMov_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.materiais_mov)),
     legacy_mao_obra: mapSupabaseLegacyMaoObra_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.legacy_mao_obra)),
-    legacy_materiais: mapSupabaseLegacyMateriais_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.legacy_materiais))
+    legacy_materiais: mapSupabaseLegacyMateriais_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.legacy_materiais)),
+    faturas: mapSupabaseFaturas_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.faturas)),
+    faturas_itens: mapSupabaseFaturasItens_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.faturas_itens)),
+    notas_credito_itens: mapSupabaseNotasCreditoItens_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.notas_credito_itens)),
+    stock_atual: mapSupabaseStockAtual_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.stock_atual)),
+    afetacoes_obra: mapSupabaseAfetacoesObra_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.afetacoes_obra)),
+    materiais_cad: mapSupabaseMateriaisCad_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.materiais_cad))
   });
 
   return payload;
@@ -543,6 +600,167 @@ function mapSupabaseLegacyMateriais_(rows) {
         source: "legacy_materiais",
         qtd: quantidade,
         custo: custoTotal
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseFaturas_(rows) {
+  return (rows || [])
+    .map(function(row) {
+      var id = supabaseText_(row.id_fatura);
+      if (!id) return null;
+      return {
+        id_fatura: id,
+        fornecedor: supabaseText_(row.fornecedor),
+        nif: supabaseText_(row.nif),
+        nr_documento: supabaseText_(row.nr_documento),
+        data_fatura: supabaseDate_(row.data_fatura),
+        valor_sem_iva: supabaseNumber_(row.valor_sem_iva),
+        iva: supabaseNumber_(row.iva),
+        valor_com_iva: supabaseNumber_(row.valor_com_iva),
+        observacoes: supabaseText_(row.observacoes),
+        estado: supabaseText_(row.estado),
+        tipo_doc: supabaseText_(row.tipo_doc) || "FATURA",
+        doc_origem: supabaseText_(row.doc_origem),
+        paga: supabaseBool_(row.paga),
+        data_pagamento: supabaseDate_(row.data_pagamento)
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseFaturasItens_(rows) {
+  return (rows || [])
+    .map(function(row) {
+      var id = supabaseText_(row.id_item_fatura);
+      if (!id) return null;
+      return {
+        id_item_fatura: id,
+        id_fatura: supabaseText_(row.id_fatura),
+        fornecedor: supabaseText_(row.fornecedor),
+        nif: supabaseText_(row.nif),
+        nr_documento: supabaseText_(row.nr_documento),
+        data_fatura: supabaseDate_(row.data_fatura),
+        descricao_original: supabaseText_(row.descricao_original),
+        id_item: supabaseText_(row.id_item),
+        item_oficial: supabaseText_(row.item_oficial),
+        unidade: supabaseText_(row.unidade),
+        natureza: supabaseText_(row.natureza),
+        quantidade: supabaseNumber_(row.quantidade),
+        custo_unit: supabaseNumber_(row.custo_unit),
+        desconto_1: supabaseNumber_(row.desconto_1),
+        desconto_2: supabaseNumber_(row.desconto_2),
+        custo_total_sem_iva: supabaseNumber_(row.custo_total_sem_iva),
+        iva: supabaseNumber_(row.iva),
+        custo_total_com_iva: supabaseNumber_(row.custo_total_com_iva),
+        destino: supabaseText_(row.destino),
+        obra: supabaseText_(row.obra),
+        fase: supabaseText_(row.fase),
+        observacoes: supabaseText_(row.observacoes)
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseNotasCreditoItens_(rows) {
+  return (rows || [])
+    .map(function(row) {
+      var id = supabaseText_(row.id_item_nota_credito);
+      if (!id) return null;
+      return {
+        id_item_nota_credito: id,
+        id_fatura: supabaseText_(row.id_fatura),
+        fornecedor: supabaseText_(row.fornecedor),
+        nif: supabaseText_(row.nif),
+        nr_documento: supabaseText_(row.nr_documento),
+        doc_origem: supabaseText_(row.doc_origem),
+        data_fatura: supabaseDate_(row.data_fatura),
+        descricao_original: supabaseText_(row.descricao_original),
+        id_item: supabaseText_(row.id_item),
+        item_oficial: supabaseText_(row.item_oficial),
+        unidade: supabaseText_(row.unidade),
+        natureza: supabaseText_(row.natureza),
+        quantidade: supabaseNumber_(row.quantidade),
+        custo_unit: supabaseNumber_(row.custo_unit),
+        custo_total_sem_iva: supabaseNumber_(row.custo_total_sem_iva),
+        iva: supabaseNumber_(row.iva),
+        custo_total_com_iva: supabaseNumber_(row.custo_total_com_iva),
+        categoria_nota_credito: supabaseText_(row.categoria_nota_credito),
+        obra: supabaseText_(row.obra),
+        fase: supabaseText_(row.fase),
+        estado: supabaseText_(row.estado),
+        observacoes: supabaseText_(row.observacoes)
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseStockAtual_(rows) {
+  return (rows || [])
+    .map(function(row) {
+      var id = supabaseText_(row.id_item);
+      if (!id) return null;
+      var stockQtd = supabaseNumber_(row.stock_atual);
+      var custoMedio = supabaseNumber_(row.custo_medio_atual);
+      return {
+        id_item: id,
+        item_oficial: supabaseText_(row.item_oficial),
+        material: supabaseText_(row.material),
+        unidade: supabaseText_(row.unidade),
+        stock_atual: stockQtd,
+        custo_medio_atual: custoMedio,
+        valor_stock: stockQtd * custoMedio
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseAfetacoesObra_(rows) {
+  return (rows || [])
+    .map(function(row) {
+      var id = supabaseText_(row.id_afetacao);
+      if (!id) return null;
+      return {
+        id_afetacao: id,
+        origem: supabaseText_(row.origem),
+        source_id: supabaseText_(row.source_id),
+        data: supabaseDate_(row.data),
+        id_item: supabaseText_(row.id_item),
+        item_oficial: supabaseText_(row.item_oficial),
+        natureza: supabaseText_(row.natureza),
+        quantidade: supabaseNumber_(row.quantidade),
+        unidade: supabaseText_(row.unidade),
+        custo_unit: supabaseNumber_(row.custo_unit),
+        custo_total: supabaseNumber_(row.custo_total),
+        custo_total_sem_iva: supabaseNumber_(row.custo_total_sem_iva),
+        iva: supabaseNumber_(row.iva),
+        custo_total_com_iva: supabaseNumber_(row.custo_total_com_iva),
+        obra: supabaseText_(row.obra),
+        fase: supabaseText_(row.fase),
+        fornecedor: supabaseText_(row.fornecedor),
+        nif: supabaseText_(row.nif),
+        nr_documento: supabaseText_(row.nr_documento),
+        observacoes: supabaseText_(row.observacoes)
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseMateriaisCad_(rows) {
+  var seen = {};
+  return (rows || [])
+    .map(function(row) {
+      var id = supabaseText_(row.id_item);
+      if (!id || seen[id]) return null;
+      seen[id] = true;
+      return {
+        id_item: id,
+        item_oficial: supabaseText_(row.item_oficial),
+        natureza: supabaseText_(row.natureza),
+        unidade: supabaseText_(row.unidade),
+        observacoes: supabaseText_(row.observacoes),
+        estado_cadastro: supabaseText_(row.estado_cadastro)
       };
     })
     .filter(function(row) { return !!row; });

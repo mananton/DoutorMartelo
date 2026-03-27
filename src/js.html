@@ -61,6 +61,12 @@ let equipaAllRows = [];
 let equipaEfetivos = [];
 let equipaExperiencias = [];
 let equipaActiveTab = 'efetivos';
+
+let comprasActiveTab = 'faturas';
+let comprasFaturaFilter = 'todas';
+let comprasFaturasData = [];
+let comprasNCData = [];
+let comprasExpandedFatura = null;
 let equipaSortCol = 'custo';
 let equipaSortAsc = false;
 let equipaExpandedRow = null;
@@ -180,6 +186,9 @@ function buildDashboardSectionNow_(id) {
       return true;
     case 'equipa':
       buildEquipa();
+      return true;
+    case 'compras':
+      buildCompras();
       return true;
     case 'mapa-mensal':
       buildMapaMensal();
@@ -342,6 +351,7 @@ const sectionTitles = {
   ferias:       'Férias',
   comparativa:  'Análise Comparativa',
   contabilidade:'Contabilidade',
+  compras:      'Compras',
   rh:           'Recursos Humanos'
 };
 
@@ -952,6 +962,12 @@ function buildDashboardFromRaw_(raw) {
     ferias: raw.ferias || [],
     pessoal_efetivo: raw.pessoal_efetivo || [],
     materiais_mov: materiaisMov,
+    faturas: raw.faturas || [],
+    faturas_itens: raw.faturas_itens || [],
+    notas_credito_itens: raw.notas_credito_itens || [],
+    stock_atual: raw.stock_atual || [],
+    afetacoes_obra: raw.afetacoes_obra || [],
+    materiais_cad: raw.materiais_cad || [],
     generated_at: raw.generated_at || '',
     payload_source: raw.payload_source || 'sheets'
   };
@@ -2892,6 +2908,392 @@ function renderEquipaDetailChart(row) {
 
 /* ── CSV export — disabled ────────────────────────────── */
 function exportEquipaCSV() { /* disabled */ }
+
+/* ══════════════════════════════════════════════════════════
+   COMPRAS
+   ══════════════════════════════════════════════════════════ */
+
+function buildCompras() {
+  if (!DATA) return;
+  comprasFaturasData = (DATA.faturas || []).slice();
+  comprasNCData = (DATA.notas_credito_itens || []).slice();
+  comprasExpandedFatura = null;
+  comprasFaturaFilter = 'todas';
+
+  // Update tab counts
+  var cntF = document.getElementById('compras-count-faturas');
+  var cntS = document.getElementById('compras-count-stock');
+  if (cntF) cntF.textContent = comprasFaturasData.length;
+  if (cntS) cntS.textContent = (DATA.stock_atual || []).filter(function(s) { return s.stock_atual > 0; }).length;
+
+  // Reset chips
+  var chips = document.querySelectorAll('#compras-faturas-chips .compras-chip');
+  chips.forEach(function(c) { c.classList.toggle('active', c.textContent.trim() === 'Todas'); });
+
+  // Clear search
+  var searchF = document.getElementById('compras-faturas-search');
+  var searchS = document.getElementById('compras-stock-search');
+  if (searchF) searchF.value = '';
+  if (searchS) searchS.value = '';
+
+  // Render active panel
+  if (comprasActiveTab === 'faturas') renderComprasFaturas();
+  else if (comprasActiveTab === 'stock') renderComprasStock();
+  else renderComprasResumo();
+}
+
+function setComprasTab(tab) {
+  comprasActiveTab = tab;
+  ['faturas', 'stock', 'resumo'].forEach(function(t) {
+    var btn = document.getElementById('compras-tab-' + t);
+    var panel = document.getElementById('compras-panel-' + t);
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (panel) panel.style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'faturas') renderComprasFaturas();
+  else if (tab === 'stock') renderComprasStock();
+  else renderComprasResumo();
+}
+
+function setComprasFaturaFilter(f) {
+  comprasFaturaFilter = f;
+  var chips = document.querySelectorAll('#compras-faturas-chips .compras-chip');
+  var labels = { 'todas': 'Todas', 'por_pagar': 'Por pagar', 'pagas': 'Pagas', 'nc': 'Notas Crédito' };
+  chips.forEach(function(c) { c.classList.toggle('active', c.textContent.trim() === labels[f]); });
+  renderComprasFaturas();
+}
+
+function comprasFmtDate(iso) {
+  if (!iso) return '\u2014';
+  var p = iso.split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso;
+}
+
+function comprasFmtVal(v) {
+  if (!v && v !== 0) return '\u2014';
+  return Number(v).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
+}
+
+/* ── Faturas rendering ─────────────────────────────────── */
+function renderComprasFaturas() {
+  if (!DATA) return;
+  var faturas = comprasFaturasData;
+  var itens = DATA.faturas_itens || [];
+  var movs = DATA.materiais_mov || [];
+  var search = (document.getElementById('compras-faturas-search').value || '').toLowerCase();
+
+  // Filter by date range
+  faturas = faturas.filter(function(f) { return dateInRange(f.data_fatura); });
+
+  // Filter by tab
+  var isNC = comprasFaturaFilter === 'nc';
+  if (comprasFaturaFilter === 'pagas') faturas = faturas.filter(function(f) { return f.paga && f.tipo_doc !== 'NOTA_CREDITO'; });
+  else if (comprasFaturaFilter === 'por_pagar') faturas = faturas.filter(function(f) { return !f.paga && f.tipo_doc !== 'NOTA_CREDITO'; });
+  else if (!isNC) faturas = faturas.filter(function(f) { return f.tipo_doc !== 'NOTA_CREDITO'; });
+  else faturas = faturas.filter(function(f) { return f.tipo_doc === 'NOTA_CREDITO'; });
+
+  // Search
+  if (search) {
+    faturas = faturas.filter(function(f) {
+      return (f.fornecedor || '').toLowerCase().includes(search) ||
+             (f.nr_documento || '').toLowerCase().includes(search) ||
+             (f.id_fatura || '').toLowerCase().includes(search);
+    });
+  }
+
+  // Sort by date desc
+  faturas.sort(function(a, b) { return (b.data_fatura || '').localeCompare(a.data_fatura || ''); });
+
+  // Index itens by fatura
+  var itensByFatura = {};
+  itens.forEach(function(it) {
+    if (!itensByFatura[it.id_fatura]) itensByFatura[it.id_fatura] = [];
+    itensByFatura[it.id_fatura].push(it);
+  });
+
+  // KPIs
+  var allInRange = comprasFaturasData.filter(function(f) { return dateInRange(f.data_fatura) && f.tipo_doc !== 'NOTA_CREDITO'; });
+  var totalVal = 0, totalPorPagar = 0, countPorPagar = 0;
+  allInRange.forEach(function(f) {
+    totalVal += f.valor_com_iva || 0;
+    if (!f.paga) { totalPorPagar += f.valor_com_iva || 0; countPorPagar++; }
+  });
+  var kpiEl = document.getElementById('compras-faturas-kpis');
+  if (kpiEl) {
+    kpiEl.innerHTML =
+      '<div class="compras-kpi-pill"><span style="color:var(--text-dim)">' + allInRange.length + ' docs</span><strong>' + comprasFmtVal(totalVal) + '</strong></div>' +
+      '<div class="compras-kpi-pill"><span style="color:var(--text-dim)">' + countPorPagar + ' por pagar</span><strong>' + comprasFmtVal(totalPorPagar) + '</strong></div>';
+  }
+
+  // Build cards
+  var list = document.getElementById('compras-faturas-list');
+  if (!faturas.length) {
+    list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-file-invoice" style="font-size:24px;margin-bottom:8px;display:block;opacity:.4"></i>Sem faturas no per\u00edodo seleccionado.</div>';
+    return;
+  }
+
+  var html = '';
+  faturas.forEach(function(f) {
+    var fitens = itensByFatura[f.id_fatura] || [];
+    var isNotaCredito = f.tipo_doc === 'NOTA_CREDITO';
+    var valor = f.valor_com_iva || 0;
+
+    // Destination bar
+    var destStock = 0, destObra = 0, destEscritorio = 0, destViatura = 0;
+    fitens.forEach(function(it) {
+      var c = it.custo_total_com_iva || 0;
+      var d = (it.destino || '').toUpperCase();
+      if (d === 'STOCK') destStock += c;
+      else if (d === 'ESCRITORIO' || d === 'ESCRITÓRIO') destEscritorio += c;
+      else if (d === 'VIATURA' || d === 'MAQUINA' || d === 'GERADOR') destViatura += c;
+      else destObra += c;
+    });
+    var destTotal = destStock + destObra + destEscritorio + destViatura;
+    var destBar = '';
+    if (destTotal > 0) {
+      destBar = '<div class="compras-fatura-destino-bar" title="Stock / Obra / Escritório / Viatura">';
+      if (destStock > 0) destBar += '<span class="compras-dest-stock" style="width:' + (destStock/destTotal*100).toFixed(1) + '%"></span>';
+      if (destObra > 0) destBar += '<span class="compras-dest-obra" style="width:' + (destObra/destTotal*100).toFixed(1) + '%"></span>';
+      if (destEscritorio > 0) destBar += '<span class="compras-dest-escritorio" style="width:' + (destEscritorio/destTotal*100).toFixed(1) + '%"></span>';
+      if (destViatura > 0) destBar += '<span class="compras-dest-viatura" style="width:' + (destViatura/destTotal*100).toFixed(1) + '%"></span>';
+      destBar += '</div>';
+    }
+
+    // Badge
+    var badge = '';
+    if (isNotaCredito) badge = '<span class="compras-badge compras-badge-nc">NC</span>';
+    else if (f.paga) badge = '<span class="compras-badge compras-badge-paga">Paga</span>';
+    else badge = '<span class="compras-badge compras-badge-por-pagar">Por pagar</span>';
+
+    // Photo link placeholder
+    var fotoLink = '<span class="compras-fatura-foto-link" title="Foto da fatura (em breve)"><i class="fa-solid fa-camera"></i></span>';
+
+    var expanded = comprasExpandedFatura === f.id_fatura;
+    var escId = f.id_fatura.replace(/'/g, "\\'");
+
+    html += '<div class="compras-fatura-card" onclick="toggleComprasFaturaDetail(\'' + escId + '\')">';
+    html += '<div class="compras-fatura-row1"><span class="compras-fatura-fornecedor">' + (f.fornecedor || '\u2014') + '</span><span class="compras-fatura-data">' + comprasFmtDate(f.data_fatura) + '</span></div>';
+    html += '<div class="compras-fatura-row2"><span class="compras-fatura-doc">' + (f.nr_documento || f.id_fatura) + '</span></div>';
+    html += '<div class="compras-fatura-row3">';
+    html += '<span class="compras-fatura-valor' + (isNotaCredito ? ' nc' : '') + '">' + (isNotaCredito ? '-' : '') + comprasFmtVal(valor) + '</span>';
+    html += badge;
+    if (fitens.length) html += '<span class="compras-fatura-linhas">' + fitens.length + ' linha' + (fitens.length > 1 ? 's' : '') + '</span>';
+    html += destBar;
+    html += fotoLink;
+    html += '</div>';
+
+    // Expanded detail
+    if (expanded && fitens.length) {
+      html += '<div class="compras-fatura-detail"><div class="compras-timeline">';
+      fitens.forEach(function(it) {
+        var destLabel = (it.destino || 'OBRA').toUpperCase();
+        var tlClass = destLabel === 'STOCK' ? 'tl-stock' : (destLabel.indexOf('VIATURA') >= 0 ? 'tl-stock' : 'tl-obra');
+        var itemLabel = it.item_oficial || it.descricao_original || '\u2014';
+        html += '<div class="compras-timeline-item tl-compra">';
+        html += '<div class="compras-tl-head">' + itemLabel + '</div>';
+        html += '<div class="compras-tl-sub">' + (it.quantidade || 0) + ' ' + (it.unidade || 'un') + ' \u00D7 ' + comprasFmtVal(it.custo_unit) + ' = ' + comprasFmtVal(it.custo_total_com_iva) + '</div>';
+        html += '<div class="compras-tl-sub">';
+        if (destLabel === 'STOCK') html += '<span style="color:#3498db">\u2192 Stock</span>';
+        else if (it.obra) html += '<span style="color:#e67e22">\u2192 ' + it.obra + (it.fase ? ' / ' + it.fase : '') + '</span>';
+        else html += '<span style="color:#95a5a6">\u2192 ' + destLabel + '</span>';
+        html += '</div>';
+        html += '</div>';
+
+        // Show related movements
+        var relatedMovs = (DATA.materiais_mov || []).filter(function(m) {
+          return m.doc_fatura === f.nr_documento && m.id_item === it.id_item;
+        });
+        relatedMovs.forEach(function(m) {
+          var movClass = m.tipo === 'ENTRADA' ? 'tl-stock' : (m.tipo === 'CONSUMO' ? 'tl-obra' : 'tl-compra');
+          html += '<div class="compras-timeline-item ' + movClass + '">';
+          html += '<div class="compras-tl-head" style="font-size:11px">' + m.tipo + ' ' + m.id_mov + '</div>';
+          html += '<div class="compras-tl-sub">' + (m.tipo === 'ENTRADA' ? '+' : '-') + m.quantidade + ' ' + (m.unidade || 'un');
+          if (m.obra) html += ' \u2022 ' + m.obra;
+          html += '</div></div>';
+        });
+      });
+      html += '</div></div>';
+    }
+    html += '</div>';
+  });
+
+  list.innerHTML = html;
+}
+
+function toggleComprasFaturaDetail(id) {
+  comprasExpandedFatura = comprasExpandedFatura === id ? null : id;
+  renderComprasFaturas();
+}
+
+/* ── Stock rendering ───────────────────────────────────── */
+function renderComprasStock() {
+  if (!DATA) return;
+  var stock = (DATA.stock_atual || []).slice();
+  var movs = DATA.materiais_mov || [];
+  var search = (document.getElementById('compras-stock-search').value || '').toLowerCase();
+
+  // Filter
+  if (search) {
+    stock = stock.filter(function(s) {
+      return (s.item_oficial || '').toLowerCase().includes(search) ||
+             (s.material || '').toLowerCase().includes(search) ||
+             (s.id_item || '').toLowerCase().includes(search);
+    });
+  }
+
+  // Sort: items with stock first, then by name
+  stock.sort(function(a, b) {
+    if (a.stock_atual > 0 && b.stock_atual <= 0) return -1;
+    if (a.stock_atual <= 0 && b.stock_atual > 0) return 1;
+    return (a.item_oficial || '').localeCompare(b.item_oficial || '');
+  });
+
+  // Alert
+  var zeroStock = (DATA.stock_atual || []).filter(function(s) { return s.stock_atual <= 0; });
+  var alertEl = document.getElementById('compras-stock-alert');
+  if (alertEl) {
+    alertEl.innerHTML = zeroStock.length > 0
+      ? '<i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>' + zeroStock.length + ' ite' + (zeroStock.length === 1 ? 'm' : 'ns') + ' sem stock'
+      : '';
+  }
+
+  var list = document.getElementById('compras-stock-list');
+  if (!stock.length) {
+    list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px"><i class="fa-solid fa-warehouse" style="font-size:24px;margin-bottom:8px;display:block;opacity:.4"></i>Sem dados de stock.</div>';
+    return;
+  }
+
+  // Index last 3 movements per item
+  var movsByItem = {};
+  movs.forEach(function(m) {
+    if (!m.id_item) return;
+    if (!movsByItem[m.id_item]) movsByItem[m.id_item] = [];
+    movsByItem[m.id_item].push(m);
+  });
+  Object.keys(movsByItem).forEach(function(k) {
+    movsByItem[k].sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+    movsByItem[k] = movsByItem[k].slice(0, 3);
+  });
+
+  var html = '';
+  stock.forEach(function(s) {
+    var nome = s.item_oficial || s.material || s.id_item;
+    var valorStock = s.stock_atual * s.custo_medio_atual;
+    html += '<div class="compras-stock-card">';
+    html += '<div class="compras-stock-row1"><span class="compras-stock-nome">' + nome + '</span><span class="compras-stock-id">' + s.id_item + '</span></div>';
+    html += '<div class="compras-stock-metrics">';
+    html += '<span class="compras-stock-metric">Stock: <strong>' + s.stock_atual + ' ' + (s.unidade || 'un') + '</strong></span>';
+    html += '<span class="compras-stock-metric">Custo m\u00e9dio: <strong>' + comprasFmtVal(s.custo_medio_atual) + '</strong></span>';
+    html += '<span class="compras-stock-metric">Valor: <strong>' + comprasFmtVal(valorStock) + '</strong></span>';
+    html += '</div>';
+
+    // Recent movements
+    var recent = movsByItem[s.id_item];
+    if (recent && recent.length) {
+      html += '<div class="compras-stock-movs">';
+      recent.forEach(function(m) {
+        var isIn = m.tipo === 'ENTRADA';
+        html += '<div class="compras-stock-mov-line">';
+        html += '<span class="' + (isIn ? 'compras-mov-in' : 'compras-mov-out') + '">' + (isIn ? '+' : '-') + m.quantidade + '</span>';
+        html += '<span>' + m.tipo + '</span>';
+        if (m.doc_fatura) html += '<span style="color:var(--text-dim)">' + m.doc_fatura + '</span>';
+        html += '<span style="color:var(--text-dim)">' + comprasFmtDate(m.data) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+
+  list.innerHTML = html;
+}
+
+/* ── Resumo rendering ──────────────────────────────────── */
+function renderComprasResumo() {
+  if (!DATA) return;
+  var faturas = (DATA.faturas || []).filter(function(f) { return dateInRange(f.data_fatura) && f.tipo_doc !== 'NOTA_CREDITO'; });
+  var itens = DATA.faturas_itens || [];
+  var afetacoes = DATA.afetacoes_obra || [];
+
+  // KPIs
+  var totalCompras = 0, totalPorPagar = 0, fornecedoresSet = new Set();
+  faturas.forEach(function(f) {
+    totalCompras += f.valor_com_iva || 0;
+    if (!f.paga) totalPorPagar += f.valor_com_iva || 0;
+    if (f.fornecedor) fornecedoresSet.add(f.fornecedor);
+  });
+  var kpiEl = document.getElementById('compras-resumo-kpis');
+  if (kpiEl) {
+    kpiEl.innerHTML =
+      '<div class="compras-kpi-pill"><span style="color:var(--text-dim)">Total Compras</span><strong>' + comprasFmtVal(totalCompras) + '</strong></div>' +
+      '<div class="compras-kpi-pill"><span style="color:var(--text-dim)">Por Pagar</span><strong>' + comprasFmtVal(totalPorPagar) + '</strong></div>' +
+      '<div class="compras-kpi-pill"><span style="color:var(--text-dim)">Fornecedores</span><strong>' + fornecedoresSet.size + '</strong></div>';
+  }
+
+  // ── Por Fornecedor ──
+  var fornMap = {};
+  faturas.forEach(function(f) {
+    var key = f.fornecedor || '\u2014';
+    if (!fornMap[key]) fornMap[key] = { total: 0, count: 0, porPagar: 0 };
+    fornMap[key].total += f.valor_com_iva || 0;
+    fornMap[key].count++;
+    if (!f.paga) fornMap[key].porPagar += f.valor_com_iva || 0;
+  });
+  var fornArr = Object.entries(fornMap).sort(function(a, b) { return b[1].total - a[1].total; });
+  var fornHtml = '';
+  fornArr.forEach(function(entry) {
+    var nome = entry[0], d = entry[1];
+    fornHtml += '<div class="compras-resumo-card">';
+    fornHtml += '<div class="compras-resumo-row1"><span class="compras-resumo-nome">' + nome + '</span><span class="compras-resumo-total">' + comprasFmtVal(d.total) + '</span></div>';
+    fornHtml += '<div class="compras-resumo-meta">' + d.count + ' fatura' + (d.count > 1 ? 's' : '');
+    if (d.porPagar > 0) fornHtml += ' \u2022 ' + comprasFmtVal(d.porPagar) + ' por pagar';
+    fornHtml += '</div></div>';
+  });
+  var fornEl = document.getElementById('compras-resumo-fornecedores');
+  if (fornEl) fornEl.innerHTML = fornHtml || '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">Sem dados.</div>';
+
+  // ── Por Obra ──
+  // Use faturas_itens filtered by date for obra breakdown
+  var itensInRange = itens.filter(function(it) { return dateInRange(it.data_fatura); });
+  var obraMap = {};
+  itensInRange.forEach(function(it) {
+    var obra = it.obra || '\u2014';
+    if (!obraMap[obra]) obraMap[obra] = { material: 0, servico: 0, aluguer: 0, transporte: 0, outro: 0, linhas: 0, fornecedores: new Set() };
+    var c = it.custo_total_com_iva || 0;
+    var nat = (it.natureza || '').toUpperCase();
+    if (nat === 'SERVICO' || nat === 'SERVIÇO') obraMap[obra].servico += c;
+    else if (nat === 'ALUGUER') obraMap[obra].aluguer += c;
+    else if (nat === 'TRANSPORTE') obraMap[obra].transporte += c;
+    else if (nat === 'MATERIAL' || nat === 'GASOLEO' || nat === 'GASOLINA') obraMap[obra].material += c;
+    else obraMap[obra].outro += c;
+    obraMap[obra].linhas++;
+    if (it.fornecedor) obraMap[obra].fornecedores.add(it.fornecedor);
+  });
+  var obraArr = Object.entries(obraMap).sort(function(a, b) {
+    var totA = a[1].material + a[1].servico + a[1].aluguer + a[1].transporte + a[1].outro;
+    var totB = b[1].material + b[1].servico + b[1].aluguer + b[1].transporte + b[1].outro;
+    return totB - totA;
+  });
+  var obraHtml = '';
+  obraArr.forEach(function(entry) {
+    var obra = entry[0], d = entry[1];
+    var total = d.material + d.servico + d.aluguer + d.transporte + d.outro;
+    if (total <= 0) return;
+    obraHtml += '<div class="compras-resumo-card">';
+    obraHtml += '<div class="compras-resumo-row1"><span class="compras-resumo-nome">' + obra + '</span><span class="compras-resumo-total">' + comprasFmtVal(total) + '</span></div>';
+    obraHtml += '<div class="compras-resumo-meta">' + d.linhas + ' linha' + (d.linhas > 1 ? 's' : '') + ' \u2022 ' + d.fornecedores.size + ' fornecedor' + (d.fornecedores.size > 1 ? 'es' : '') + '</div>';
+    // Stacked bar
+    obraHtml += '<div class="compras-resumo-bar">';
+    if (d.material > 0) obraHtml += '<span class="compras-dest-stock" style="width:' + (d.material/total*100).toFixed(1) + '%" title="Material: ' + comprasFmtVal(d.material) + '"></span>';
+    if (d.servico > 0) obraHtml += '<span class="compras-dest-viatura" style="width:' + (d.servico/total*100).toFixed(1) + '%" title="Servi\u00e7o: ' + comprasFmtVal(d.servico) + '"></span>';
+    if (d.aluguer > 0) obraHtml += '<span class="compras-dest-escritorio" style="width:' + (d.aluguer/total*100).toFixed(1) + '%" title="Aluguer: ' + comprasFmtVal(d.aluguer) + '"></span>';
+    if (d.transporte > 0) obraHtml += '<span class="compras-dest-obra" style="width:' + (d.transporte/total*100).toFixed(1) + '%" title="Transporte: ' + comprasFmtVal(d.transporte) + '"></span>';
+    obraHtml += '</div>';
+    obraHtml += '</div>';
+  });
+  var obraEl = document.getElementById('compras-resumo-obras');
+  if (obraEl) obraEl.innerHTML = obraHtml || '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">Sem dados.</div>';
+}
 
 /* ══════════════════════════════════════════════════════════
    MAPA MENSAL

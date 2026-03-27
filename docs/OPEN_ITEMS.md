@@ -60,6 +60,19 @@ Last reviewed: 2026-03-23
     - frontend rebuild
     - firewall rule verification
 
+## P1 - Validate New Compras Dashboard Tab
+- The dashboard now includes a **Compras** tab with Faturas, Stock, and Resumo sub-tabs.
+- The `raw_v2` payload carries 6 new datasets from Supabase (or Sheets fallback).
+- Next step:
+  - validate that faturas list renders correctly with real data (date filter, badges, destination bars)
+  - confirm inline fatura detail timeline correctly links items to generated `MATERIAIS_MOV` movements
+  - validate stock card quantities match `STOCK_ATUAL` sheet after manual sync
+  - confirm resumo breakdowns by fornecedor and obra match expected totals
+  - validate Notas de Crédito appear correctly in the NC filter with negative styling
+  - validate payload size impact on dashboard load time (6 new datasets)
+  - later: add fatura photo URL support when the field is populated
+  - later: consider integrating Compras data into the existing Contabilidade tab if redundancy becomes an issue
+
 ## P1 - Validate Current Materials Costs In The Dashboard
 - The legacy dashboard reader was updated to accept current materials-backoffice rows from:
   - `MATERIAIS_MOV`

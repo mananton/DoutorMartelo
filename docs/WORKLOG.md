@@ -12,6 +12,20 @@ Purpose: chronological, commit-based project history for fast handoff.
 ## 2026-03-27
 
 ### `pending`
+- **Type**: feat / dashboard / compras
+- **Scope**: `src/main.gs`, `src/Readers.gs`, `src/Composer.gs`, `src/SupabaseRead.gs`, `src/index.html`, `src/css.html`, `src/js.html`
+- **Summary**:
+  - Added new **Compras** dashboard tab with 3 sub-tabs: **Faturas**, **Stock**, **Resumo**.
+  - Extended the `raw_v2` payload with 6 new datasets: `faturas`, `faturas_itens`, `notas_credito_itens`, `stock_atual`, `afetacoes_obra`, `materiais_cad`.
+  - Added Sheet readers and Supabase mappers for all 6 entities, following the existing dual-source pattern (Supabase first, Sheets fallback).
+  - Faturas: mobile-first card list with status badges (Paga/Por pagar/NC), destination bar, inline timeline detail with movement traceability, filter chips, photo placeholder.
+  - Stock: cards with current levels, cost, last 3 movements, zero-stock alert.
+  - Resumo: KPIs, breakdown by fornecedor and by obra with segmented nature bars.
+- **Impact**:
+  - Field managers can now track purchases, stock levels, and cost breakdowns per supplier/obra directly from the mobile dashboard.
+  - No new Supabase tables required — reads existing synced tables.
+
+### `31a2a9f`
 - **Type**: feat / dashboard / equipa
 - **Scope**: `src/index.html`, `src/css.html`, `src/js.html`
 - **Summary**:
