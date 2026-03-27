@@ -9,6 +9,21 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ---
 
+## 2026-03-27
+
+### `d7174fe`
+- **Type**: feat / dashboard / sync / performance
+- **Scope**: `src/*`, `backend/scripts/sync_sheets_to_supabase.py`, `backend/ops/Sync-SheetsToSupabase.ps1`, `backend/sql/010_create_dashboard_runtime_sync_tables.sql`, `backend/sql/011_align_dashboard_supabase_read_contract.sql`, `backend/app/adapters/*`
+- **Summary**:
+  - Completed the legacy dashboard runtime migration so `getDashboardData()` can read the same `raw_v2` contract from Supabase or Sheets without changing the frontend contract.
+  - Added technical parity validation (`Sheets vs Supabase`) and used it to close the migration with matching dashboard-facing metrics and datasets.
+  - Added frontend cache + source badge behavior, lazy section builds, and a derived per-period snapshot so filtered sections stop recomputing the same date-filtered arrays independently.
+  - Fixed the `Equipa` detail bug where workers could show stale/extra fases not present in the currently filtered day range.
+- **Impact**:
+  - The dashboard can now open much faster using the Supabase mirror while preserving a safe fallback path.
+  - Mobile reopen behavior is smoother because the app can bootstrap from cache before refreshing live data.
+  - Filter-heavy sections now reuse a shared range snapshot, reducing repeated work after date-filter changes.
+
 ## 2026-03-26
 
 ### `pending`

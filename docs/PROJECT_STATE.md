@@ -1,10 +1,11 @@
 # Project State
 
-Last updated: 2026-03-26
+Last updated: 2026-03-27
 
 ## 1. Product Scope
 - Google Apps Script web app for construction management dashboard.
-- Data source: Google Sheets (central workbook).
+- Operational data source: Google Sheets (central workbook).
+- Dashboard runtime source: Supabase mirror by preference, with GAS fallback to Google Sheets.
 - Frontend renders KPIs, obra detail, workers, materials, travel/displacements, attendance, vacations, and comparative analytics.
 - A parallel materials backoffice now exists as a separate product surface in `frontend/` + `backend/`.
 - Product posture is now explicit:
@@ -17,6 +18,8 @@ Last updated: 2026-03-26
   - `src/Readers.gs`: sheet readers, header normalization, dynamic column mapping, legacy-safe parsing.
   - `src/Composer.gs`: raw payload assembly (`buildRawData_`).
   - `src/Aggregators.gs`: legacy server-side aggregation (`buildData_`).
+  - `src/SupabaseRead.gs`: Supabase runtime reader that reproduces the `raw_v2` contract expected by the legacy dashboard frontend.
+  - `src/DashboardParity.gs`: technical parity checker for `Sheets vs Supabase` validation of dashboard-facing datasets and KPIs.
   - `src/Sync.gs`: legacy GAS sync boundary now kept disabled so Sheets edits no longer push to Supabase.
   - `backend/scripts/sync_sheets_to_supabase.py`: local manual Google Sheets -> Supabase mirror runner.
   - `backend/ops/Sync-SheetsToSupabase.ps1`: Windows wrapper for the manual local mirror flow.
@@ -37,9 +40,16 @@ Last updated: 2026-03-26
 ## 3. Runtime Data Flow
 1. `doGet()` serves `index`.
 2. Frontend calls `getDashboardData({ mode: 'raw_v2' })`.
-3. Backend returns raw payload (`buildRawData_`) with non-blocking data-quality diagnostics metadata.
-4. Frontend normalizes via `buildDashboardFromRaw_`.
-5. If parsing/loading fails, frontend retries with `mode: 'legacy'`.
+3. GAS resolves the runtime source from `DASHBOARD_DATA_SOURCE`:
+   - `auto`: prefer Supabase, fallback to Sheets
+   - `supabase`: force Supabase
+   - `sheets`: force Google Sheets
+4. GAS returns the same `raw_v2` contract from either:
+   - `buildRawData_()` in `src/Composer.gs`
+   - Supabase mirror readers in `src/SupabaseRead.gs`
+5. Frontend normalizes via `buildDashboardFromRaw_`, hydrates local cache, and lazy-builds sections as they are opened.
+6. If the raw path fails, frontend still preserves the legacy fallback behavior.
+- Detailed current workbook-origin mapping is documented in `docs/DASHBOARD_SHEET_FLOW.md`.
 
 ## 4. Legacy Data Rules (Implemented)
 - Keep costs even when old rows are incomplete.
@@ -55,6 +65,18 @@ Last updated: 2026-03-26
 - Missing `Horas` does not infer hours from cost (`horas_total` remains numeric sum of valid hour values).
 
 ## 5. UI State (Recent)
+- **Dashboard Runtime / Performance**:
+  - Dashboard runtime has been validated with `Supabase` as the primary read path and `Sheets` as fallback through `DASHBOARD_DATA_SOURCE=auto`.
+  - Top-bar source badge now identifies whether the current payload came from:
+    - `Supabase`
+    - `Sheets`
+    - local `Cache`
+  - Frontend now keeps a local payload cache plus lightweight UI-state restore for:
+    - current section
+    - current obra
+    - active date filter
+    - sidebar/open state
+  - Initial heavy `buildAll()` behavior was replaced by lazy section builds so the app no longer rebuilds every section on first paint or on every filter change.
 - **Contabilidade Section**:
   - Added 5 aggregated financial KPIs respecting the global date filter (Custo Total, Mão de Obra, Deslocações, Materiais / Serv., IVA Dedutível).
   - Added two global breakdown charts: a categorical cost doughnut and a time-series stacked bar.
@@ -97,6 +119,10 @@ Last updated: 2026-03-26
   - no Railway dependency
   - no automatic GAS retry loop
   - no automatic write to Supabase from normal Sheets edits
+- Dashboard runtime read migration status:
+  - `Sheets vs Supabase` parity has been validated successfully through `src/DashboardParity.gs`
+  - the dashboard can now read from Supabase without changing the legacy frontend contract
+  - the safest operational setting remains `DASHBOARD_DATA_SOURCE=auto`
 - The materials backoffice now supports direct invoice-line destination `ESCRITORIO`:
   - valid as direct non-stock consumption
   - generates `MATERIAIS_MOV`

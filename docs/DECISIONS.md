@@ -665,3 +665,40 @@ Format: short ADR-style records with rationale and impact.
 - **Impact**:
   - Empty AppSheet tombstone rows and unprocessed `dispensado` records can be handled again through event-driven GAS automation.
   - The materials backoffice remains the sole owner of the legacy materials flow.
+
+## D-035: Legacy dashboard runtime should prefer the Supabase mirror while preserving a Sheets fallback
+- **Status**: accepted
+- **Date**: 2026-03-27
+- **Commit**: `d7174fe`
+- **Decision**:
+  - Keep `getDashboardData()` as the single frontend entrypoint.
+  - Resolve the runtime source in GAS through `DASHBOARD_DATA_SOURCE`.
+  - Use Supabase as the preferred runtime read path.
+  - Keep Google Sheets as the fallback runtime read path and as the primary operational source of truth.
+  - Preserve the same `raw_v2` payload contract regardless of runtime source.
+- **Rationale**:
+  - The team wanted a faster dashboard without changing the existing GAS frontend structure or the operational data-entry flow in Google Sheets.
+  - Forcing a Supabase-only cutover would create avoidable risk if the mirror or connectivity failed.
+- **Impact**:
+  - The dashboard can now benefit from the faster Supabase read path while remaining resilient.
+  - Google Sheets remains the operational master, and the manual sync remains the explicit refresh boundary for Supabase.
+
+## D-036: Dashboard performance improvements should reuse cached payloads and derived period snapshots before deeper UI rewrites
+- **Status**: accepted
+- **Date**: 2026-03-27
+- **Commit**: `d7174fe`
+- **Decision**:
+  - Keep a local cached payload and minimal UI state so the dashboard can reopen quickly, especially on mobile.
+  - Replace eager full-page rebuilds with lazy section builds.
+  - Reuse a shared derived snapshot per active date period instead of letting each section refilter `registos`, `deslocacoes`, and `materiais` independently.
+- **Rationale**:
+  - A large part of the perceived slowness came from repeated client-side filtering and rebuilding after every load/filter change, not only from the data source itself.
+  - These optimizations improve speed without forcing a redesign of the legacy dashboard.
+- **Impact**:
+  - Reopening the dashboard is smoother because cache can be shown immediately.
+  - Date-filter changes now reuse shared filtered arrays across sections, reducing duplicated frontend work.
+
+## Standing Constraints
+- Do not rename global sheet constants.
+- Do not change Supabase sync structure without explicit request.
+- Keep legacy rules active unless business owner requests rollback.

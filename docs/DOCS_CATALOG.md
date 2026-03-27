@@ -1,6 +1,6 @@
 # Documentation Catalog
 
-Last updated: 2026-03-19
+Last updated: 2026-03-27
 
 ## Purpose
 - Separate the Markdown documents that reflect the current operational state of the project from older baseline/reference documents that still matter but should not drive day-to-day decisions first.
@@ -32,10 +32,10 @@ These are the documents most aligned with the current repo direction and should 
 
 | File | Last repo update | Status | Use |
 |---|---|---|---|
-| `docs/PROJECT_STATE.md` | 2026-03-18 | Active | Best current snapshot of architecture, runtime flow, risks, and current materials-backoffice state. |
+| `docs/PROJECT_STATE.md` | 2026-03-27 | Active | Best current snapshot of architecture, runtime flow, Supabase-read dashboard state, risks, and current materials-backoffice state. |
 | `docs/DECISIONS.md` | 2026-03-18 | Active | Canonical short ADR-style record of accepted technical/product decisions. |
 | `docs/OPEN_ITEMS.md` | 2026-03-18 | Active | Best list of immediate next steps and validation gaps. |
-| `docs/WORKLOG.md` | 2026-03-18 | Active | Chronological change narrative; useful to understand recent delivery sequence. |
+| `docs/WORKLOG.md` | 2026-03-27 | Active | Chronological change narrative; useful to understand recent delivery sequence. |
 | `docs/HANDOFF_PROMPT.md` | 2026-03-18 | Active | Best “new session bootstrap” prompt for agents and collaborators. |
 | `docs/MATERIALS_BACKOFFICE_SPEC.md` | 2026-03-18 | Active | Current MVP execution spec for the new materials backoffice. |
 | `docs/MATERIALS_BACKOFFICE_PLAN.md` | 2026-03-18 | Active | Transition plan explaining why the project is moving materials logic into backend/app flow. |
@@ -50,6 +50,8 @@ These are still current, but they are narrower in scope and should not be mistak
 |---|---|---|---|
 | `docs/MAPA_MENSAL_SPEC.md` | 2026-03-13 | Current feature spec | Reference for monthly payment map behavior and validation. |
 | `docs/MAPA_MENSAL_TECH_PLAN.md` | 2026-03-13 | Current feature plan | Technical reference for the implemented monthly-map slice and future refinement. |
+| `docs/DASHBOARD_SHEET_FLOW.md` | 2026-03-27 | Current runtime reference | Exact map of which Google Sheets tabs remain the operational origin for the dashboard payload and which sections consume them. |
+| `docs/DASHBOARD_SUPABASE_READ_MIGRATION_PLAN.md` | 2026-03-27 | Current migration plan | Phased plan plus progress record for the Supabase-read dashboard migration, with phases 0-5 completed and phase 6 in progress. |
 
 ## C. Historical / Baseline Architecture Reference
 
@@ -104,6 +106,7 @@ These Markdown files are useful, but they describe tooling behavior or collabora
 ## Current Catalog Summary
 - The live center of gravity of the repo is now the hybrid phase:
   - legacy GAS dashboard remains active
+  - legacy GAS dashboard now reads from the Supabase mirror by preference
   - new materials backoffice in `backend/` + `frontend/` is the main forward path
 - The biggest documentation risk is reading older GAS-only or early-migration notes before the 2026-03-18 operational docs.
 - The safest default is:
