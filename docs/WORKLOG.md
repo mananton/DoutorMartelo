@@ -12,18 +12,23 @@ Purpose: chronological, commit-based project history for fast handoff.
 ## 2026-03-27
 
 ### `pending`
-- **Type**: feat / dashboard / compras
-- **Scope**: `src/main.gs`, `src/Readers.gs`, `src/Composer.gs`, `src/SupabaseRead.gs`, `src/index.html`, `src/css.html`, `src/js.html`
+- **Type**: feat / dashboard / compras / sync
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`, `src/main.gs`, `src/Readers.gs`, `src/Sync.gs`, `src/SupabaseRead.gs`, `backend/scripts/sync_sheets_to_supabase.py`, `backend/sql/013_create_veiculos_sync.sql`, `backend/sql/014_add_foto_url_to_faturas.sql`
 - **Summary**:
-  - Added new **Compras** dashboard tab with 3 sub-tabs: **Faturas**, **Stock**, **Resumo**.
-  - Extended the `raw_v2` payload with 6 new datasets: `faturas`, `faturas_itens`, `notas_credito_itens`, `stock_atual`, `afetacoes_obra`, `materiais_cad`.
-  - Added Sheet readers and Supabase mappers for all 6 entities, following the existing dual-source pattern (Supabase first, Sheets fallback).
-  - Faturas: mobile-first card list with status badges (Paga/Por pagar/NC), destination bar, inline timeline detail with movement traceability, filter chips, photo placeholder.
-  - Stock: cards with current levels, cost, last 3 movements, zero-stock alert.
-  - Resumo: KPIs, breakdown by fornecedor and by obra with segmented nature bars.
+  - **UI cleanup**: Removed count badges (`compras-count-faturas`, `compras-count-stock`) from Faturas and Stock tab buttons in the Compras section.
+  - **Veículos sync**: Added `veiculos_sync` Supabase table (`013_create_veiculos_sync.sql`), added `veiculos` to `TABLE_CONFIG` in `live.py`, added `_map_veiculo` mapper in `sync_sheets_to_supabase.py`, and updated `SupabaseRead.gs` to fetch vehicle data from `veiculos_sync` instead of falling back to local sheet.
+  - **Compras VIATURA display**: Updated the expanded fatura detail to show `Veículo - Matrícula` when the destination is `VIATURA`, doing a lookup in `DATA.veiculos` for the vehicle name.
+  - **Fatura photo integration**: Migrated photos from a Google Drive public folder (`1jlU62-fn-_3nHl0-NFH0nk3QoOFRWTHh`) into the dashboard.
+    - Added `syncFaturaPhotoUrls()` in `main.gs`: scans Drive folder, matches PDF filename (without extension) to `Nº Doc/Fatura`, writes view URL to `Foto_URL` column in FATURAS sheet.
+    - Added `buildFaturaPhotoUrlMap_()` helper.
+    - Added `foto_url` to all pipeline layers: `Readers.gs`, `Sync.gs`, `SupabaseRead.gs` (select + mapper).
+    - Added SQL migration `014_add_foto_url_to_faturas.sql` to add `foto_url` column.
+    - Frontend: fatura card shows **📎 Doc** button when `foto_url` present; expanded detail shows Drive Thumbnail API preview (`?sz=w240`) + "Abrir documento" link.
+    - Fixed `getUi()` context error: replaced `SpreadsheetApp.getUi().alert()` with context-safe `Logger.log + toast` helper.
 - **Impact**:
-  - Field managers can now track purchases, stock levels, and cost breakdowns per supplier/obra directly from the mobile dashboard.
-  - No new Supabase tables required — reads existing synced tables.
+  - Compras tab buttons are cleaner without arbitrary count badges.
+  - Vehicle lookups in fatura detail now resolve name from Supabase instead of requiring a local sheet fallback.
+  - Invoice documents can be viewed directly from the dashboard by clicking the PDF thumbnail in the expanded fatura detail.
 
 ### `31a2a9f`
 - **Type**: feat / dashboard / equipa

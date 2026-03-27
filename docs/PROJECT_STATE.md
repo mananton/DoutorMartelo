@@ -54,6 +54,8 @@ Last updated: 2026-03-27
   - `faturas`, `faturas_itens`, `notas_credito_itens`, `stock_atual`, `afetacoes_obra`, `materiais_cad`
   - These feed the new **Compras** dashboard tab (Faturas / Stock / Resumo sub-tabs).
   - Same dual-source behaviour: Supabase preferred, Sheets fallback.
+  - `veiculos` is now synced from the `VEICULOS` sheet to the `veiculos_sync` Supabase table; fatura detail resolves `Veículo - Matrícula` via `DATA.veiculos`.
+  - `faturas.foto_url` is now populated by `syncFaturaPhotoUrls()` (GAS + Drive scan); dashboard shows PDF thumbnail and link in expanded detail.
 
 ## 4. Legacy Data Rules (Implemented)
 - Keep costs even when old rows are incomplete.
