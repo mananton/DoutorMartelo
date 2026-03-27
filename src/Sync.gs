@@ -268,6 +268,7 @@ var SYNC_SHEET_CONFIG = {
                 data_pagamento: syncFormatDate_(syncReadCell_(row, ["Data Pagamento"])) || null,
                 observacoes: syncReadString_(row, ["Observacoes", "Observações", "ObservaÃ§Ãµes", "Observacao"]) || null,
                 estado: syncReadString_(row, ["Estado"]) || "ATIVA",
+                foto_url: syncReadString_(row, ["Foto_URL", "Foto URL", "FotoURL"]) || null,
                 sheet_row_num: Number(row.__sheet_row_num || 0)
             };
         }

@@ -350,6 +350,31 @@ function mapRegistoRow_(row, cols, colabRateMap, diagnostics, rowNumber) {
   };
 }
 
+// ── VEICULOS ──────────────────────────────────────────────
+function readVeiculos_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  const colMap = getColMap_(sheet, 1);
+  const cVeiculo = pickCol_(colMap, ["Veiculos", "Veículos", "Veiculo", "Veículo", "Nome", "Descricao"], -1);
+  const cMatricula = pickCol_(colMap, ["Matricula", "Matrícula"], -1);
+  if (cMatricula < 0) return [];
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const out = [];
+  rows.forEach(function(r) {
+    const matricula = String(r[cMatricula] || "").trim();
+    if (!matricula) return;
+    out.push({
+      matricula: matricula,
+      veiculo: cVeiculo >= 0 ? String(r[cVeiculo] || "").trim() : matricula
+    });
+  });
+  return out;
+}
+
 function readObras_(sheet) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
@@ -812,6 +837,7 @@ function readFaturas_(sheet) {
   var cDocOrigem = pickCol_(colMap, ["Doc_Origem", "Doc Origem"], -1);
   var cPaga = pickCol_(colMap, ["Paga", "Paga?"], -1);
   var cDataPag = pickCol_(colMap, ["Data_Pagamento", "Data Pagamento"], -1);
+  var cFotoUrl = pickCol_(colMap, ["Foto_URL", "Foto URL", "FotoURL"], -1);
 
   if (cId < 0) return [];
 
@@ -842,7 +868,8 @@ function readFaturas_(sheet) {
       tipo_doc: cTipoDoc >= 0 ? String(r[cTipoDoc] || "").trim() : "FATURA",
       doc_origem: cDocOrigem >= 0 ? String(r[cDocOrigem] || "").trim() : "",
       paga: cPaga >= 0 ? toBool_(r[cPaga]) : false,
-      data_pagamento: formatDateValue_(cDataPag >= 0 ? r[cDataPag] : null, false)
+      data_pagamento: formatDateValue_(cDataPag >= 0 ? r[cDataPag] : null, false),
+      foto_url: cFotoUrl >= 0 ? String(r[cFotoUrl] || "").trim() || null : null
     });
   });
 
@@ -879,6 +906,8 @@ function readFaturasItens_(sheet) {
   var cObra = pickCol_(colMap, ["Obra"], -1);
   var cFase = pickCol_(colMap, ["Fase"], -1);
   var cObs = pickCol_(colMap, ["Observações", "Observacoes", "Obs"], -1);
+  var cVeiculo = pickCol_(colMap, ["Veiculo", "Veículo"], -1);
+  var cMatricula = pickCol_(colMap, ["Matricula", "Matrícula"], -1);
 
   if (cId < 0) return [];
 
@@ -917,7 +946,9 @@ function readFaturasItens_(sheet) {
       destino: cDestino >= 0 ? String(r[cDestino] || "").trim() : "",
       obra: cObra >= 0 ? String(r[cObra] || "").trim() : "",
       fase: cFase >= 0 ? String(r[cFase] || "").trim() : "",
-      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : ""
+      observacoes: cObs >= 0 ? String(r[cObs] || "").trim() : "",
+      veiculo: cVeiculo >= 0 ? String(r[cVeiculo] || "").trim() : "",
+      matricula: cMatricula >= 0 ? String(r[cMatricula] || "").trim() : ""
     });
   });
 

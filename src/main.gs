@@ -2869,3 +2869,93 @@ function abrirDashboard() {
 // ── Sync: Trigger automático ────────────────────────────────
 // ── Sync: Manual de todas as abas ───────────────────────────
 // ── Sync: Helpers (prefixo sync para não conflitar) ─────────
+
+// ============================================================
+//  FOTOS DE FATURAS — Google Drive sync
+// ============================================================
+
+var DRIVE_FATURAS_FOLDER_ID = "1jlU62-fn-_3nHl0-NFH0nk3QoOFRWTHh";
+
+/**
+ * Percorre a pasta Drive de faturas, faz match pelo nome do ficheiro
+ * (sem extensão) com o campo "Nº Doc/Fatura" na sheet FATURAS,
+ * e escreve o link de visualização em Drive na coluna "Foto_URL".
+ *
+ * Executar manualmente via menu ou editor GAS.
+ */
+function syncFaturaPhotoUrls() {
+  function notify_(msg) {
+    Logger.log(msg);
+    try { SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Fotos Faturas', 8); } catch (e) {}
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("FATURAS");
+  if (!sheet) { notify_("Sheet FATURAS não encontrada."); return; }
+
+  var urlMap = buildFaturaPhotoUrlMap_(DRIVE_FATURAS_FOLDER_ID);
+  if (!urlMap) { notify_("Não foi possível aceder à pasta Drive."); return; }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) { notify_("Sem dados na sheet FATURAS."); return; }
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var cNrDoc = -1;
+  var cFotoUrl = -1;
+
+  for (var h = 0; h < headers.length; h++) {
+    var norm = String(headers[h] || "").trim().toLowerCase();
+    if (["nº doc/fatura", "n doc/fatura", "nr_documento", "nr documento"].indexOf(norm) >= 0) cNrDoc = h;
+    if (["foto_url", "foto url", "fotourl"].indexOf(norm) >= 0) cFotoUrl = h;
+  }
+
+  // Se não existe coluna Foto_URL, criar no fim
+  if (cFotoUrl < 0) {
+    cFotoUrl = headers.length;
+    sheet.getRange(1, cFotoUrl + 1).setValue("Foto_URL");
+  }
+
+  if (cNrDoc < 0) { notify_("Coluna 'Nº Doc/Fatura' não encontrada na sheet FATURAS."); return; }
+
+  var data = sheet.getRange(2, 1, lastRow - 1, Math.max(sheet.getLastColumn(), cFotoUrl + 1)).getValues();
+  var updated = 0;
+
+  data.forEach(function(row, i) {
+    var nrDoc = String(row[cNrDoc] || "").trim();
+    if (!nrDoc) return;
+    var url = urlMap[nrDoc.toLowerCase()] || null;
+    if (url && row[cFotoUrl] !== url) {
+      sheet.getRange(i + 2, cFotoUrl + 1).setValue(url);
+      updated++;
+    }
+  });
+
+  notify_("Fotos sincronizadas: " + updated + " registos actualizados.");
+}
+
+/**
+ * Lê todos os ficheiros da pasta Drive e devolve
+ * { "fat-000001": "https://drive.google.com/file/d/.../view", ... }
+ * A chave é o nome do ficheiro sem extensão, em minúsculas.
+ */
+function buildFaturaPhotoUrlMap_(folderId) {
+  try {
+    var folder = DriveApp.getFolderById(folderId);
+    var files = folder.getFiles();
+    var map = {};
+    while (files.hasNext()) {
+      var file = files.next();
+      var name = file.getName();
+      // Remove extensão (.pdf, .PDF, etc.)
+      var baseName = name.replace(/\.[^/.]+$/, "").trim().toLowerCase();
+      if (baseName) {
+        map[baseName] = "https://drive.google.com/file/d/" + file.getId() + "/view";
+      }
+    }
+    return map;
+  } catch (e) {
+    Logger.log("buildFaturaPhotoUrlMap_ erro: " + e.message);
+    return null;
+  }
+}
+
