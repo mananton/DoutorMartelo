@@ -58,6 +58,9 @@ let deslRegistoCollapsed = true;
 /* ── EQUIPA GLOBALS ────────────────────────────────────── */
 let equipaCharts = {};
 let equipaAllRows = [];
+let equipaEfetivos = [];
+let equipaExperiencias = [];
+let equipaActiveTab = 'efetivos';
 let equipaSortCol = 'custo';
 let equipaSortAsc = false;
 let equipaExpandedRow = null;
@@ -2650,6 +2653,17 @@ function buildEquipa() {
       };
     });
 
+  // ── Split by PESSOAL_EFETIVO membership ──
+  const pessoalNomes = new Set((DATA.pessoal_efetivo || []).map(p => p.nome));
+  equipaEfetivos = equipaAllRows.filter(r => pessoalNomes.has(r.nome));
+  equipaExperiencias = equipaAllRows.filter(r => !pessoalNomes.has(r.nome));
+
+  // Update tab counts
+  const cntEf = document.getElementById('equipa-count-efetivos');
+  const cntEx = document.getElementById('equipa-count-experiencias');
+  if (cntEf) cntEf.textContent = equipaEfetivos.length;
+  if (cntEx) cntEx.textContent = equipaExperiencias.length;
+
   equipaSortCol = 'custo';
   equipaSortAsc = false;
   equipaExpandedRow = null;
@@ -2680,9 +2694,34 @@ function buildEquipaTopChart() {
   /* body commented out — chart removed from equipa section */
 }
 
+/* ── Get active equipa rows based on current tab ─────── */
+function getEquipaActiveRows() {
+  return equipaActiveTab === 'experiencias' ? equipaExperiencias : equipaEfetivos;
+}
+
+/* ── Switch equipa sub-tab ──────────────────────────── */
+function setEquipaTab(tab) {
+  equipaActiveTab = tab;
+  document.getElementById('equipa-tab-efetivos').classList.toggle('active', tab === 'efetivos');
+  document.getElementById('equipa-tab-experiencias').classList.toggle('active', tab === 'experiencias');
+  // Update card title
+  var titleEl = document.getElementById('equipa-title');
+  if (titleEl) {
+    titleEl.innerHTML = tab === 'experiencias'
+      ? '<i class="fa-solid fa-user-clock"></i> Experiências'
+      : '<i class="fa-solid fa-users"></i> Colaboradores Efetivos';
+  }
+  equipaSortCol = 'custo';
+  equipaSortAsc = false;
+  populateEquipaFuncaoFilter();
+  document.getElementById('equipa-search').value = '';
+  renderEquipaTable();
+}
+
 /* ── Populate funcao filter ──────────────────────────── */
 function populateEquipaFuncaoFilter() {
-  const funcoes = [...new Set(equipaAllRows.map(r => r.funcao))].filter(Boolean).sort();
+  const rows = getEquipaActiveRows();
+  const funcoes = [...new Set(rows.map(r => r.funcao))].filter(Boolean).sort();
   const sel = document.getElementById('equipa-filter-funcao');
   sel.innerHTML = '<option value="">Todas as funções</option>' +
     funcoes.map(f => `<option value="${f}">${f}</option>`).join('');
@@ -2693,7 +2732,7 @@ function renderEquipaTable() {
   const search = (document.getElementById('equipa-search').value || '').toLowerCase();
   const funcaoFilter = document.getElementById('equipa-filter-funcao').value;
 
-  let rows = equipaAllRows.filter(r => {
+  let rows = getEquipaActiveRows().filter(r => {
     if (funcaoFilter && r.funcao !== funcaoFilter) return false;
     if (search && !r.nome.toLowerCase().includes(search)) return false;
     return true;

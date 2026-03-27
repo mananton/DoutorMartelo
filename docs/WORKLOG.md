@@ -12,6 +12,16 @@ Purpose: chronological, commit-based project history for fast handoff.
 ## 2026-03-27
 
 ### `pending`
+- **Type**: feat / dashboard / equipa
+- **Scope**: `src/index.html`, `src/css.html`, `src/js.html`
+- **Summary**:
+  - Split the Equipa tab into two sub-tabs: **Efetivos** (workers present in `PESSOAL_EFETIVO`) and **Experiências** (workers with records in `REGISTOS_POR_DIA` but not in `PESSOAL_EFETIVO`).
+  - Added pill-style sub-tab buttons with live counters, independent function filters and search per tab, and dynamic card title update on tab switch.
+- **Impact**:
+  - Management can now distinguish permanent staff from trial/temporary workers at a glance in the dashboard.
+  - No backend or data-model changes required — classification is derived client-side from the existing `pessoal_efetivo` payload.
+
+### `b8420f0`
 - **Type**: feat / dashboard / rh / sync
 - **Scope**: `src/Readers.gs`, `src/SupabaseRead.gs`, `src/js.html`, `src/css.html`, `backend/scripts/sync_sheets_to_supabase.py`, `backend/sql/007_create_pessoal_efetivo.sql`, `backend/sql/012_add_pessoal_efetivo_photo_url.sql`
 - **Summary**:

@@ -791,6 +791,48 @@ td { padding: 11px 16px; vertical-align: middle; }
   width: 100%;
   min-width: 0;
 }
+.equipa-sub-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.equipa-sub-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-dim);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.equipa-sub-tab:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.equipa-sub-tab.active {
+  background: rgba(233,69,96,.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.equipa-tab-count {
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255,255,255,.06);
+  border-radius: 6px;
+  padding: 2px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+.equipa-sub-tab.active .equipa-tab-count {
+  background: rgba(233,69,96,.18);
+}
 .equipa-toolbar-stack {
   margin-left: 0;
   width: 100%;

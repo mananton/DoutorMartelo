@@ -315,10 +315,19 @@
 
   <!-- Equipa -->
   <div class="section" id="section-equipa">
+    <!-- Sub-tabs -->
+    <div class="equipa-sub-tabs">
+      <button class="equipa-sub-tab active" id="equipa-tab-efetivos" onclick="setEquipaTab('efetivos')">
+        <i class="fa-solid fa-user-check"></i> Efetivos <span class="equipa-tab-count" id="equipa-count-efetivos"></span>
+      </button>
+      <button class="equipa-sub-tab" id="equipa-tab-experiencias" onclick="setEquipaTab('experiencias')">
+        <i class="fa-solid fa-user-clock"></i> Experiências <span class="equipa-tab-count" id="equipa-count-experiencias"></span>
+      </button>
+    </div>
     <!-- Main Table -->
     <div class="card">
       <div class="card-header workers-card-header">
-        <div class="workers-title-row">
+        <div class="workers-title-row" id="equipa-title">
           <i class="fa-solid fa-users"></i> Colaboradores
         </div>
         <div class="table-toolbar workers-toolbar-stack equipa-toolbar-stack" id="equipa-toolbar">
