@@ -31,7 +31,7 @@ Documentar, de forma operacional, quais as abas da Google Sheet continuam a ser 
 | `OBRAS` | `obras_info` | `DATA.obras_info` | Estado visual das obras, badge `Ativa/Inativa`, filtragem visual da lista de obras | Nao e a fonte principal dos custos. |
 | `REGISTO_DESLOCACOES` | `deslocacoes` | `DATA.deslocacoes` | `Overview`, `Obra Detail`, `Deslocacoes`, `Comparativa`, `Contabilidade` | Fonte das deslocacoes e respetivo custo. |
 | `FERIAS` | `ferias` | `DATA.ferias` | `Ferias` | A vista de ferias cruza depois com registos para o calendario. |
-| `PESSOAL_EFETIVO` | `pessoal_efetivo` | `DATA.pessoal_efetivo` | `RH` | Fonte dedicada da secao de recursos humanos. |
+| `PESSOAL_EFETIVO` | `pessoal_efetivo` | `DATA.pessoal_efetivo` | `RH` | Fonte dedicada da secao de recursos humanos. Suporta tambem `Foto_URL` opcional para avatar/foto de perfil. |
 | `MATERIAIS_MOV` | `materiais_mov` | `DATA.materiais_mov` | `Overview`, `Obra Detail`, `Comparativa`, `Contabilidade` | So entram em totais de dashboard os movimentos considerados consumo de obra. |
 | `LEGACY_MAO_OBRA` | `legacy_mao_obra` | `DATA.legacy_mao_obra` | `Overview`, `Obra Detail`, `Comparativa`, `Contabilidade` | Complementa historico antigo de mao de obra. |
 | `LEGACY_MATERIAIS` ou `MATERIAIS_LEGACY` | `legacy_materiais` | `DATA.legacy_materiais` | `Overview`, `Obra Detail`, `Comparativa`, `Contabilidade` | Complementa historico antigo de materiais/servicos. |

@@ -135,6 +135,7 @@ def _map_pessoal_efetivo(row: dict[str, Any], row_num: int) -> dict[str, Any] | 
         "morada": _read_text(row, ["Morada"]),
         "telefone": _read_text(row, ["Telefone"]),
         "email": _read_text(row, ["Email", "email"]),
+        "foto_url": _read_text(row, ["Foto_URL", "Foto URL", "Foto"]),
         "data_inicio_contrato": data_inicio.isoformat() if data_inicio else None,
         "data_termino_contrato": data_termino.isoformat() if data_termino else None,
         "carta_conducao": _read_text(row, ["Carta Condução", "Carta Conducao", "Carta ConduÃ§Ã£o"]),

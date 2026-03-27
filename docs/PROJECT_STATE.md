@@ -82,6 +82,10 @@ Last updated: 2026-03-27
   - Added two global breakdown charts: a categorical cost doughnut and a time-series stacked bar.
 - **Mapa Mensal**:
   - Print/PDF view now features a small red delay indicator on days with valid hours and `atraso_min > 0`.
+- **RH Section**:
+  - `PESSOAL_EFETIVO` now supports an optional `Foto_URL` field for profile photos.
+  - `Recursos Humanos` renders the photo in the worker avatar and in the expanded detail panel, with automatic fallback to initials when the image is missing or invalid.
+  - Google Drive share links are normalized client-side into image-compatible thumbnail URLs for quick operational use.
 - Obra "Cost by phase" chart now supports:
   - Metric selector: Labor / Materials / Total.
   - Chart type selector: Bar / Doughnut.

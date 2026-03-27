@@ -698,6 +698,22 @@ Format: short ADR-style records with rationale and impact.
   - Reopening the dashboard is smoother because cache can be shown immediately.
   - Date-filter changes now reuse shared filtered arrays across sections, reducing duplicated frontend work.
 
+## D-037: RH profile photos should start as URL metadata, not uploaded binary payloads inside Sheets rows
+- **Status**: accepted
+- **Date**: 2026-03-27
+- **Commit**: `pending`
+- **Decision**:
+  - Start the `Recursos Humanos` photo feature with a single optional `Foto_URL` field in `PESSOAL_EFETIVO` / `pessoal_efetivo`.
+  - Keep the workbook and Supabase mirror storing only the image URL, not the image binary itself.
+  - Render photos in `RH` with initials fallback when the URL is empty or invalid.
+  - Support simple public-hosted image URLs first, including Google Drive share links normalized into image-compatible thumbnail URLs.
+- **Rationale**:
+  - The team wanted the fastest possible path to showing worker profile photos without redesigning storage or adding a document-management subsystem.
+  - URL metadata keeps Google Sheets rows light and avoids storing binary blobs in the operational workbook or mirror tables.
+- **Impact**:
+  - `RH` can now display profile photos with minimal operational overhead.
+  - The implementation stays compatible with a later migration to more restricted/private document storage for sensitive files.
+
 ## Standing Constraints
 - Do not rename global sheet constants.
 - Do not change Supabase sync structure without explicit request.

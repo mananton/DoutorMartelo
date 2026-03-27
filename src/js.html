@@ -1368,6 +1368,39 @@ function escapeHtml_(raw) {
     .replace(/'/g, '&#39;');
 }
 
+function normalizePhotoUrl_(raw) {
+  const url = String(raw || '').trim();
+  if (!/^https?:\/\//i.test(url)) return '';
+
+  const driveFileMatch = url.match(/^https?:\/\/drive\.google\.com\/file\/d\/([^/]+)\//i);
+  if (driveFileMatch && driveFileMatch[1]) {
+    return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(driveFileMatch[1]) + '&sz=w1000';
+  }
+
+  const driveOpenMatch = url.match(/[?&]id=([^&]+)/i);
+  if (/^https?:\/\/drive\.google\.com\//i.test(url) && driveOpenMatch && driveOpenMatch[1]) {
+    return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(driveOpenMatch[1]) + '&sz=w1000';
+  }
+
+  return url;
+}
+
+function buildRhAvatarHtml_(row, sizeClass, extraStyle) {
+  const nome = String((row && row.nome) || '').trim();
+  const fallback = escapeHtml_(initials(nome || '—'));
+  const photoUrl = normalizePhotoUrl_(row && row.foto_url);
+  const classes = ['worker-avatar'];
+  if (sizeClass) classes.push(sizeClass);
+  if (photoUrl) classes.push('has-photo');
+
+  return '<div class="' + classes.join(' ') + '"' + (extraStyle ? ' style="' + escapeHtml_(extraStyle) + '"' : '') + '>' +
+    '<span class="worker-avatar-fallback">' + fallback + '</span>' +
+    (photoUrl
+      ? '<img class="worker-avatar-img" src="' + escapeHtml_(photoUrl) + '" alt="Foto de ' + escapeHtml_(nome) + '" loading="lazy" onerror="this.remove();this.parentNode.classList.remove(\'has-photo\')">'
+      : '') +
+    '</div>';
+}
+
 function getObraFaseHiddenStateKey_(obraNome) {
   return String(obraNome || '') + '::' + String(obraFaseMetric || '');
 }
@@ -3230,8 +3263,9 @@ function renderMapaMensalPrintView_(mapaData) {
       const cell = (worker.cells && worker.cells[day.date]) || null;
       const cls = day.weekend_type === 'sab' ? ' is-sab' : (day.weekend_type === 'dom' ? ' is-dom' : '');
       const absenceCls = cell && /^(F|FJ|Bxa|Fer)$/.test(cell.code || '') ? ' mapa-mensal-absence-day' : '';
+      const lowHoursCls = cell && cell.display && !cell.code && cell.valid_minutes < 480 ? ' is-low-hours' : '';
       const content = cell && cell.display ? escapeHtml_(cell.display) : '<span class="mapa-print-cell-empty">·</span>';
-      return '<td class="mapa-print-day-cell' + cls + absenceCls + '">' + content + '</td>';
+      return '<td class="mapa-print-day-cell' + cls + absenceCls + lowHoursCls + '">' + content + '</td>';
     }).join('');
 
     return '<tr>' +
@@ -5806,7 +5840,7 @@ function renderRhList(rows) {
     html += `
       <div class="worker-list-item" style="border-bottom: 1px solid var(--border); transition: background 0.2s">
         <div class="worker-row-main" style="display:flex;align-items:center;padding:12px 16px;cursor:pointer" onclick="toggleRhDetails('${r.nome.replace(/'/g, "\\'")}')">
-          <div class="worker-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--bg-tertiary);color:var(--text-main);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;margin-right:12px">${initials(r.nome)}</div>
+          ${buildRhAvatarHtml_(r, '', 'margin-right:12px')}
           <div class="worker-row-info" style="flex:2">
             <div class="worker-row-name" style="font-weight:600;color:var(--text-main);font-size:14px">${escapeHtml_(r.nome)}</div>
             <div class="worker-row-funcao" style="font-size:12px;color:var(--text-dim);margin-top:2px">${escapeHtml_(r.nacionalidade || 'Não definida')} <span style="opacity:0.6;margin:0 4px">•</span> ${escapeHtml_(r.telefone || 'Sem contacto')}</div>
@@ -5839,6 +5873,13 @@ function toggleRhDetails(nome) {
 function buildRhDetailHTML(r) {
   return `
     <div class="worker-detail-panel" style="background:var(--bg-secondary);padding:16px;border-top:1px solid var(--border);animation: fadeIn 0.3s ease">
+      <div class="rh-detail-hero">
+        ${buildRhAvatarHtml_(r, 'worker-avatar-lg')}
+        <div class="rh-detail-hero-text">
+          <div class="rh-detail-hero-name">${escapeHtml_(r.nome)}</div>
+          <div class="rh-detail-hero-meta">${escapeHtml_(r.nacionalidade || 'NÃ£o definida')} <span style="opacity:0.55;margin:0 6px">â€¢</span> ${escapeHtml_(r.telefone || 'Sem contacto')}</div>
+        </div>
+      </div>
       <div class="detail-panel-grid" style="display:grid;grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));gap:16px;">
         <div class="detail-box">
           <div class="detail-label" style="font-size:10px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;font-weight:600">Data Nascimento</div>

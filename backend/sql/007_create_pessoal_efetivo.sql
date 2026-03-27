@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS public.pessoal_efetivo (
     morada text,
     telefone text,
     email text,
+    foto_url text,
     data_inicio_contrato date,
     data_termino_contrato date,
     carta_conducao text,

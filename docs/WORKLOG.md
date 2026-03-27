@@ -11,6 +11,17 @@ Purpose: chronological, commit-based project history for fast handoff.
 
 ## 2026-03-27
 
+### `pending`
+- **Type**: feat / dashboard / rh / sync
+- **Scope**: `src/Readers.gs`, `src/SupabaseRead.gs`, `src/js.html`, `src/css.html`, `backend/scripts/sync_sheets_to_supabase.py`, `backend/sql/007_create_pessoal_efetivo.sql`, `backend/sql/012_add_pessoal_efetivo_photo_url.sql`
+- **Summary**:
+  - Added optional `Foto_URL` support to `PESSOAL_EFETIVO` and to the manual Sheets -> Supabase mirror for `pessoal_efetivo`.
+  - Extended both Sheets and Supabase dashboard readers so `RH` can consume profile-photo URLs from the same payload contract.
+  - Updated the `RH` list and detail panel to render profile photos with initials fallback, including automatic conversion of Google Drive share links into image-compatible thumbnail URLs.
+- **Impact**:
+  - `Recursos Humanos` can now show profile photos without storing binary files inside Google Sheets or the Supabase row payload.
+  - Operators can start with a simple public-image workflow by pasting a public image URL into `Foto_URL` and rerunning the manual sync.
+
 ### `d7174fe`
 - **Type**: feat / dashboard / sync / performance
 - **Scope**: `src/*`, `backend/scripts/sync_sheets_to_supabase.py`, `backend/ops/Sync-SheetsToSupabase.ps1`, `backend/sql/010_create_dashboard_runtime_sync_tables.sql`, `backend/sql/011_align_dashboard_supabase_read_contract.sql`, `backend/app/adapters/*`

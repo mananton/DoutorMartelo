@@ -741,6 +741,7 @@ function readPessoalEfetivo_(sheet) {
   const cMorada = pickCol_(colMap, ["Morada"], -1);
   const cTelefone = pickCol_(colMap, ["Telefone"], -1);
   const cEmail = pickCol_(colMap, ["email", "Email"], -1);
+  const cFotoUrl = pickCol_(colMap, ["Foto_URL", "Foto URL", "Foto"], -1);
   const cInicioContrato = pickCol_(colMap, ["Dta Inicio Contrato", "Data Inicio Contrato"], -1);
   const cTerminoContrato = pickCol_(colMap, ["Data Termino Contrato", "Dta Termino Contrato"], -1);
   const cConducao = pickCol_(colMap, ["Carta Condução", "Carta Conducao"], -1);
@@ -770,6 +771,7 @@ function readPessoalEfetivo_(sheet) {
       morada: cMorada >= 0 ? String(r[cMorada] || "").trim() : "",
       telefone: cTelefone >= 0 ? String(r[cTelefone] || "").trim() : "",
       email: cEmail >= 0 ? String(r[cEmail] || "").trim() : "",
+      foto_url: cFotoUrl >= 0 ? String(r[cFotoUrl] || "").trim() : "",
       data_inicio_contrato: formatDateValue_(cInicioContrato >= 0 ? r[cInicioContrato] : null, false),
       data_termino_contrato: formatDateValue_(cTerminoContrato >= 0 ? r[cTerminoContrato] : null, false),
       carta_conducao: cConducao >= 0 ? String(r[cConducao] || "").trim() : "",
