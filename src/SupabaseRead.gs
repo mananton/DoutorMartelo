@@ -163,7 +163,7 @@ const DASHBOARD_SUPABASE_TABLES_ = {
     select: [
       "id_fatura", "fornecedor", "nif", "nr_documento", "data_fatura",
       "valor_sem_iva", "iva", "valor_com_iva", "observacoes", "estado",
-      "tipo_doc", "doc_origem", "paga", "data_pagamento"
+      "tipo_doc", "doc_origem", "paga", "data_pagamento", "foto_url"
     ]
   },
   faturas_itens: {
@@ -174,7 +174,7 @@ const DASHBOARD_SUPABASE_TABLES_ = {
       "data_fatura", "descricao_original", "id_item", "item_oficial",
       "unidade", "natureza", "quantidade", "custo_unit", "desconto_1",
       "desconto_2", "custo_total_sem_iva", "iva", "custo_total_com_iva",
-      "destino", "obra", "fase", "observacoes"
+      "destino", "obra", "fase", "observacoes", "matricula", "veiculo"
     ]
   },
   notas_credito_itens: {
@@ -207,6 +207,11 @@ const DASHBOARD_SUPABASE_TABLES_ = {
     table: "materiais_cad",
     orderBy: "id_item",
     select: ["id_item", "item_oficial", "natureza", "unidade", "observacoes", "estado_cadastro"]
+  },
+  veiculos: {
+    table: "veiculos_sync",
+    orderBy: "matricula",
+    select: ["matricula", "veiculo"]
   }
 };
 
@@ -225,19 +230,28 @@ function getDashboardSourcePreference_(options) {
 
 function buildRawDataForDashboard_(ss, options) {
   const sourcePreference = getDashboardSourcePreference_(options);
-  if (sourcePreference === "supabase") {
-    return assertRawV2PayloadContract_(buildRawDataFromSupabase_());
-  }
+  let payload;
 
-  if (sourcePreference === "auto") {
+  if (sourcePreference === "supabase") {
+    payload = assertRawV2PayloadContract_(buildRawDataFromSupabase_());
+  } else if (sourcePreference === "auto") {
     try {
-      return assertRawV2PayloadContract_(buildRawDataFromSupabase_());
+      payload = assertRawV2PayloadContract_(buildRawDataFromSupabase_());
     } catch (err) {
       Logger.log("Dashboard Supabase fallback para Sheets: " + err.message);
+      payload = assertRawV2PayloadContract_(buildRawData_(ss));
     }
+  } else {
+    payload = assertRawV2PayloadContract_(buildRawData_(ss));
   }
 
-  return assertRawV2PayloadContract_(buildRawData_(ss));
+  // VEICULOS não está no Supabase — ler sempre da sheet local para garantir
+  // que o lookup matricula→veiculo funciona em qualquer caminho de dados
+  if (ss && (!payload.veiculos || !payload.veiculos.length)) {
+    payload.veiculos = readVeiculos_(ss.getSheetByName("VEICULOS"));
+  }
+
+  return payload;
 }
 
 function getSupabaseDashboardConfig_() {
@@ -283,7 +297,8 @@ function buildRawDataFromSupabase_() {
     notas_credito_itens: mapSupabaseNotasCreditoItens_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.notas_credito_itens)),
     stock_atual: mapSupabaseStockAtual_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.stock_atual)),
     afetacoes_obra: mapSupabaseAfetacoesObra_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.afetacoes_obra)),
-    materiais_cad: mapSupabaseMateriaisCad_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.materiais_cad))
+    materiais_cad: mapSupabaseMateriaisCad_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.materiais_cad)),
+    veiculos: mapSupabaseVeiculos_(fetchSupabaseTableAll_(config, DASHBOARD_SUPABASE_TABLES_.veiculos))
   });
 
   return payload;
@@ -624,7 +639,8 @@ function mapSupabaseFaturas_(rows) {
         tipo_doc: supabaseText_(row.tipo_doc) || "FATURA",
         doc_origem: supabaseText_(row.doc_origem),
         paga: supabaseBool_(row.paga),
-        data_pagamento: supabaseDate_(row.data_pagamento)
+        data_pagamento: supabaseDate_(row.data_pagamento),
+        foto_url: supabaseText_(row.foto_url) || null
       };
     })
     .filter(function(row) { return !!row; });
@@ -657,7 +673,9 @@ function mapSupabaseFaturasItens_(rows) {
         destino: supabaseText_(row.destino),
         obra: supabaseText_(row.obra),
         fase: supabaseText_(row.fase),
-        observacoes: supabaseText_(row.observacoes)
+        observacoes: supabaseText_(row.observacoes),
+        matricula: supabaseText_(row.matricula),
+        veiculo: supabaseText_(row.veiculo)
       };
     })
     .filter(function(row) { return !!row; });
@@ -761,6 +779,19 @@ function mapSupabaseMateriaisCad_(rows) {
         unidade: supabaseText_(row.unidade),
         observacoes: supabaseText_(row.observacoes),
         estado_cadastro: supabaseText_(row.estado_cadastro)
+      };
+    })
+    .filter(function(row) { return !!row; });
+}
+
+function mapSupabaseVeiculos_(rows) {
+  return (rows || [])
+    .map(function(row) {
+      var matricula = supabaseText_(row.matricula);
+      if (!matricula) return null;
+      return {
+        matricula: matricula,
+        veiculo: supabaseText_(row.veiculo) || matricula
       };
     })
     .filter(function(row) { return !!row; });

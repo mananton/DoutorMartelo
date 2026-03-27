@@ -31,6 +31,7 @@ TABLE_CONFIG: dict[str, dict[str, str]] = {
     "afetacoes_obra": {"table": "afetacoes_obra", "conflict": "id_afetacao", "id_field": "id_afetacao"},
     "materiais_mov": {"table": "materiais_mov", "conflict": "id_mov", "id_field": "id_mov"},
     "stock_atual": {"table": "stock_atual", "conflict": "id_item", "id_field": "id_item"},
+    "veiculos": {"table": "veiculos_sync", "conflict": "matricula", "id_field": "matricula"},
 }
 logger = logging.getLogger("uvicorn.error")
 DELETE_QUERY_CHAR_LIMIT = 1500

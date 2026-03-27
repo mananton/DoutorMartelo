@@ -54,6 +54,7 @@ SYNC_ORDER = [
     "deslocacoes",
     "legacy_mao_obra",
     "legacy_materiais",
+    "veiculos",
     *SNAPSHOT_ENTITIES,
 ]
 
@@ -373,6 +374,18 @@ def _map_legacy_materiais(row: dict[str, Any], row_num: int) -> dict[str, Any] |
     }
 
 
+def _map_veiculo(row: dict[str, Any], row_num: int) -> dict[str, Any] | None:
+    matricula = _read_text(row, ["Matricula", "Matr\u00edcula"])
+    if not matricula:
+        return None
+    veiculo = _read_text(row, ["Veiculos", "Ve\u00edculos", "Veiculo", "Ve\u00edculo", "Nome"]) or matricula
+    return {
+        "matricula": matricula,
+        "veiculo": veiculo,
+        "sheet_row_num": row_num,
+    }
+
+
 MANUAL_SHEETS: dict[str, ManualSheetConfig] = {
     "pessoal_efetivo": ManualSheetConfig(
         entity="pessoal_efetivo",
@@ -437,6 +450,14 @@ MANUAL_SHEETS: dict[str, ManualSheetConfig] = {
         header_row=1,
         mapper=_map_legacy_materiais,
         dedupe_key=lambda item: str(item.get("source_key") or "").strip(),
+    ),
+    "veiculos": ManualSheetConfig(
+        entity="veiculos",
+        sheet_name="VEICULOS",
+        header_row=1,
+        mapper=_map_veiculo,
+        dedupe_key=lambda item: str(item.get("matricula") or "").strip().lower(),
+        optional=True,
     ),
 }
 
